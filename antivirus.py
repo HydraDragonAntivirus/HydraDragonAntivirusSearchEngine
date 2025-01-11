@@ -57,10 +57,6 @@ total_start_time = time.time()
 
 # Start individual module timing
 start_time = time.time()
-import subprocess
-print(f"subprocess module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
 import whois
 print(f"whois module loaded in {time.time() - start_time:.6f} seconds")
 
@@ -77,28 +73,12 @@ import csv
 print(f"csv module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-import yara
-print(f"yara module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
 from googlesearch import search
 print(f"googlesearch.search module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-import yara_x
-print(f"yara_x module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
 import ipaddress
 print(f"ipaddress module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-import binascii
-print(f"binascii module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-import threading
-print(f"threading module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 import requests
@@ -125,40 +105,7 @@ total_end_time = time.time()
 total_duration = total_end_time - total_start_time
 print(f"Total time for all imports: {total_duration:.6f} seconds")
 
-def restart_clamd_thread():
-    try:
-        threading.Thread(target=restart_clamd).start()
-    except Exception as ex:
-        logging.error(f"Error starting clamd restart thread: {ex}")
-        print(f"Error starting clamd restart thread: {ex}")
-
-def restart_clamd():
-    try:
-        print("Stopping ClamAV...")
-        stop_result = subprocess.run(["net", "stop", 'clamd'], capture_output=True, text=True)
-        if stop_result.returncode != 0:
-                logging.error("Failed to stop ClamAV.")
-                print("Failed to stop ClamAV.")
-            
-        print("Starting ClamAV...")
-        start_result = subprocess.run(["net", "start", 'clamd'], capture_output=True, text=True)
-        if start_result.returncode == 0:
-            logging.info("ClamAV restarted successfully.")
-            print("ClamAV restarted successfully.")
-            return True
-        else:
-            logging.error("Failed to start ClamAV.")
-            print("Failed to start ClamAV.")
-            return False
-    except Exception as ex:
-        logging.error(f"An error occurred while restarting ClamAV: {ex}")
-        print(f"An error occurred while restarting ClamAV: {ex}")
-        return False
-
-general_extracted_dir = os.path.join(script_dir, "general_extracted")
-website_extracted_dir = os.path.join(script_dir, "website_extracted")
 website_rules_dir = os.path.join(script_dir, "website")
-yara_folder_path = os.path.join(script_dir, "yara")
 excluded_rules_dir = os.path.join(script_dir, "excluded")
 excluded_rules_path = os.path.join(excluded_rules_dir, "excluded_rules.txt")
 ipv4_addresses_path = os.path.join(website_rules_dir, "IPv4Malware.txt")
@@ -175,11 +122,6 @@ whitelist_domains_path = os.path.join(website_rules_dir, "WhiteListDomains.txt")
 whitelist_domains_mail_path = os.path.join(website_rules_dir, "WhiteListDomainsMail.txt")
 urlhaus_path = os.path.join(website_rules_dir, "urlhaus.txt")
 antivirus_list_path = os.path.join(script_dir, "hosts", "antivirus_list.txt")
-yaraxtr_yrc_path = os.path.join(yara_folder_path, "yaraxtr.yrc")
-compiled_rule_path = os.path.join(yara_folder_path, "compiled_rule.yrc")
-yarGen_rule_path = os.path.join(yara_folder_path, "machinelearning.yrc")
-icewater_rule_path = os.path.join(yara_folder_path, "icewater.yrc")
-valhalla_rule_path = os.path.join(yara_folder_path, "valhalla-rules.yrc")
 antivirus_domains_data = []
 ipv4_addresses_signatures_data = []
 ipv6_addresses_signatures_data = []
@@ -199,19 +141,9 @@ scanned_urls_general = []
 scanned_domains_general = []
 scanned_ipv4_addresses_general = []
 scanned_ipv6_addresses_general = []
-restart_clamd_thread()
-
-clamdscan_path = "C:\\Program Files\\ClamAV\\clamdscan.exe"
-freshclam_path = "C:\\Program Files\\ClamAV\\freshclam.exe"
-clamav_file_paths = ["C:\\Program Files\\ClamAV\\database\\daily.cvd", "C:\\Program Files\\ClamAV\\database\\daily.cld"]
-clamav_database_directory_path = "C:\\Program Files\\ClamAV\\database"
-seven_zip_path = "C:\\Program Files\\7-Zip\\7z.exe"  # Path to 7z.exe
 
 IPv4_pattern = r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'  # Simple IPv4 regex
 IPv6_pattern = r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$'  # Simple IPv6 regex
-
-os.makedirs(general_extracted_dir, exist_ok=True)
-os.makedirs(website_extracted_dir, exist_ok=True)
 
 antivirus_style = """
 QWidget {
@@ -251,59 +183,6 @@ QFileDialog {
     color: #e0e0e0;
 }
 """
-
-def is_hex_data(data_content):
-    """Check if the given binary data can be valid hex-encoded data."""
-    try:
-        # Convert binary data to hex representation and back to binary
-        binascii.unhexlify(binascii.hexlify(data_content))
-        return True
-    except (TypeError, binascii.Error):
-        return False
-
-try:
-    # Load excluded rules from text file
-    with open(excluded_rules_path, "r") as excluded_file:
-        excluded_rules = excluded_file.read()
-        print("YARA Excluded Rules Definitions loaded!")
-except Exception as e:
-    print(f"Error loading excluded rules: {e}")
-
-try:
-    # Load the precompiled yarGen rules from the .yrc file
-    yarGen_rule = yara.load(yarGen_rule_path)
-    print("yarGen Rules Definitions loaded!")
-except yara.Error as e:
-    print(f"Error loading precompiled YARA rule: {e}")
-
-try:
-    # Load the precompiled icewater rules from the .yrc file
-    icewater_rule = yara.load(icewater_rule_path)
-    print("Icewater Rules Definitions loaded!")
-except yara.Error as e:
-    print(f"Error loading precompiled YARA rule: {e}")
-
-try:
-    # Load the precompiled valhalla rules from the .yrc file
-    valhalla_rule = yara.load(valhalla_rule_path)
-    print("Vallhalla Demo Rules Definitions loaded!")
-except yara.Error as e:
-    print(f"Error loading precompiled YARA rule: {e}")
-
-try:
-    # Load the precompiled rules from the .yrc file
-    compiled_rule = yara.load(compiled_rule_path)
-    print("YARA Rules Definitions loaded!")
-except yara.Error as e:
-    print(f"Error loading precompiled YARA rule: {e}")
-
-try:
-    # Load the precompiled rule from the .yrc file using yara_x
-    with open(yaraxtr_yrc_path, 'rb') as yara_x_f:
-        yaraxtr_rule = yara_x.Rules.deserialize_from(yara_x_f)
-    print("YARA-X Rules Definitions loaded!")
-except Exception as e:
-    print(f"Error loading YARA-X rules: {e}")
 
 def load_domains_data():
     global ipv4_addresses_signatures_data, ipv4_whitelist_data, ipv6_addresses_signatures_data, ipv6_whitelist_data, urlhaus_data, malware_domains_data, malware_domains_mail_data, phishing_domains_data, abuse_domains_data, mining_domains_data, spam_domains_data, whitelist_domains_data, whitelist_domains_mail_data
@@ -633,225 +512,6 @@ def scan_ip_address_general(ip_address):
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
         return False, f"Error scanning IP address {ip_address}: {ex}"
 
-# Function to extract all files from an archive using 7z.exe (no focus on extension)
-def extract_all_files_with_7z(file_path):
-    try:
-        counter = 1
-        base_output_dir = os.path.join(general_extracted_dir, os.path.splitext(os.path.basename(file_path))[0])
-
-        # Ensure output directory is unique
-        while os.path.exists(f"{base_output_dir}_{counter}"):
-            counter += 1
-
-        output_dir = f"{base_output_dir}_{counter}"
-        os.makedirs(output_dir, exist_ok=True)
-
-        logging.info(f"Attempting to extract file {file_path} into {output_dir}...")
-
-        # Run the 7z extraction command
-        command = [seven_zip_path, "x", file_path, f"-o{output_dir}", "-y", "-snl", "-spe"]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
-        if result.returncode != 0:
-            logging.error(f"7z extraction failed with return code {result.returncode}: {result.stderr}")
-            return []
-
-        logging.info(f"7z extraction successful for {file_path}.")
-
-        # Gather all files in the output directory after extraction
-        extracted_files = []
-        for root, _, files in os.walk(output_dir):
-            for name in files:
-                extracted_files.append(os.path.join(root, name))
-
-        if not extracted_files:
-            logging.warning(f"No files were extracted from {file_path}.")
-        else:
-            logging.info(f"Extracted {len(extracted_files)} files from {file_path}.")
-
-        return extracted_files
-
-    except Exception as ex:
-        logging.error(f"Error during extraction with 7z: {ex}")
-        return []
-
-# Hex data validation function
-def is_hex_data(data_content):
-    """Check if the given binary data can be valid hex-encoded data."""
-    try:
-        # Convert binary data to hex representation and back to binary
-        binascii.unhexlify(binascii.hexlify(data_content))
-        return True
-    except (TypeError, binascii.Error):
-        return False
-
-# Function to read file content
-def read_file_content(file_path):
-    """Reads the content of the given file."""
-    try:
-        with open(file_path, 'rb') as file:
-            return file.read()
-    except Exception as ex:
-        logging.error(f"Error reading file {file_path}: {ex}")
-        return None
-
-def scan_file_with_clamd(file_path):
-    """Scan file using clamd."""
-    try:
-        file_path = os.path.abspath(file_path)  # Get absolute path
-        result = subprocess.run([clamdscan_path, file_path], capture_output=True, text=True)
-        clamd_output = result.stdout
-        print(f"Clamdscan output: {clamd_output}")
-
-        if "ERROR" in clamd_output:
-            print(f"Clamdscan reported an error: {clamd_output}")
-            return "Clean"
-        elif "FOUND" in clamd_output:
-            match = re.search(r": (.+) FOUND", clamd_output)
-            if match:
-                virus_name = match.group(1).strip()
-                return virus_name
-        elif "OK" in clamd_output or "Infected files: 0" in clamd_output:
-            return "Clean"
-        else:
-            print(f"Unexpected clamdscan output: {clamd_output}")
-            return "Clean"
-    except Exception as ex:
-        logging.error(f"Error scanning file {file_path}: {ex}")
-        print(f"Error scanning file {file_path}: {ex}")
-        return "Clean"
-
-# Updated scan_file_real_time function to handle hex data and 7z extraction
-def scan_file_real_time(file_path):
-    """Scan file in real-time using multiple engines and extract files with 7z or handle hex data."""
-    logging.info(f"Started scanning file: {file_path}")
-
-    try:
-        # Read file content
-        data_content = read_file_content(file_path)
-        if not data_content:
-            logging.error(f"Unable to read content of the file: {file_path}")
-            return False, "Error reading file", ""
-
-        # If hex data is detected in the content, attempt extraction with 7z
-        if is_hex_data(data_content):
-            logging.info(f"Hex data detected in {file_path}, attempting to extract files...")
-
-            # Extract files with 7z (general extraction, no extension focus)
-            extracted_files = extract_all_files_with_7z(file_path)
-                
-            if not extracted_files:
-                logging.warning(f"No files extracted from the archive: {file_path}")
-            else:
-                for extracted_file in extracted_files:
-                    logging.info(f"Scanning extracted file: {extracted_file}")
-                    scan_file_real_time(extracted_file)  # Recursive scan for extracted files
-
-        # Continue with scanning if hex data is not detected or after extracting files
-        # Scan with ClamAV
-        try:
-            result = scan_file_with_clamd(file_path)
-            if result not in ("Clean", ""):
-                logging.warning(f"Infected file detected (ClamAV): {file_path} - Virus: {result}")
-                return True, result, "ClamAV"
-            logging.info(f"No malware detected by ClamAV in file: {file_path}")
-        except Exception as ex:
-            logging.error(f"An error occurred while scanning file with ClamAV: {file_path}. Error: {ex}")
-
-        # Scan with YARA
-        try:
-            yara_result = scan_yara(file_path)
-            if yara_result is not None and yara_result not in ("Clean", ""):
-                logging.warning(f"Infected file detected (YARA): {file_path} - Virus: {yara_result}")
-                return True, yara_result, "YARA"
-            logging.info(f"Scanned file with YARA: {file_path} - No viruses detected")
-        except Exception as ex:
-            logging.error(f"An error occurred while scanning file with YARA: {file_path}. Error: {ex}")
-
-    except Exception as ex:
-        logging.error(f"An error occurred while scanning file: {file_path}. Error: {ex}")
-
-    return False, "Clean", ""  # Default to clean if no malware found
-
-def scan_yara(file_path):
-    matched_rules = []
-
-    try:
-        if not os.path.exists(file_path):
-            logging.error(f"File not found during YARA scan: {file_path}")
-            return None
-
-        with open(file_path, 'rb') as yara_file:
-            data_content = yara_file.read()
-
-            # Check matches for compiled_rule
-            if compiled_rule:
-                matches = compiled_rule.match(data=data_content)
-                if matches:
-                    for match in matches:
-                        if match.rule not in excluded_rules:
-                            matched_rules.append(match.rule)
-                        else:
-                            logging.info(f"Rule {match.rule} is excluded from compiled_rule.")
-            else:
-                logging.warning("compiled_rule is not defined.")
-
-            # Check matches for yarGen_rule
-            if yarGen_rule:
-                matches = yarGen_rule.match(data=data_content)
-                if matches:
-                    for match in matches:
-                        if match.rule not in excluded_rules:
-                            matched_rules.append(match.rule)
-                        else:
-                            logging.info(f"Rule {match.rule} is excluded from yarGen_rule.")
-            else:
-                logging.warning("yarGen_rule is not defined.")
-
-            # Check matches for icewater_rule
-            if icewater_rule:
-                matches = icewater_rule.match(data=data_content)
-                if matches:
-                    for match in matches:
-                        if match.rule not in excluded_rules:
-                            matched_rules.append(match.rule)
-                        else:
-                            logging.info(f"Rule {match.rule} is excluded from icewater_rule.")
-            else:
-                logging.warning("icewater_rule is not defined.")
-
-            # Check matches for valhalla_rule
-            if valhalla_rule:
-                matches = valhalla_rule.match(data=data_content)
-                if matches:
-                    for match in matches:
-                        if match.rule not in excluded_rules:
-                            matched_rules.append(match.rule)
-                        else:
-                            logging.info(f"Rule {match.rule} is excluded from valhalla_rule.")
-            else:
-                logging.warning("valhalla_rule is not defined.")
-
-            # Check matches for yaraxtr_rule (loaded with yara_x)
-            if yaraxtr_rule:
-                scanner = yara_x.Scanner(yaraxtr_rule)
-                results = scanner.scan(data=data_content)
-                if results.matching_rules:
-                    for rule in results.matching_rules:
-                        if hasattr(rule, 'identifier') and rule.identifier not in excluded_rules:
-                            matched_rules.append(rule.identifier)
-                        else:
-                            logging.info(f"Rule {rule.identifier} is excluded from yaraxtr_rule.")
-            else:
-                logging.warning("yaraxtr_rule is not defined.")
-
-        # Return matched rules as the yara_result if not empty, otherwise return None
-        return matched_rules if matched_rules else None
-
-    except Exception as ex:
-        logging.error(f"An error occurred during YARA scan: {ex}")
-        return None
-
 def scan_website_content(url):
     """
     Scan website content by saving it to a specific directory and analyzing it.
@@ -859,6 +519,12 @@ def scan_website_content(url):
     """
     try:
         logging.info(f"Scanning cleaned URL: {url}")
+
+        # Extract the main domain (e.g., example.com)
+        parsed_url = urlparse(url)
+        main_domain = parsed_url.netloc
+
+        logging.info(f"Scanning main domain: {main_domain}")
 
         # Create a session with headers to mimic a browser
         session = requests.Session()
@@ -872,12 +538,15 @@ def scan_website_content(url):
         response.raise_for_status()
 
         # Generate a file name based on the URL (sanitize the URL for a valid file name)
-        filename = url.replace('https://', '').replace('http://', '').replace('/', '_') + '.html'
+        filename = main_domain.replace('https://', '').replace('http://', '').replace('/', '_') + '.html'
         file_path = os.path.join(website_extracted_dir, filename)
 
         # Save the website content to the directory
         with open(file_path, 'wb') as file:
             file.write(response.content)
+
+        # List to hold malicious domains found
+        malicious_domains = []
 
         try:
             # Scan the saved file using the existing scan_file_real_time function
@@ -886,18 +555,26 @@ def scan_website_content(url):
 
             # If the file is flagged as malicious, return immediately
             if is_malicious:
-                return True, threat_details, scanner_name
+                malicious_domains.append(main_domain)
 
             # Check for Discord webhook (if any)
             if contains_discord_code(response.text):
+                malicious_domains.append(main_domain)
                 return True, "Discord webhook detected", "WebContentAnalyzer"
 
             # Scan for malicious URLs, domains, and IPs in the content
             result, reason = scan_code_for_links(response.text)
             if not result:
-                return False, reason, scanner_name  # Return the reason if any issue is found
+                # If malicious domains are found, append them and return the result
+                malicious_domains.append(main_domain)
+                return True, reason, scanner_name
 
             # If everything checks out, return True, indicating the site is safe
+            if malicious_domains:
+                # Limit to 5 malicious domains
+                return True, f"Malicious domains detected: {', '.join(malicious_domains[:5])}", scanner_name
+
+            # If no malicious domains found
             return False, "No malicious content detected.", scanner_name
 
         finally:
