@@ -803,34 +803,12 @@ def scan_yara(file_path):
         logging.error(f"An error occurred during YARA scan: {ex}")
         return None
 
-def clean_url(url):
-    """
-    Cleans the URL to return only the domain (e.g., https://www.google.com -> google.com).
-    """
-    parsed_url = urlparse(url)
-    if not parsed_url.netloc:
-        return None  # Invalid URL
-    
-    # Remove "www." if it exists
-    domain = parsed_url.netloc
-    if domain.startswith("www."):
-        domain = domain[4:]  # Strip the "www." prefix
-    
-    return domain  # Return the cleaned domain
-
 def scan_website_content(url):
     """
     Scan website content using scan_file_real_time function.
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
-        # Validate and clean URL
-        parsed_url = urlparse(url)
-        cleaned_url = clean_url(url)
-        if not cleaned_url:
-            logging.error(f"Invalid URL format: {url}")
-            return False, "Invalid URL format", ""
-
         logging.info(f"Scanning cleaned URL: {cleaned_url}")
 
         # Create a session with headers to mimic a browser
