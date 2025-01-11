@@ -97,6 +97,10 @@ import requests
 print(f"requests module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import re
+print(f"re module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget, QInputDialog, QTextEdit, QLineEdit
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
@@ -641,6 +645,32 @@ def read_file_content(file_path):
     except Exception as ex:
         logging.error(f"Error reading file {file_path}: {ex}")
         return None
+
+def scan_file_with_clamd(file_path):
+    """Scan file using clamd."""
+    try:
+        file_path = os.path.abspath(file_path)  # Get absolute path
+        result = subprocess.run([clamdscan_path, file_path], capture_output=True, text=True)
+        clamd_output = result.stdout
+        print(f"Clamdscan output: {clamd_output}")
+
+        if "ERROR" in clamd_output:
+            print(f"Clamdscan reported an error: {clamd_output}")
+            return "Clean"
+        elif "FOUND" in clamd_output:
+            match = re.search(r": (.+) FOUND", clamd_output)
+            if match:
+                virus_name = match.group(1).strip()
+                return virus_name
+        elif "OK" in clamd_output or "Infected files: 0" in clamd_output:
+            return "Clean"
+        else:
+            print(f"Unexpected clamdscan output: {clamd_output}")
+            return "Clean"
+    except Exception as ex:
+        logging.error(f"Error scanning file {file_path}: {ex}")
+        print(f"Error scanning file {file_path}: {ex}")
+        return "Clean"
 
 # Updated scan_file_real_time function to handle hex data and 7z extraction
 def scan_file_real_time(file_path):
