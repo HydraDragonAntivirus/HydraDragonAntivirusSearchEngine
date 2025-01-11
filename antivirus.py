@@ -401,6 +401,8 @@ def load_domains_data():
 
     print("All domain and ip address files loaded successfully!")
 
+load_domains_data()
+
 # Check for Discord webhook URLs and invite links (including Canary)
 def contains_discord_code(decompiled_code):
     """
