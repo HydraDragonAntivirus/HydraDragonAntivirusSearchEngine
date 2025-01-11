@@ -53,6 +53,10 @@ import ipaddress
 print(f"ipaddress module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import binascii
+print(f"binascii module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
@@ -99,6 +103,7 @@ def restart_clamd():
         print(f"An error occurred while restarting ClamAV: {ex}")
         return False
 
+general_extracted_dir = os.path.join(script_dir, "general_extracted")
 website_rules_dir = os.path.join(script_dir, "website")
 ipv4_addresses_path = os.path.join(website_rules_dir, "IPv4Malware.txt")
 ipv4_whitelist_path = os.path.join(website_rules_dir, "IPv4Whitelist.txt")
@@ -187,6 +192,15 @@ QFileDialog {
     color: #e0e0e0;
 }
 """
+
+def is_hex_data(data_content):
+    """Check if the given binary data can be valid hex-encoded data."""
+    try:
+        # Convert binary data to hex representation and back to binary
+        binascii.unhexlify(binascii.hexlify(data_content))
+        return True
+    except (TypeError, binascii.Error):
+        return False
 
 try:
     # Load excluded rules from text file
@@ -398,7 +412,6 @@ def scan_code_for_links(decompiled_code):
     for ip in ipv6_addresses:
         scan_ip_address_general(ip)
 
-
 # Generalized scan for domains
 def scan_domain_general(domain):
     try:
@@ -425,7 +438,6 @@ def scan_domain_general(domain):
     except Exception as ex:
         logging.error(f"Error scanning domain {domain}: {ex}")
         print(f"Error scanning domain {domain}: {ex}")
-
 
 # Generalized scan for URLs
 def scan_url_general(url):
@@ -461,7 +473,6 @@ def scan_url_general(url):
     except Exception as ex:
         logging.error(f"Error scanning URL {url}: {ex}")
         print(f"Error scanning URL {url}: {ex}")
-
 
 # Generalized scan for IP addresses
 def scan_ip_address_general(ip_address):
@@ -530,12 +541,95 @@ def is_local_ip(ip):
     except ValueError:
         return False
 
-# Scan file in real-time using multiple engines (ClamAV, YARA, and Archive Scanners)
+# Function to extract all files from an archive using 7z.exe (no focus on extension)
+def extract_all_files_with_7z(file_path):
+    try:
+        counter = 1
+        base_output_dir = os.path.join(general_extracted_dir, os.path.splitext(os.path.basename(file_path))[0])
+
+        # Ensure output directory is unique
+        while os.path.exists(f"{base_output_dir}_{counter}"):
+            counter += 1
+
+        output_dir = f"{base_output_dir}_{counter}"
+        os.makedirs(output_dir, exist_ok=True)
+
+        logging.info(f"Attempting to extract file {file_path} into {output_dir}...")
+
+        # Run the 7z extraction command
+        command = [seven_zip_path, "x", file_path, f"-o{output_dir}", "-y", "-snl", "-spe"]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        if result.returncode != 0:
+            logging.error(f"7z extraction failed with return code {result.returncode}: {result.stderr}")
+            return []
+
+        logging.info(f"7z extraction successful for {file_path}.")
+
+        # Gather all files in the output directory after extraction
+        extracted_files = []
+        for root, _, files in os.walk(output_dir):
+            for name in files:
+                extracted_files.append(os.path.join(root, name))
+
+        if not extracted_files:
+            logging.warning(f"No files were extracted from {file_path}.")
+        else:
+            logging.info(f"Extracted {len(extracted_files)} files from {file_path}.")
+
+        return extracted_files
+
+    except Exception as ex:
+        logging.error(f"Error during extraction with 7z: {ex}")
+        return []
+
+# Hex data validation function
+def is_hex_data(data_content):
+    """Check if the given binary data can be valid hex-encoded data."""
+    try:
+        # Convert binary data to hex representation and back to binary
+        binascii.unhexlify(binascii.hexlify(data_content))
+        return True
+    except (TypeError, binascii.Error):
+        return False
+
+# Function to read file content
+def read_file_content(file_path):
+    """Reads the content of the given file."""
+    try:
+        with open(file_path, 'rb') as file:
+            return file.read()
+    except Exception as ex:
+        logging.error(f"Error reading file {file_path}: {ex}")
+        return None
+
+# Updated scan_file_real_time function to handle hex data and 7z extraction
 def scan_file_real_time(file_path):
-    """Scan file in real-time using multiple engines."""
+    """Scan file in real-time using multiple engines and extract files with 7z or handle hex data."""
     logging.info(f"Started scanning file: {file_path}")
 
     try:
+        # Read file content
+        data_content = read_file_content(file_path)
+        if not data_content:
+            logging.error(f"Unable to read content of the file: {file_path}")
+            return False, "Error reading file", ""
+
+        # If hex data is detected in the content, attempt extraction with 7z
+        if is_hex_data(data_content):
+            logging.info(f"Hex data detected in {file_path}, attempting to extract files...")
+
+            # Extract files with 7z (general extraction, no extension focus)
+            extracted_files = extract_all_files_with_7z(file_path)
+                
+            if not extracted_files:
+                logging.warning(f"No files extracted from the archive: {file_path}")
+            else:
+                for extracted_file in extracted_files:
+                    logging.info(f"Scanning extracted file: {extracted_file}")
+                    scan_file_real_time(extracted_file)  # Recursive scan for extracted files
+
+        # Continue with scanning if hex data is not detected or after extracting files
         # Scan with ClamAV
         try:
             result = scan_file_with_clamd(file_path)
@@ -555,53 +649,6 @@ def scan_file_real_time(file_path):
             logging.info(f"Scanned file with YARA: {file_path} - No viruses detected")
         except Exception as ex:
             logging.error(f"An error occurred while scanning file with YARA: {file_path}. Error: {ex}")
-
-        # Scan TAR files
-        try:
-            if tarfile.is_tarfile(file_path):
-                scan_result, virus_name = scan_tar_file(file_path)
-                if scan_result and virus_name not in ("Clean", "F", ""):
-                    logging.warning(f"Infected file detected (TAR): {file_path} - Virus: {virus_name}")
-                    return True, virus_name, "TAR"
-                logging.info(f"No malware detected in TAR file: {file_path}")
-        except PermissionError:
-            logging.error(f"Permission error occurred while scanning TAR file: {file_path}")
-        except FileNotFoundError:
-            logging.error(f"TAR file not found error occurred while scanning TAR file: {file_path}")
-        except Exception as ex:
-            logging.error(f"An error occurred while scanning TAR file: {file_path}. Error: {ex}")
-
-        # Scan ZIP files
-        try:
-            if zipfile.is_zipfile(file_path):
-                scan_result, virus_name = scan_zip_file(file_path)
-                if scan_result and virus_name not in ("Clean", ""):
-                    logging.warning(f"Infected file detected (ZIP): {file_path} - Virus: {virus_name}")
-                    return True, virus_name, "ZIP"
-                logging.info(f"No malware detected in ZIP file: {file_path}")
-        except PermissionError:
-            logging.error(f"Permission error occurred while scanning ZIP file: {file_path}")
-        except FileNotFoundError:
-            logging.error(f"ZIP file not found error occurred while scanning ZIP file: {file_path}")
-        except Exception as ex:
-            logging.error(f"An error occurred while scanning ZIP file: {file_path}. Error: {ex}")
-
-        # Scan 7z files
-        try:
-            if is_7z_file(file_path):
-                scan_result, virus_name = scan_7z_file(file_path)
-                if scan_result and virus_name not in ("Clean", ""):
-                    logging.warning(f"Infected file detected (7z): {file_path} - Virus: {virus_name}")
-                    return True, virus_name, "7z"
-                logging.info(f"No malware detected in 7z file: {file_path}")
-            else:
-                logging.info(f"File is not a valid 7z archive: {file_path}")
-        except PermissionError:
-            logging.error(f"Permission error occurred while scanning 7Z file: {file_path}")
-        except FileNotFoundError:
-            logging.error(f"7Z file not found error occurred while scanning 7Z file: {file_path}")
-        except Exception as ex:
-            logging.error(f"An error occurred while scanning 7Z file: {file_path}. Error: {ex}")
 
     except Exception as ex:
         logging.error(f"An error occurred while scanning file: {file_path}. Error: {ex}")
