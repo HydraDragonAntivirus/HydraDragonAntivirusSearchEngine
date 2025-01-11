@@ -465,32 +465,11 @@ def scan_code_for_links(decompiled_code):
     for ip in ipv6_addresses:
         scan_ip_address_general(ip)
 
-def is_domain_active(domain):
-    """
-    Check if a domain is active using the whois library.
-    Returns True if the domain is active, False otherwise.
-    """
-    try:
-        domain_info = whois.whois(domain)
-        if domain_info.status:
-            logging.info(f"Domain {domain} is active.")
-            return True
-        else:
-            logging.warning(f"Domain {domain} is not active.")
-            return False
-    except Exception as ex:
-        logging.error(f"Error checking domain {domain}: {ex}")
-        return False
-
 # Generalized scan for domains
 def scan_domain_general(domain):
     try:
         if domain in scanned_domains_general:
             logging.info(f"Domain {domain} has already been scanned.")
-            return
-
-        # Extract the domain from the URL to check if it is active
-        if not is_domain_active(domain):
             return
 
         scanned_domains_general.append(domain)  # Add to the scanned list
@@ -888,7 +867,6 @@ def scan_website_content(url):
         logging.error(f"Error scanning website content: {ex}")
         return False, f"Error scanning content: {str(ex)}", ""
 
-# PySide6 GUI
 class LocalSearchAntivirus(QWidget):
     def __init__(self):
         super().__init__()
@@ -918,6 +896,41 @@ class LocalSearchAntivirus(QWidget):
 
         self.setLayout(layout)
 
+    def is_domain_reachable(self, url):
+        """
+        Check if the domain is reachable by making an HTTP request and if the domain has valid WHOIS registration information.
+        """
+        try:
+            # Extract the domain from the URL
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc
+
+            # Check the domain's registration status using WHOIS
+            try:
+                domain_info = whois.whois(domain)
+                if not domain_info.status:
+                    logging.warning(f"Domain {domain} does not have valid WHOIS data or is not active.")
+                    return False
+            except Exception as e:
+                logging.error(f"Error retrieving WHOIS information for {domain}: {e}")
+                return False
+
+            # Check if the domain is reachable by making an HTTP request
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                logging.info(f"Domain {domain} is reachable.")
+                return True
+            else:
+                logging.warning(f"Domain {domain} returned status code {response.status_code}.")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            logging.error(f"Domain is unreachable: {url} - HTTP error: {e}")
+            return False
+        except Exception as e:
+            logging.error(f"Error checking domain {url}: {e}")
+            return False
+
     def search_and_scan(self):
         keyword = self.keyword_input.text().strip()
         if not keyword:
@@ -935,11 +948,16 @@ class LocalSearchAntivirus(QWidget):
                 self.result_text.append(f"Scanning: {url}")
                 QApplication.processEvents()
 
-                # Scan the URL
+                # Check if the domain is reachable and active
+                if not self.is_domain_reachable(url):
+                    self.result_text.append(f"[UNREACHABLE] {url}\n")
+                    continue
+
+                # Scan the URL (assuming scan_website_content is available)
                 is_malicious, threat_details, scanner_name = scan_website_content(url)
 
                 if is_malicious:
-                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nDiscord Scanner: {scanner_name}\n")
+                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
                 else:
                     self.result_text.append(f"[CLEAN] {url}")
 
