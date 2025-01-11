@@ -733,3 +733,171 @@ def scan_yara(file_path):
     except Exception as ex:
         logging.error(f"An error occurred during YARA scan: {ex}")
         return None
+
+class AntivirusUI(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Hydra Dragon Antivirus - Website Scanner")
+        self.setStyleSheet(antivirus_style)
+        self.setup_ui()
+        self.load_data()
+        
+    def load_data(self):
+        """Load all necessary data for website scanning"""
+        load_domains_data()  # This loads all the domain and IP data from files
+        
+    def setup_ui(self):
+        """Setup the main user interface"""
+        layout = QVBoxLayout()
+        
+        # Create stacked widget for multiple pages
+        self.stacked_widget = QStackedWidget()
+        
+        # Create main buttons
+        self.url_scan_button = QPushButton("Scan URL")
+        self.url_scan_button.clicked.connect(self.scan_url)
+        
+        self.domain_scan_button = QPushButton("Scan Domain")
+        self.domain_scan_button.clicked.connect(self.scan_domain)
+        
+        self.ip_scan_button = QPushButton("Scan IP Address")
+        self.ip_scan_button.clicked.connect(self.scan_ip)
+        
+        # Add buttons to layout
+        layout.addWidget(self.url_scan_button)
+        layout.addWidget(self.domain_scan_button)
+        layout.addWidget(self.ip_scan_button)
+        
+        # Add results display
+        self.results_display = QTextEdit()
+        self.results_display.setReadOnly(True)
+        self.results_display.setPlaceholderText("Scan results will appear here...")
+        layout.addWidget(self.results_display)
+        
+        self.setLayout(layout)
+        
+    def scan_url(self):
+        """Handle URL scanning"""
+        url, ok = QInputDialog.getText(self, "Scan URL", "Enter URL to scan:")
+        if ok and url:
+            self.results_display.clear()
+            self.results_display.append(f"Scanning URL: {url}\n")
+            try:
+                scan_url_general(url)
+                # Check URLhaus database
+                found_in_urlhaus = False
+                for entry in urlhaus_data:
+                    if entry['url'] in url:
+                        self.results_display.append("⚠️ WARNING: Malicious URL detected!")
+                        self.results_display.append(f"Threat Type: {entry['threat']}")
+                        self.results_display.append(f"Date Added: {entry['dateadded']}")
+                        self.results_display.append(f"Status: {entry['url_status']}")
+                        found_in_urlhaus = True
+                        break
+                
+                if not found_in_urlhaus:
+                    self.results_display.append("✅ URL appears to be safe")
+                    
+            except Exception as ex:
+                self.results_display.append(f"Error during scan: {str(ex)}")
+                
+    def scan_domain(self):
+        """Handle domain scanning"""
+        domain, ok = QInputDialog.getText(self, "Scan Domain", "Enter domain to scan:")
+        if ok and domain:
+            self.results_display.clear()
+            self.results_display.append(f"Scanning domain: {domain}\n")
+            try:
+                # Check against malware domains
+                if any(domain.lower() == malicious_domain.lower() or 
+                      domain.lower().endswith(f".{malicious_domain.lower()}") 
+                      for malicious_domain in malware_domains_data):
+                    self.results_display.append("⚠️ WARNING: Malicious domain detected!")
+                    self.results_display.append("This domain is known for malware distribution")
+                    
+                # Check against phishing domains
+                elif any(domain.lower() == phishing_domain.lower() or 
+                        domain.lower().endswith(f".{phishing_domain.lower()}") 
+                        for phishing_domain in phishing_domains_data):
+                    self.results_display.append("⚠️ WARNING: Phishing domain detected!")
+                    self.results_display.append("This domain is known for phishing attacks")
+                    
+                # Check against abuse domains
+                elif any(domain.lower() == abuse_domain.lower() or 
+                        domain.lower().endswith(f".{abuse_domain.lower()}") 
+                        for abuse_domain in abuse_domains_data):
+                    self.results_display.append("⚠️ WARNING: Abuse domain detected!")
+                    self.results_display.append("This domain is known for abusive behavior")
+                    
+                # Check whitelist
+                elif any(domain.lower() == whitelist_domain.lower() or 
+                        domain.lower().endswith(f".{whitelist_domain.lower()}") 
+                        for whitelist_domain in whitelist_domains_data):
+                    self.results_display.append("✅ Domain is whitelisted and safe")
+                    
+                else:
+                    self.results_display.append("✅ Domain not found in malicious databases")
+                    self.results_display.append("No known threats detected")
+                    
+            except Exception as ex:
+                self.results_display.append(f"Error during scan: {str(ex)}")
+                
+    def scan_ip(self):
+        """Handle IP address scanning"""
+        ip, ok = QInputDialog.getText(self, "Scan IP", "Enter IP address to scan:")
+        if ok and ip:
+            self.results_display.clear()
+            self.results_display.append(f"Scanning IP address: {ip}\n")
+            try:
+                # Check if it's a local IP
+                if is_local_ip(ip):
+                    self.results_display.append("ℹ️ This is a local IP address")
+                    return
+                
+                # Check IPv4
+                if re.match(IPv4_pattern, ip):
+                    if ip in ipv4_addresses_signatures_data:
+                        self.results_display.append("⚠️ WARNING: Malicious IPv4 address detected!")
+                    elif ip in ipv4_whitelist_data:
+                        self.results_display.append("✅ IPv4 address is whitelisted and safe")
+                    else:
+                        self.results_display.append("✅ IPv4 address not found in malicious databases")
+                        
+                # Check IPv6
+                elif re.match(IPv6_pattern, ip):
+                    if ip in ipv6_addresses_signatures_data:
+                        self.results_display.append("⚠️ WARNING: Malicious IPv6 address detected!")
+                    elif ip in ipv6_whitelist_data:
+                        self.results_display.append("✅ IPv6 address is whitelisted and safe")
+                    else:
+                        self.results_display.append("✅ IPv6 address not found in malicious databases")
+                        
+                else:
+                    self.results_display.append("❌ Invalid IP address format")
+                    
+            except Exception as ex:
+                self.results_display.append(f"Error during scan: {str(ex)}")
+
+    def closeEvent(self, event):
+        """Handle application closure"""
+        reply = QMessageBox.question(self, 'Exit',
+            "Are you sure you want to exit?", QMessageBox.Yes |
+            QMessageBox.No, QMessageBox.No)
+
+        if reply == QMessageBox.Yes:
+            event.accept()
+        else:
+            event.ignore()
+
+def main():
+    try:
+        app = QApplication(sys.argv)
+        app.setStyleSheet(antivirus_style)  # Apply the style sheet
+        main_gui = AntivirusUI()
+        main_gui.show()
+        sys.exit(app.exec())
+    except Exception as ex:
+        print(f"An error occurred: {ex}")
+
+if __name__ == "__main__":
+    main()
