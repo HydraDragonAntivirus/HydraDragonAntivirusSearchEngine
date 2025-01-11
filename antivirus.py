@@ -69,6 +69,10 @@ from urllib.parse import urlparse
 print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import csv
+print(f"csv module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 import yara
 print(f"yara module loaded in {time.time() - start_time:.6f} seconds")
 
