@@ -124,6 +124,12 @@ scanned_ipv4_addresses_general = []
 scanned_ipv6_addresses_general = []
 restart_clamd_thread()
 
+clamdscan_path = "C:\\Program Files\\ClamAV\\clamdscan.exe"
+freshclam_path = "C:\\Program Files\\ClamAV\\freshclam.exe"
+clamav_file_paths = ["C:\\Program Files\\ClamAV\\database\\daily.cvd", "C:\\Program Files\\ClamAV\\database\\daily.cld"]
+clamav_database_directory_path = "C:\\Program Files\\ClamAV\\database"
+seven_zip_path = "C:\\Program Files\\7-Zip\\7z.exe"  # Path to 7z.exe
+
 try:
     # Load excluded rules from text file
     with open(excluded_rules_path, "r") as excluded_file:
@@ -460,6 +466,93 @@ def scan_ip_address_general(ip_address):
     except Exception as ex:
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
         print(f"Error scanning IP address {ip_address}: {ex}")
+
+def scan_file_real_time(file_path, signature_check, pe_file=False):
+    """Scan file in real-time using multiple engines."""
+    logging.info(f"Started scanning file: {file_path}")
+
+    try:
+        # Scan with ClamAV
+        try:
+            result = scan_file_with_clamd(file_path)
+            if result not in ("Clean", ""):
+                if signature_check["is_valid"]:
+                    result = "SIG." + result
+                logging.warning(f"Infected file detected (ClamAV): {file_path} - Virus: {result}")
+                return True, result, "ClamAV"
+            logging.info(f"No malware detected by ClamAV in file: {file_path}")
+        except Exception as ex:
+            logging.error(f"An error occurred while scanning file with ClamAV: {file_path}. Error: {ex}")
+
+        # Scan with YARA
+        try:
+            yara_result = scan_yara(file_path)
+            if yara_result is not None and yara_result not in ("Clean", ""):
+                if signature_check["is_valid"]:
+                    yara_result = "SIG." + yara_result
+                logging.warning(f"Infected file detected (YARA): {file_path} - Virus: {yara_result}")
+                return True, yara_result, "YARA"
+            logging.info(f"Scanned file with YARA: {file_path} - No viruses detected")
+        except Exception as ex:
+            logging.error(f"An error occurred while scanning file with YARA: {file_path}. Error: {ex}")
+
+        # Scan TAR files
+        try:
+            if tarfile.is_tarfile(file_path):
+                scan_result, virus_name = scan_tar_file(file_path)
+                if scan_result and virus_name not in ("Clean", "F", ""):
+                    if signature_check["is_valid"]:
+                        virus_name = "SIG." + virus_name
+                    logging.warning(f"Infected file detected (TAR): {file_path} - Virus: {virus_name}")
+                    return True, virus_name, "TAR"
+                logging.info(f"No malware detected in TAR file: {file_path}")
+        except PermissionError:
+            logging.error(f"Permission error occurred while scanning TAR file: {file_path}")
+        except FileNotFoundError:
+            logging.error(f"TAR file not found error occurred while scanning TAR file: {file_path}")
+        except Exception as ex:
+            logging.error(f"An error occurred while scanning TAR file: {file_path}. Error: {ex}")
+
+        # Scan ZIP files
+        try:
+            if zipfile.is_zipfile(file_path):
+                scan_result, virus_name = scan_zip_file(file_path)
+                if scan_result and virus_name not in ("Clean", ""):
+                    if signature_check["is_valid"]:
+                        virus_name = "SIG." + virus_name
+                    logging.warning(f"Infected file detected (ZIP): {file_path} - Virus: {virus_name}")
+                    return True, virus_name, "ZIP"
+                logging.info(f"No malware detected in ZIP file: {file_path}")
+        except PermissionError:
+            logging.error(f"Permission error occurred while scanning ZIP file: {file_path}")
+        except FileNotFoundError:
+            logging.error(f"ZIP file not found error occurred while scanning ZIP file: {file_path}")
+        except Exception as ex:
+            logging.error(f"An error occurred while scanning ZIP file: {file_path}. Error: {ex}")
+
+        # Scan 7z files
+        try:
+            if is_7z_file(file_path):
+                scan_result, virus_name = scan_7z_file(file_path)
+                if scan_result and virus_name not in ("Clean", ""):
+                    if signature_check["is_valid"]:
+                        virus_name = "SIG." + virus_name
+                    logging.warning(f"Infected file detected (7z): {file_path} - Virus: {virus_name}")
+                    return True, virus_name, "7z"
+                logging.info(f"No malware detected in 7z file: {file_path}")
+            else:
+                logging.info(f"File is not a valid 7z archive: {file_path}")
+        except PermissionError:
+            logging.error(f"Permission error occurred while scanning 7Z file: {file_path}")
+        except FileNotFoundError:
+            logging.error(f"7Z file not found error occurred while scanning 7Z file: {file_path}")
+        except Exception as ex:
+            logging.error(f"An error occurred while scanning 7Z file: {file_path}. Error: {ex}")
+
+    except Exception as ex:
+        logging.error(f"An error occurred while scanning file: {file_path}. Error: {ex}")
+
+    return False, "Clean", ""  # Default to clean if no malware found
 
 def scan_yara(file_path):
     matched_rules = []
