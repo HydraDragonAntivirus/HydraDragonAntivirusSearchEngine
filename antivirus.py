@@ -468,28 +468,28 @@ def scan_code_for_links(decompiled_code):
         for url in urls:
             result, reason = scan_url_general(url)
             if not result:
-                return False, f"Malicious or problematic URL detected: {reason}"
+                return False, f"Malicious URL detected: {reason}"
 
         # Scan for domains (simplified regex)
         domains = set(re.findall(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', decompiled_code))
         for domain in domains:
             result, reason = scan_domain_general(domain)
             if not result:
-                return False, f"Malicious or problematic domain detected: {reason}"
+                return False, f"Malicious domain detected: {reason}"
 
         # Scan for IP addresses (IPv4)
         ipv4_addresses = set(re.findall(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', decompiled_code))
         for ip in ipv4_addresses:
             result, reason = scan_ip_address_general(ip)
             if not result:
-                return False, f"Malicious or problematic IPv4 address detected: {reason}"
+                return False, f"Malicious IPv4 address detected: {reason}"
 
         # Scan for IP addresses (IPv6)
         ipv6_addresses = set(re.findall(r'([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}', decompiled_code))
         for ip in ipv6_addresses:
             result, reason = scan_ip_address_general(ip)
             if not result:
-                return False, f"Malicious or problematic IPv6 address detected: {reason}"
+                return False, f"Malicious IPv6 address detected: {reason}"
 
         # If no issues are found
         return True, "No malicious or whitelisted URLs, domains, or IPs detected."
@@ -628,9 +628,6 @@ def scan_ip_address_general(ip_address):
             else:
                 logging.info(f"Unknown IPv4 address detected: {ip_address}")
                 return True, f"Unknown IPv4 address detected: {ip_address}"  # Unknown, but safe
-        else:
-            logging.debug(f"Invalid IP address format detected: {ip_address}")
-            return True, f"Invalid IP address format: {ip_address}"
 
     except Exception as ex:
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
