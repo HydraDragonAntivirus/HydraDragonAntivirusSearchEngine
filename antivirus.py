@@ -113,6 +113,10 @@ from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, Q
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+from PySide6.QtCore import QThread, Signal
+print(f"PySide6.QtCore modules loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from PySide6.QtGui import QIcon
 print(f"PySide6.QtGui.QIcon module loaded in {time.time() - start_time:.6f} seconds")
 
@@ -867,6 +871,84 @@ def scan_website_content(url):
         logging.error(f"Error scanning website content: {ex}")
         return False, f"Error scanning content: {str(ex)}", ""
 
+class WorkerThread(QThread):
+    update_results = Signal(str)  # Signal to update results in the UI
+    finished = Signal()  # Signal when the task is done
+
+    def __init__(self, keyword, parent=None):
+        super().__init__(parent)
+        self.keyword = keyword
+
+    def is_domain_reachable(self, url):
+        """Check if the domain is reachable and has valid WHOIS data."""
+        try:
+            parsed_url = urlparse(url)
+            domain = parsed_url.netloc
+
+            # Check the domain's registration status using WHOIS
+            try:
+                domain_info = whois.whois(domain)
+                if not domain_info.status:
+                    self.update_results.emit(f"[WARNING] Domain {domain} does not have valid WHOIS data or is not active.\n")
+                    return False
+            except Exception as e:
+                self.update_results.emit(f"[ERROR] Error retrieving WHOIS information for {domain}: {e}\n")
+                return False
+
+            # Check if the domain is reachable by making an HTTP request
+            response = requests.get(url, timeout=5)
+            if response.status_code == 200:
+                return True
+            else:
+                self.update_results.emit(f"[WARNING] Domain {domain} returned status code {response.status_code}.\n")
+                return False
+
+        except requests.exceptions.RequestException as e:
+            self.update_results.emit(f"[ERROR] Domain is unreachable: {url} - HTTP error: {e}\n")
+            return False
+        except Exception as e:
+            self.update_results.emit(f"[ERROR] Error checking domain {url}: {e}\n")
+            return False
+
+    def run(self):
+        """Run the search and scan tasks in the background."""
+        try:
+            # Simulate searching for websites based on the keyword
+            websites = search(self.keyword, num_results=5)  # First 5 results
+            self.update_results.emit(f"Searching websites for: {self.keyword}\n")
+
+            for url in websites:
+                self.update_results.emit(f"Scanning: {url}\n")
+
+                # Check if the domain is reachable
+                if not self.is_domain_reachable(url):
+                    continue
+
+                # Scan the website
+                is_malicious, threat_details, scanner_name = scan_website_content(url)
+
+                if is_malicious:
+                    self.update_results.emit(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
+                else:
+                    self.update_results.emit(f"[CLEAN] {url}\n")
+
+                # Clear the lists after each URL scan
+                self.clean_scan_lists()
+
+        except Exception as e:
+            self.update_results.emit(f"Error during search and scan: {e}\n")
+        finally:
+            self.finished.emit()  # Emit finished signal when done
+
+    def clean_scan_lists(self):
+        """Clear the scan lists."""
+        global scanned_urls_general, scanned_domains_general, scanned_ipv4_addresses_general, scanned_ipv6_addresses_general
+        scanned_urls_general.clear()
+        scanned_domains_general.clear()
+        scanned_ipv4_addresses_general.clear()
+        scanned_ipv6_addresses_general.clear()
+        self.update_results.emit("Scan lists cleared.\n")
+
 class LocalSearchAntivirus(QWidget):
     def __init__(self):
         super().__init__()
@@ -877,7 +959,7 @@ class LocalSearchAntivirus(QWidget):
         layout = QVBoxLayout()
 
         # Set the window icon
-        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))  # Set the icon
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
 
         # User input for keyword
         self.keyword_input = QLineEdit()
@@ -886,7 +968,7 @@ class LocalSearchAntivirus(QWidget):
 
         # Search & Scan button
         self.search_button = QPushButton("Search & Scan")
-        self.search_button.clicked.connect(self.search_and_scan)
+        self.search_button.clicked.connect(self.start_search_and_scan)
         layout.addWidget(self.search_button)
 
         # Text area to show results
@@ -896,42 +978,8 @@ class LocalSearchAntivirus(QWidget):
 
         self.setLayout(layout)
 
-    def is_domain_reachable(self, url):
-        """
-        Check if the domain is reachable by making an HTTP request and if the domain has valid WHOIS registration information.
-        """
-        try:
-            # Extract the domain from the URL
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc
-
-            # Check the domain's registration status using WHOIS
-            try:
-                domain_info = whois.whois(domain)
-                if not domain_info.status:
-                    logging.warning(f"Domain {domain} does not have valid WHOIS data or is not active.")
-                    return False
-            except Exception as e:
-                logging.error(f"Error retrieving WHOIS information for {domain}: {e}")
-                return False
-
-            # Check if the domain is reachable by making an HTTP request
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                logging.info(f"Domain {domain} is reachable.")
-                return True
-            else:
-                logging.warning(f"Domain {domain} returned status code {response.status_code}.")
-                return False
-
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Domain is unreachable: {url} - HTTP error: {e}")
-            return False
-        except Exception as e:
-            logging.error(f"Error checking domain {url}: {e}")
-            return False
-
-    def search_and_scan(self):
+    def start_search_and_scan(self):
+        """Start the search and scan process in a new thread."""
         keyword = self.keyword_input.text().strip()
         if not keyword:
             self.result_text.setText("Please enter a keyword.")
@@ -940,29 +988,21 @@ class LocalSearchAntivirus(QWidget):
         self.result_text.setText(f"Searching websites for: {keyword}\n")
         QApplication.processEvents()
 
-        try:
-            # Search for websites
-            websites = search(keyword, num_results=5)  # First 5 results
+        # Start worker thread to search and scan websites
+        self.worker_thread = WorkerThread(keyword)
+        self.worker_thread.update_results.connect(self.update_results)  # Connect the signal to update results
+        self.worker_thread.finished.connect(self.on_finished)  # Connect the finished signal
+        self.worker_thread.start()
 
-            for url in websites:
-                self.result_text.append(f"Scanning: {url}")
-                QApplication.processEvents()
+    def update_results(self, result_text):
+        """Update the text area with results from the worker thread."""
+        self.result_text.append(result_text)
+        QApplication.processEvents()
 
-                # Check if the domain is reachable and active
-                if not self.is_domain_reachable(url):
-                    self.result_text.append(f"[UNREACHABLE] {url}\n")
-                    continue
-
-                # Scan the URL (assuming scan_website_content is available)
-                is_malicious, threat_details, scanner_name = scan_website_content(url)
-
-                if is_malicious:
-                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
-                else:
-                    self.result_text.append(f"[CLEAN] {url}")
-
-        except Exception as e:
-            self.result_text.append(f"Error during search and scan: {e}")
+    def on_finished(self):
+        """Handle the finished signal from the worker thread."""
+        self.result_text.append("\nScanning completed.")
+        QApplication.processEvents()
 
 def main():
     try:
