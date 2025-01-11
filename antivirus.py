@@ -854,7 +854,7 @@ def scan_yara(file_path):
 
 def scan_website_content(url):
     """
-    Scan website content by saving it to a specific directory.
+    Scan website content by saving it to a specific directory and analyzing it.
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
@@ -884,19 +884,21 @@ def scan_website_content(url):
             logging.info(f"Scanning website content from: {file_path}")
             is_malicious, threat_details, scanner_name = scan_file_real_time(file_path)
 
-            # Check for Discord webhook
+            # If the file is flagged as malicious, return immediately
+            if is_malicious:
+                return True, threat_details, scanner_name
+
+            # Check for Discord webhook (if any)
             if contains_discord_code(response.text):
-                is_malicious = True
-                threat_details = "Discord webhook detected"
-                scanner_name = "WebContentAnalyzer"
+                return True, "Discord webhook detected", "WebContentAnalyzer"
 
             # Scan for malicious URLs, domains, and IPs in the content
             result, reason = scan_code_for_links(response.text)
             if not result:
                 return False, reason, scanner_name  # Return the reason if any issue is found
 
-            # If everything checks out, return the result from scan_file_real_time
-            return is_malicious, threat_details, scanner_name
+            # If everything checks out, return True, indicating the site is safe
+            return False, "No malicious content detected.", scanner_name
 
         finally:
             # Clean up the saved file after scanning (if needed)
