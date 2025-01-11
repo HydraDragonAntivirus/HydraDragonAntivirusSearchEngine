@@ -61,16 +61,16 @@ import subprocess
 print(f"subprocess module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-import tempfile
-print(f"tempfile module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
 import whois
 print(f"whois module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 from urllib.parse import urlparse
 print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+import socket
+print(f"socket module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 import csv
@@ -156,6 +156,7 @@ def restart_clamd():
         return False
 
 general_extracted_dir = os.path.join(script_dir, "general_extracted")
+website_extracted_dir = os.path.join(script_dir, "website_extracted")
 website_rules_dir = os.path.join(script_dir, "website")
 yara_folder_path = os.path.join(script_dir, "yara")
 excluded_rules_dir = os.path.join(script_dir, "excluded")
@@ -208,6 +209,9 @@ seven_zip_path = "C:\\Program Files\\7-Zip\\7z.exe"  # Path to 7z.exe
 
 IPv4_pattern = r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'  # Simple IPv4 regex
 IPv6_pattern = r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$'  # Simple IPv6 regex
+
+os.makedirs(general_extracted_dir, exist_ok=True)
+os.makedirs(website_extracted_dir, exist_ok=True)
 
 antivirus_style = """
 QWidget {
@@ -415,6 +419,14 @@ def load_domains_data():
 
 load_domains_data()
 
+# Function to check if the IP is a local IP address
+def is_local_ip(ip):
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        return ip_obj.is_private
+    except ValueError:
+        return False
+
 # Check for Discord webhook URLs and invite links (including Canary)
 def contains_discord_code(decompiled_code):
     """
@@ -444,37 +456,54 @@ def contains_discord_code(decompiled_code):
 
     return False
 
-# Scan for domains, URLs, and IPs in the decompiled code
 def scan_code_for_links(decompiled_code):
     """
     Scan the decompiled code for domains, URLs, and IP addresses, removing duplicates.
+    Returns True if no malicious or whitelisted URLs, domains, or IPs are found.
+    Returns False with reason if any issues are detected.
     """
-    # Scan for URLs
-    urls = set(re.findall(r'https?://[^\s/$.?#].[^\s]*', decompiled_code))
-    for url in urls:
-        scan_url_general(url)
+    try:
+        # Scan for URLs
+        urls = set(re.findall(r'https?://[^\s/$.?#].[^\s]*', decompiled_code))
+        for url in urls:
+            result = scan_url_general(url)
+            if not result:
+                return False, f"Malicious or whitelisted URL detected: {url}"
 
-    # Scan for domains (simplified regex)
-    domains = set(re.findall(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', decompiled_code))
-    for domain in domains:
-        scan_domain_general(domain)
+        # Scan for domains (simplified regex)
+        domains = set(re.findall(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', decompiled_code))
+        for domain in domains:
+            result = scan_domain_general(domain)
+            if not result:
+                return False, f"Malicious or whitelisted domain detected: {domain}"
 
-    # Scan for IP addresses (IPv4)
-    ipv4_addresses = set(re.findall(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', decompiled_code))
-    for ip in ipv4_addresses:
-        scan_ip_address_general(ip)
+        # Scan for IP addresses (IPv4)
+        ipv4_addresses = set(re.findall(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', decompiled_code))
+        for ip in ipv4_addresses:
+            result = scan_ip_address_general(ip)
+            if not result:
+                return False, f"Malicious or whitelisted IPv4 address detected: {ip}"
 
-    # Scan for IP addresses (IPv6)
-    ipv6_addresses = set(re.findall(r'([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}', decompiled_code))
-    for ip in ipv6_addresses:
-        scan_ip_address_general(ip)
+        # Scan for IP addresses (IPv6)
+        ipv6_addresses = set(re.findall(r'([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}', decompiled_code))
+        for ip in ipv6_addresses:
+            result = scan_ip_address_general(ip)
+            if not result:
+                return False, f"Malicious or whitelisted IPv6 address detected: {ip}"
 
-# Generalized scan for domains
+        # If no issues are found
+        return True, "No malicious or whitelisted URLs, domains, or IPs detected."
+
+    except Exception as ex:
+        logging.error(f"Error scanning code for links: {ex}")
+        return False, f"Error scanning code for links: {ex}"
+
+# Updated generalized scan functions to return True/False for success or failure
 def scan_domain_general(domain):
     try:
         if domain in scanned_domains_general:
             logging.info(f"Domain {domain} has already been scanned.")
-            return
+            return True  # No issue found, continue scanning
 
         scanned_domains_general.append(domain)  # Add to the scanned list
         logging.info(f"Scanning domain: {domain}")
@@ -482,26 +511,25 @@ def scan_domain_general(domain):
         # Check for malicious domains
         if any(domain.lower() == malicious_domain or domain.lower().endswith(f".{malicious_domain}") for malicious_domain in malware_domains_data):
             logging.warning(f"Malicious domain detected: {domain}")
-            return
+            return False  # Malicious domain found
 
         # Check if domain is whitelisted
         if any(domain.lower() == whitelisted_domain or domain.lower().endswith(f".{whitelisted_domain}") for whitelisted_domain in whitelist_domains_data):
             logging.info(f"Domain {domain} is whitelisted")
-            return
+            return True  # Domain is whitelisted, no issues
 
         logging.info(f"Domain {domain} is not malicious or whitelisted")
-        print(f"Domain {domain} is not malicious or whitelisted")
+        return True  # No issues
 
     except Exception as ex:
         logging.error(f"Error scanning domain {domain}: {ex}")
-        print(f"Error scanning domain {domain}: {ex}")
+        return False  # Error during scan
 
-# Generalized scan for URLs
 def scan_url_general(url):
     try:
         if url in scanned_urls_general:
             logging.info(f"URL {url} has already been scanned.")
-            return
+            return True  # No issue found, continue scanning
 
         scanned_urls_general.append(url)  # Add to the scanned list
         logging.info(f"Scanning URL: {url}")
@@ -521,82 +549,72 @@ def scan_url_general(url):
                     f"Reporter: {entry['reporter']}"
                 )
                 logging.warning(message)
-                print(message)
-                return
+                return False  # Malicious URL detected
 
         logging.info(f"No match found for URL: {url}")
-        print(f"No match found for URL: {url}")
+        return True  # No malicious URL found
 
     except Exception as ex:
         logging.error(f"Error scanning URL {url}: {ex}")
-        print(f"Error scanning URL {url}: {ex}")
+        return False  # Error during scan
 
-# Generalized scan for IP addresses
 def scan_ip_address_general(ip_address):
     try:
         # Check if the IP address is local
         if is_local_ip(ip_address):
             message = f"Skipping local IP address: {ip_address}"
             logging.info(message)
-            print(message)
-            return
+            return True  # Local IP, no need to scan
 
         # Check if the IP address has already been scanned
         if ip_address in scanned_ipv4_addresses_general or ip_address in scanned_ipv6_addresses_general:
             message = f"IP address {ip_address} has already been scanned."
             logging.info(message)
-            print(message)
-            return
+            return True  # IP already scanned, no issues
 
         # Determine if it's an IPv4 or IPv6 address using regex
         if re.match(IPv6_pattern, ip_address):  # IPv6
             scanned_ipv6_addresses_general.append(ip_address)
             message = f"Scanning IPv6 address: {ip_address}"
             logging.info(message)
-            print(message)
 
             # Check if it matches malicious signatures
             if ip_address in ipv6_addresses_signatures_data:
                 logging.warning(f"Malicious IPv6 address detected: {ip_address}")
+                return False  # Malicious IP found
 
             elif ip_address in ipv6_whitelist_data:
                 logging.info(f"IPv6 address {ip_address} is whitelisted")
-                return
+                return True  # Whitelisted IP
+
             else:
                 logging.info(f"Unknown IPv6 address detected: {ip_address}")
-                print(f"Unknown IPv6 address detected: {ip_address}")
+                return True  # No issues
 
         elif re.match(IPv4_pattern, ip_address):  # IPv4
             scanned_ipv4_addresses_general.append(ip_address)
             message = f"Scanning IPv4 address: {ip_address}"
             logging.info(message)
-            print(message)
 
             # Check if it matches malicious signatures
             if ip_address in ipv4_addresses_signatures_data:
                 logging.warning(f"Malicious IPv4 address detected: {ip_address}")
+                return False  # Malicious IP found
 
             elif ip_address in ipv4_whitelist_data:
                 logging.info(f"IPv4 address {ip_address} is whitelisted")
-                return
+                return True  # Whitelisted IP
+
             else:
                 logging.info(f"Unknown IPv4 address detected: {ip_address}")
-                print(f"Unknown IPv4 address detected: {ip_address}")
+                return True  # No issues
         else:
             logging.debug(f"Invalid IP address format detected: {ip_address}")
-            print(f"Invalid IP address format detected: {ip_address}")
+            return False  # Invalid IP format
 
     except Exception as ex:
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
-        print(f"Error scanning IP address {ip_address}: {ex}")
-
-# Function to check if the IP is a local IP address
-def is_local_ip(ip):
-    try:
-        ip_obj = ipaddress.ip_address(ip)
-        return ip_obj.is_private
-    except ValueError:
-        return False
+        return False  # Error during scan
 
 # Function to extract all files from an archive using 7z.exe (no focus on extension)
 def extract_all_files_with_7z(file_path):
@@ -819,7 +837,7 @@ def scan_yara(file_path):
 
 def scan_website_content(url):
     """
-    Scan website content using scan_file_real_time function.
+    Scan website content by saving it to a specific directory.
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
@@ -836,33 +854,39 @@ def scan_website_content(url):
         response = session.get(url, timeout=30)
         response.raise_for_status()
 
-        # Create a temporary file to store the content
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
-            temp_file.write(response.content)
-            temp_path = temp_file.name
+        # Generate a file name based on the URL (sanitize the URL for a valid file name)
+        filename = url.replace('https://', '').replace('http://', '').replace('/', '_') + '.html'
+        file_path = os.path.join(website_extracted_dir, filename)
+
+        # Save the website content to the directory
+        with open(file_path, 'wb') as file:
+            file.write(response.content)
 
         try:
-            # Scan the temporary file using existing scan_file_real_time function
-            logging.info(f"Scanning website content from: {url}")
-            is_malicious, threat_details, scanner_name = scan_file_real_time(temp_path)
+            # Scan the saved file using the existing scan_file_real_time function
+            logging.info(f"Scanning website content from: {file_path}")
+            is_malicious, threat_details, scanner_name = scan_file_real_time(file_path)
 
-            # Additional website-specific checks
+            # Check for Discord webhook
             if contains_discord_code(response.text):
                 is_malicious = True
                 threat_details = "Discord webhook detected"
                 scanner_name = "WebContentAnalyzer"
 
             # Scan for malicious URLs, domains, and IPs in the content
-            scan_code_for_links(response.text)
+            result, reason = scan_code_for_links(response.text)
+            if not result:
+                return False, reason, scanner_name  # Return the reason if any issue is found
 
+            # If everything checks out, return the result from scan_file_real_time
             return is_malicious, threat_details, scanner_name
 
         finally:
-            # Clean up temporary file
+            # Clean up the saved file after scanning (if needed)
             try:
-                os.unlink(temp_path)
+                os.remove(file_path)
             except Exception as ex:
-                logging.error(f"Error removing temporary file: {ex}")
+                logging.error(f"Error removing saved file: {ex}")
 
     except requests.exceptions.RequestException as ex:
         logging.error(f"Error fetching website content: {ex}")
@@ -885,6 +909,18 @@ class WorkerThread(QThread):
             parsed_url = urlparse(url)
             domain = parsed_url.netloc
 
+            # Validate if the domain is a proper domain
+            if not self.is_valid_domain(domain):
+                self.update_results.emit(f"[ERROR] Invalid domain: {domain}\n")
+                return False
+
+            # Check if the domain resolves to an IP (DNS resolution)
+            try:
+                socket.gethostbyname(domain)  # Try to resolve the domain
+            except socket.gaierror:
+                self.update_results.emit(f"[ERROR] Domain {domain} is unreachable (DNS resolution failed).\n")
+                return False
+
             # Check the domain's registration status using WHOIS
             try:
                 domain_info = whois.whois(domain)
@@ -896,19 +932,26 @@ class WorkerThread(QThread):
                 return False
 
             # Check if the domain is reachable by making an HTTP request
-            response = requests.get(url, timeout=5)
-            if response.status_code == 200:
-                return True
-            else:
-                self.update_results.emit(f"[WARNING] Domain {domain} returned status code {response.status_code}.\n")
+            try:
+                response = requests.get(url, timeout=5)
+                if response.status_code == 200:
+                    return True
+                else:
+                    self.update_results.emit(f"[WARNING] Domain {domain} returned status code {response.status_code}.\n")
+                    return False
+            except requests.exceptions.RequestException as e:
+                self.update_results.emit(f"[ERROR] Domain {domain} is unreachable - HTTP error: {e}\n")
                 return False
 
-        except requests.exceptions.RequestException as e:
-            self.update_results.emit(f"[ERROR] Domain is unreachable: {url} - HTTP error: {e}\n")
-            return False
         except Exception as e:
             self.update_results.emit(f"[ERROR] Error checking domain {url}: {e}\n")
             return False
+
+    def is_valid_domain(self, domain):
+        """Check if the domain is valid."""
+        # Regular expression to validate domain (basic validation)
+        domain_regex = r'^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$'
+        return re.match(domain_regex, domain) is not None
 
     def run(self):
         """Run the search and scan tasks in the background."""
@@ -920,7 +963,7 @@ class WorkerThread(QThread):
             for url in websites:
                 self.update_results.emit(f"Scanning: {url}\n")
 
-                # Check if the domain is reachable
+                # Check if the domain is reachable and valid
                 if not self.is_domain_reachable(url):
                     continue
 
