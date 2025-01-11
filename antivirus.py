@@ -49,6 +49,10 @@ import yara_x
 print(f"yara_x module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import ipaddress
+print(f"ipaddress module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
@@ -141,6 +145,9 @@ freshclam_path = "C:\\Program Files\\ClamAV\\freshclam.exe"
 clamav_file_paths = ["C:\\Program Files\\ClamAV\\database\\daily.cvd", "C:\\Program Files\\ClamAV\\database\\daily.cld"]
 clamav_database_directory_path = "C:\\Program Files\\ClamAV\\database"
 seven_zip_path = "C:\\Program Files\\7-Zip\\7z.exe"  # Path to 7z.exe
+
+IPv4_pattern = r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'  # Simple IPv4 regex
+IPv6_pattern = r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$'  # Simple IPv6 regex
 
 antivirus_style = """
 QWidget {
@@ -391,6 +398,7 @@ def scan_code_for_links(decompiled_code):
     for ip in ipv6_addresses:
         scan_ip_address_general(ip)
 
+
 # Generalized scan for domains
 def scan_domain_general(domain):
     try:
@@ -404,7 +412,6 @@ def scan_domain_general(domain):
         # Check for malicious domains
         if any(domain.lower() == malicious_domain or domain.lower().endswith(f".{malicious_domain}") for malicious_domain in malware_domains_data):
             logging.warning(f"Malicious domain detected: {domain}")
-            notify_user_for_malicious_source_code(domain, 'HEUR:Win32.SourceCode.Malicious.Domain')
             return
 
         # Check if domain is whitelisted
@@ -418,6 +425,7 @@ def scan_domain_general(domain):
     except Exception as ex:
         logging.error(f"Error scanning domain {domain}: {ex}")
         print(f"Error scanning domain {domain}: {ex}")
+
 
 # Generalized scan for URLs
 def scan_url_general(url):
@@ -445,9 +453,6 @@ def scan_url_general(url):
                 )
                 logging.warning(message)
                 print(message)
-
-                # Notify the user about the malicious URL
-                notify_user_for_malicious_source_code(url, 'HEUR:Win32.SourceCode.URLhaus.Match')
                 return
 
         logging.info(f"No match found for URL: {url}")
@@ -456,6 +461,7 @@ def scan_url_general(url):
     except Exception as ex:
         logging.error(f"Error scanning URL {url}: {ex}")
         print(f"Error scanning URL {url}: {ex}")
+
 
 # Generalized scan for IP addresses
 def scan_ip_address_general(ip_address):
@@ -484,7 +490,6 @@ def scan_ip_address_general(ip_address):
             # Check if it matches malicious signatures
             if ip_address in ipv6_addresses_signatures_data:
                 logging.warning(f"Malicious IPv6 address detected: {ip_address}")
-                notify_user_for_malicious_source_code(ip_address, 'HEUR:Win32.SourceCode.Malware.IPv6')
 
             elif ip_address in ipv6_whitelist_data:
                 logging.info(f"IPv6 address {ip_address} is whitelisted")
@@ -502,7 +507,6 @@ def scan_ip_address_general(ip_address):
             # Check if it matches malicious signatures
             if ip_address in ipv4_addresses_signatures_data:
                 logging.warning(f"Malicious IPv4 address detected: {ip_address}")
-                notify_user_for_malicious_source_code(ip_address, 'HEUR:Win32.SourceCode.Malware.IPv4')
 
             elif ip_address in ipv4_whitelist_data:
                 logging.info(f"IPv4 address {ip_address} is whitelisted")
@@ -518,6 +522,15 @@ def scan_ip_address_general(ip_address):
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
         print(f"Error scanning IP address {ip_address}: {ex}")
 
+# Function to check if the IP is a local IP address
+def is_local_ip(ip):
+    try:
+        ip_obj = ipaddress.ip_address(ip)
+        return ip_obj.is_private
+    except ValueError:
+        return False
+
+# Scan file in real-time using multiple engines (ClamAV, YARA, and Archive Scanners)
 def scan_file_real_time(file_path):
     """Scan file in real-time using multiple engines."""
     logging.info(f"Started scanning file: {file_path}")
