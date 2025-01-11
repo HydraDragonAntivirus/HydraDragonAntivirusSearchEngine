@@ -65,6 +65,10 @@ import tempfile
 print(f"tempfile module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import whois
+print(f"whois module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from urllib.parse import urlparse
 print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
 
@@ -461,11 +465,32 @@ def scan_code_for_links(decompiled_code):
     for ip in ipv6_addresses:
         scan_ip_address_general(ip)
 
+def is_domain_active(domain):
+    """
+    Check if a domain is active using the whois library.
+    Returns True if the domain is active, False otherwise.
+    """
+    try:
+        domain_info = whois.whois(domain)
+        if domain_info.status:
+            logging.info(f"Domain {domain} is active.")
+            return True
+        else:
+            logging.warning(f"Domain {domain} is not active.")
+            return False
+    except Exception as ex:
+        logging.error(f"Error checking domain {domain}: {ex}")
+        return False
+
 # Generalized scan for domains
 def scan_domain_general(domain):
     try:
         if domain in scanned_domains_general:
             logging.info(f"Domain {domain} has already been scanned.")
+            return
+
+        # Extract the domain from the URL to check if it is active
+        if not is_domain_active(domain):
             return
 
         scanned_domains_general.append(domain)  # Add to the scanned list
@@ -874,19 +899,19 @@ class LocalSearchAntivirus(QWidget):
         layout = QVBoxLayout()
 
         # Set the window icon
-        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))  # Simgeyi ayarlayın
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))  # Set the icon
 
-        # Kullanıcıdan anahtar kelime girişi
+        # User input for keyword
         self.keyword_input = QLineEdit()
         self.keyword_input.setPlaceholderText("Enter a keyword to search websites")
         layout.addWidget(self.keyword_input)
 
-        # Ara ve Tara butonu
+        # Search & Scan button
         self.search_button = QPushButton("Search & Scan")
         self.search_button.clicked.connect(self.search_and_scan)
         layout.addWidget(self.search_button)
 
-        # Sonuçları göstermek için metin alanı
+        # Text area to show results
         self.result_text = QTextEdit()
         self.result_text.setReadOnly(True)
         layout.addWidget(self.result_text)
@@ -903,20 +928,20 @@ class LocalSearchAntivirus(QWidget):
         QApplication.processEvents()
 
         try:
-            # Web sitelerini ara
-            websites = search(keyword, num_results=5)  # İlk 5 sonuç
+            # Search for websites
+            websites = search(keyword, num_results=5)  # First 5 results
 
             for url in websites:
                 self.result_text.append(f"Scanning: {url}")
                 QApplication.processEvents()
 
-                # URL'yi tara
+                # Scan the URL
                 is_malicious, threat_details, scanner_name = scan_website_content(url)
 
                 if is_malicious:
-                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
+                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nDiscord Scanner: {scanner_name}\n")
                 else:
-                    self.result_text.append(f"[CLEAN] {url}\nScanner: {scanner_name}\n")
+                    self.result_text.append(f"[CLEAN] {url}")
 
         except Exception as e:
             self.result_text.append(f"Error during search and scan: {e}")

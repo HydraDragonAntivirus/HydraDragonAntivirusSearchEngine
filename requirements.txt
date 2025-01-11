@@ -1,1 +1,2 @@
 googlesearch-python
+python-whois
