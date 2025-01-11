@@ -40,6 +40,14 @@ logging.info("Application started at %s", datetime.now().strftime("%Y-%m-%d %H:%
 # Record the start time for total duration
 total_start_time = time.time()
 
+start_time = time.time()
+import yara
+print(f"yara module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+import yara_x
+print(f"yara_x module loaded in {time.time() - start_time:.6f} seconds")
+
 # Calculate and print total time
 total_end_time = time.time()
 total_duration = total_end_time - total_start_time
