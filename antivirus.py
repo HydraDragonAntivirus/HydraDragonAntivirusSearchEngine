@@ -1,7 +1,6 @@
 import os
 import sys
 import logging
-import io
 from datetime import datetime
 import time
 
@@ -25,21 +24,38 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
 )
 
-# Redirect stdout to console log
-sys.stdout = open(console_log_file, "w", encoding="utf-8", errors="replace")
+class DualStream:
+    """Custom stream that writes to both the console and a file."""
+    def __init__(self, file_path):
+        self.console = sys.__stdout__  # Original stdout (console)
+        self.file = open(file_path, "w", encoding="utf-8", errors="ignore")
 
-# Redirect stderr to console log
-sys.stderr = open(console_log_file, "w", encoding="utf-8", errors="replace")
+    def write(self, message):
+        # Write to the console and file
+        self.console.write(message)
+        self.file.write(message)
+        self.console.flush()
+        self.file.flush()
 
-# Redirect stdin to a log file
-sys.stdin = open(stdin_log_file, "w+", encoding="utf-8", errors="replace")
+    def flush(self):
+        # Ensure that both streams are flushed
+        self.console.flush()
+        self.file.flush()
+
+# Redirect stdout and stderr to our DualStream class
+sys.stdout = DualStream(console_log_file)
+sys.stderr = DualStream(console_log_file)
+
+# Redirect stdin to a log file (keeping as original behavior)
+sys.stdin = open(stdin_log_file, "w+", encoding="utf-8", errors="ignore")
 
 # Logging for application initialization
 logging.info("Application started at %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
-# Record the start time for total duration
+# Start timing total duration
 total_start_time = time.time()
 
+# Start individual module timing
 start_time = time.time()
 import yara
 print(f"yara module loaded in {time.time() - start_time:.6f} seconds")
@@ -57,7 +73,15 @@ import binascii
 print(f"binascii module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget
+import requests
+print(f"requests module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+from PySide6.QtWidgets import (
+    QApplication, QWidget, QVBoxLayout, QPushButton, 
+    QFileDialog, QMessageBox, QStackedWidget, 
+    QInputDialog, QTextEdit
+)
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
@@ -734,160 +758,101 @@ def scan_yara(file_path):
         logging.error(f"An error occurred during YARA scan: {ex}")
         return None
 
+def scan_website_content(url):
+    """
+    Scan website content using scan_file_real_time function.
+    Returns a tuple of (is_malicious, threat_details, scanner_name)
+    """
+    try:
+        # Validate URL
+        parsed_url = urlparse(url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            logging.error(f"Invalid URL format: {url}")
+            return False, "Invalid URL format", ""
+
+        # Create a session with headers to mimic a browser
+        session = requests.Session()
+        session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        })
+
+        # Fetch the website content
+        logging.info(f"Fetching content from: {url}")
+        response = session.get(url, timeout=30)
+        response.raise_for_status()
+
+        # Create a temporary file to store the content
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.html') as temp_file:
+            temp_file.write(response.content)
+            temp_path = temp_file.name
+
+        try:
+            # Scan the temporary file using existing scan_file_real_time function
+            logging.info(f"Scanning website content from: {url}")
+            is_malicious, threat_details, scanner_name = scan_file_real_time(temp_path)
+
+            # Additional website-specific checks
+            if contains_discord_code(response.text):
+                is_malicious = True
+                threat_details = "Discord webhook/invite detected"
+                scanner_name = "WebContentAnalyzer"
+
+            # Scan for malicious URLs, domains, and IPs in the content
+            scan_code_for_links(response.text)
+
+            return is_malicious, threat_details, scanner_name
+
+        finally:
+            # Clean up temporary file
+            try:
+                os.unlink(temp_path)
+            except Exception as ex:
+                logging.error(f"Error removing temporary file: {ex}")
+
+    except requests.exceptions.RequestException as ex:
+        logging.error(f"Error fetching website content: {ex}")
+        return False, f"Error fetching content: {str(ex)}", ""
+    except Exception as ex:
+        logging.error(f"Error scanning website content: {ex}")
+        return False, f"Error scanning content: {str(ex)}", ""
+
+# Update AntivirusUI class to use the new scanner
 class AntivirusUI(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Hydra Dragon Antivirus - Website Scanner")
-        self.setStyleSheet(antivirus_style)
-        self.setup_ui()
-        self.load_data()
-        
-    def load_data(self):
-        """Load all necessary data for website scanning"""
-        load_domains_data()  # This loads all the domain and IP data from files
-        
-    def setup_ui(self):
-        """Setup the main user interface"""
-        layout = QVBoxLayout()
-        
-        # Create stacked widget for multiple pages
-        self.stacked_widget = QStackedWidget()
-        
-        # Create main buttons
-        self.url_scan_button = QPushButton("Scan URL")
-        self.url_scan_button.clicked.connect(self.scan_url)
-        
-        self.domain_scan_button = QPushButton("Scan Domain")
-        self.domain_scan_button.clicked.connect(self.scan_domain)
-        
-        self.ip_scan_button = QPushButton("Scan IP Address")
-        self.ip_scan_button.clicked.connect(self.scan_ip)
-        
-        # Add buttons to layout
-        layout.addWidget(self.url_scan_button)
-        layout.addWidget(self.domain_scan_button)
-        layout.addWidget(self.ip_scan_button)
-        
-        # Add results display
-        self.results_display = QTextEdit()
-        self.results_display.setReadOnly(True)
-        self.results_display.setPlaceholderText("Scan results will appear here...")
-        layout.addWidget(self.results_display)
-        
-        self.setLayout(layout)
-        
     def scan_url(self):
-        """Handle URL scanning"""
+        """Handle URL scanning with content analysis"""
         url, ok = QInputDialog.getText(self, "Scan URL", "Enter URL to scan:")
         if ok and url:
             self.results_display.clear()
-            self.results_display.append(f"Scanning URL: {url}\n")
+            self.results_display.append(f"Scanning URL and content: {url}\n")
+            
             try:
+                # First scan the URL itself
                 scan_url_general(url)
+                
                 # Check URLhaus database
                 found_in_urlhaus = False
                 for entry in urlhaus_data:
                     if entry['url'] in url:
-                        self.results_display.append("⚠️ WARNING: Malicious URL detected!")
+                        self.results_display.append("⚠️ WARNING: Malicious URL detected in URLhaus database!")
                         self.results_display.append(f"Threat Type: {entry['threat']}")
                         self.results_display.append(f"Date Added: {entry['dateadded']}")
                         self.results_display.append(f"Status: {entry['url_status']}")
                         found_in_urlhaus = True
                         break
-                
-                if not found_in_urlhaus:
-                    self.results_display.append("✅ URL appears to be safe")
-                    
-            except Exception as ex:
-                self.results_display.append(f"Error during scan: {str(ex)}")
-                
-    def scan_domain(self):
-        """Handle domain scanning"""
-        domain, ok = QInputDialog.getText(self, "Scan Domain", "Enter domain to scan:")
-        if ok and domain:
-            self.results_display.clear()
-            self.results_display.append(f"Scanning domain: {domain}\n")
-            try:
-                # Check against malware domains
-                if any(domain.lower() == malicious_domain.lower() or 
-                      domain.lower().endswith(f".{malicious_domain.lower()}") 
-                      for malicious_domain in malware_domains_data):
-                    self.results_display.append("⚠️ WARNING: Malicious domain detected!")
-                    self.results_display.append("This domain is known for malware distribution")
-                    
-                # Check against phishing domains
-                elif any(domain.lower() == phishing_domain.lower() or 
-                        domain.lower().endswith(f".{phishing_domain.lower()}") 
-                        for phishing_domain in phishing_domains_data):
-                    self.results_display.append("⚠️ WARNING: Phishing domain detected!")
-                    self.results_display.append("This domain is known for phishing attacks")
-                    
-                # Check against abuse domains
-                elif any(domain.lower() == abuse_domain.lower() or 
-                        domain.lower().endswith(f".{abuse_domain.lower()}") 
-                        for abuse_domain in abuse_domains_data):
-                    self.results_display.append("⚠️ WARNING: Abuse domain detected!")
-                    self.results_display.append("This domain is known for abusive behavior")
-                    
-                # Check whitelist
-                elif any(domain.lower() == whitelist_domain.lower() or 
-                        domain.lower().endswith(f".{whitelist_domain.lower()}") 
-                        for whitelist_domain in whitelist_domains_data):
-                    self.results_display.append("✅ Domain is whitelisted and safe")
-                    
-                else:
-                    self.results_display.append("✅ Domain not found in malicious databases")
-                    self.results_display.append("No known threats detected")
-                    
-            except Exception as ex:
-                self.results_display.append(f"Error during scan: {str(ex)}")
-                
-    def scan_ip(self):
-        """Handle IP address scanning"""
-        ip, ok = QInputDialog.getText(self, "Scan IP", "Enter IP address to scan:")
-        if ok and ip:
-            self.results_display.clear()
-            self.results_display.append(f"Scanning IP address: {ip}\n")
-            try:
-                # Check if it's a local IP
-                if is_local_ip(ip):
-                    self.results_display.append("ℹ️ This is a local IP address")
-                    return
-                
-                # Check IPv4
-                if re.match(IPv4_pattern, ip):
-                    if ip in ipv4_addresses_signatures_data:
-                        self.results_display.append("⚠️ WARNING: Malicious IPv4 address detected!")
-                    elif ip in ipv4_whitelist_data:
-                        self.results_display.append("✅ IPv4 address is whitelisted and safe")
-                    else:
-                        self.results_display.append("✅ IPv4 address not found in malicious databases")
-                        
-                # Check IPv6
-                elif re.match(IPv6_pattern, ip):
-                    if ip in ipv6_addresses_signatures_data:
-                        self.results_display.append("⚠️ WARNING: Malicious IPv6 address detected!")
-                    elif ip in ipv6_whitelist_data:
-                        self.results_display.append("✅ IPv6 address is whitelisted and safe")
-                    else:
-                        self.results_display.append("✅ IPv6 address not found in malicious databases")
-                        
-                else:
-                    self.results_display.append("❌ Invalid IP address format")
-                    
-            except Exception as ex:
-                self.results_display.append(f"Error during scan: {str(ex)}")
 
-    def closeEvent(self, event):
-        """Handle application closure"""
-        reply = QMessageBox.question(self, 'Exit',
-            "Are you sure you want to exit?", QMessageBox.Yes |
-            QMessageBox.No, QMessageBox.No)
-
-        if reply == QMessageBox.Yes:
-            event.accept()
-        else:
-            event.ignore()
+                # Now scan the website content
+                self.results_display.append("\nAnalyzing website content...")
+                is_malicious, threat_details, scanner_name = scan_website_content(url)
+                
+                if is_malicious:
+                    self.results_display.append(f"\n⚠️ WARNING: Malicious content detected!")
+                    self.results_display.append(f"Threat Details: {threat_details}")
+                    self.results_display.append(f"Detected By: {scanner_name}")
+                elif not found_in_urlhaus:
+                    self.results_display.append("\n✅ URL and content appear to be safe")
+                    
+            except Exception as ex:
+                self.results_display.append(f"Error during scan: {str(ex)}")
 
 def main():
     try:
