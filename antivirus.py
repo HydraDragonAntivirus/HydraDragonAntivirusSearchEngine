@@ -459,37 +459,37 @@ def contains_discord_code(decompiled_code):
 def scan_code_for_links(decompiled_code):
     """
     Scan the decompiled code for domains, URLs, and IP addresses, removing duplicates.
-    Returns True if no malicious or whitelisted URLs, domains, or IPs are found.
-    Returns False with reason if any issues are detected.
+    Returns a tuple (True, "No malicious or whitelisted URLs, domains, or IPs detected.") if no issues are found,
+    or (False, reason) if any issues are detected, using categories like "malicious", "whitelisted", or "unknown".
     """
     try:
         # Scan for URLs
         urls = set(re.findall(r'https?://[^\s/$.?#].[^\s]*', decompiled_code))
         for url in urls:
-            result = scan_url_general(url)
+            result, reason = scan_url_general(url)
             if not result:
-                return False, f"Malicious or whitelisted URL detected: {url}"
+                return False, f"Malicious or problematic URL detected: {reason}"
 
         # Scan for domains (simplified regex)
         domains = set(re.findall(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', decompiled_code))
         for domain in domains:
-            result = scan_domain_general(domain)
+            result, reason = scan_domain_general(domain)
             if not result:
-                return False, f"Malicious or whitelisted domain detected: {domain}"
+                return False, f"Malicious or problematic domain detected: {reason}"
 
         # Scan for IP addresses (IPv4)
         ipv4_addresses = set(re.findall(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', decompiled_code))
         for ip in ipv4_addresses:
-            result = scan_ip_address_general(ip)
+            result, reason = scan_ip_address_general(ip)
             if not result:
-                return False, f"Malicious or whitelisted IPv4 address detected: {ip}"
+                return False, f"Malicious or problematic IPv4 address detected: {reason}"
 
         # Scan for IP addresses (IPv6)
         ipv6_addresses = set(re.findall(r'([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}', decompiled_code))
         for ip in ipv6_addresses:
-            result = scan_ip_address_general(ip)
+            result, reason = scan_ip_address_general(ip)
             if not result:
-                return False, f"Malicious or whitelisted IPv6 address detected: {ip}"
+                return False, f"Malicious or problematic IPv6 address detected: {reason}"
 
         # If no issues are found
         return True, "No malicious or whitelisted URLs, domains, or IPs detected."
@@ -498,12 +498,12 @@ def scan_code_for_links(decompiled_code):
         logging.error(f"Error scanning code for links: {ex}")
         return False, f"Error scanning code for links: {ex}"
 
-# Updated generalized scan functions to return True/False for success or failure
+# Updated generalized scan functions to return True/False with reason for success or failure
 def scan_domain_general(domain):
     try:
         if domain in scanned_domains_general:
             logging.info(f"Domain {domain} has already been scanned.")
-            return True  # No issue found, continue scanning
+            return True, "Already scanned"  # No issue found, continue scanning
 
         scanned_domains_general.append(domain)  # Add to the scanned list
         logging.info(f"Scanning domain: {domain}")
@@ -511,25 +511,45 @@ def scan_domain_general(domain):
         # Check for malicious domains
         if any(domain.lower() == malicious_domain or domain.lower().endswith(f".{malicious_domain}") for malicious_domain in malware_domains_data):
             logging.warning(f"Malicious domain detected: {domain}")
-            return False  # Malicious domain found
+            return False, f"Malicious domain detected: {domain}"
+
+        # Check for phishing domains
+        if any(domain.lower() == phishing_domain or domain.lower().endswith(f".{phishing_domain}") for phishing_domain in phishing_domains_data):
+            logging.warning(f"Phishing domain detected: {domain}")
+            return False, f"Phishing domain detected: {domain}"
+
+        # Check for abuse domains
+        if any(domain.lower() == abuse_domain or domain.lower().endswith(f".{abuse_domain}") for abuse_domain in abuse_domains_data):
+            logging.warning(f"Abuse domain detected: {domain}")
+            return False, f"Abuse domain detected: {domain}"
+
+        # Check for mining domains
+        if any(domain.lower() == mining_domain or domain.lower().endswith(f".{mining_domain}") for mining_domain in mining_domains_data):
+            logging.warning(f"Mining domain detected: {domain}")
+            return False, f"Mining domain detected: {domain}"
+
+        # Check for spam domains
+        if any(domain.lower() == spam_domain or domain.lower().endswith(f".{spam_domain}") for spam_domain in spam_domains_data):
+            logging.warning(f"Spam domain detected: {domain}")
+            return False, f"Spam domain detected: {domain}"
 
         # Check if domain is whitelisted
         if any(domain.lower() == whitelisted_domain or domain.lower().endswith(f".{whitelisted_domain}") for whitelisted_domain in whitelist_domains_data):
             logging.info(f"Domain {domain} is whitelisted")
-            return True  # Domain is whitelisted, no issues
+            return True, f"Whitelisted domain: {domain}"  # Whitelisted domain is safe
 
-        logging.info(f"Domain {domain} is not malicious or whitelisted")
-        return True  # No issues
+        logging.info(f"Domain {domain} is unknown")
+        return True, f"Unknown domain detected: {domain}"  # Unknown domain, but not malicious
 
     except Exception as ex:
         logging.error(f"Error scanning domain {domain}: {ex}")
-        return False  # Error during scan
+        return False, f"Error scanning domain {domain}: {ex}"
 
 def scan_url_general(url):
     try:
         if url in scanned_urls_general:
             logging.info(f"URL {url} has already been scanned.")
-            return True  # No issue found, continue scanning
+            return True, "Already scanned"  # No issue found, continue scanning
 
         scanned_urls_general.append(url)  # Add to the scanned list
         logging.info(f"Scanning URL: {url}")
@@ -549,14 +569,14 @@ def scan_url_general(url):
                     f"Reporter: {entry['reporter']}"
                 )
                 logging.warning(message)
-                return False  # Malicious URL detected
+                return False, f"Malicious URL detected: {url}"
 
         logging.info(f"No match found for URL: {url}")
-        return True  # No malicious URL found
+        return True, f"URL is safe: {url}"
 
     except Exception as ex:
         logging.error(f"Error scanning URL {url}: {ex}")
-        return False  # Error during scan
+        return False, f"Error scanning URL {url}: {ex}"
 
 def scan_ip_address_general(ip_address):
     try:
@@ -564,13 +584,13 @@ def scan_ip_address_general(ip_address):
         if is_local_ip(ip_address):
             message = f"Skipping local IP address: {ip_address}"
             logging.info(message)
-            return True  # Local IP, no need to scan
+            return True, "Local IP address, skipped"  # Local IP, no need to scan
 
         # Check if the IP address has already been scanned
         if ip_address in scanned_ipv4_addresses_general or ip_address in scanned_ipv6_addresses_general:
             message = f"IP address {ip_address} has already been scanned."
             logging.info(message)
-            return True  # IP already scanned, no issues
+            return True, "IP address already scanned"  # IP already scanned, no issues
 
         # Determine if it's an IPv4 or IPv6 address using regex
         if re.match(IPv6_pattern, ip_address):  # IPv6
@@ -581,15 +601,15 @@ def scan_ip_address_general(ip_address):
             # Check if it matches malicious signatures
             if ip_address in ipv6_addresses_signatures_data:
                 logging.warning(f"Malicious IPv6 address detected: {ip_address}")
-                return False  # Malicious IP found
+                return False, f"Malicious IPv6 address detected: {ip_address}"
 
             elif ip_address in ipv6_whitelist_data:
                 logging.info(f"IPv6 address {ip_address} is whitelisted")
-                return True  # Whitelisted IP
+                return True, f"Whitelisted IPv6 address: {ip_address}"  # Whitelisted IP
 
             else:
                 logging.info(f"Unknown IPv6 address detected: {ip_address}")
-                return True  # No issues
+                return True, f"Unknown IPv6 address detected: {ip_address}"  # Unknown, but safe
 
         elif re.match(IPv4_pattern, ip_address):  # IPv4
             scanned_ipv4_addresses_general.append(ip_address)
@@ -599,22 +619,22 @@ def scan_ip_address_general(ip_address):
             # Check if it matches malicious signatures
             if ip_address in ipv4_addresses_signatures_data:
                 logging.warning(f"Malicious IPv4 address detected: {ip_address}")
-                return False  # Malicious IP found
+                return False, f"Malicious IPv4 address detected: {ip_address}"
 
             elif ip_address in ipv4_whitelist_data:
                 logging.info(f"IPv4 address {ip_address} is whitelisted")
-                return True  # Whitelisted IP
+                return True, f"Whitelisted IPv4 address: {ip_address}"  # Whitelisted IP
 
             else:
                 logging.info(f"Unknown IPv4 address detected: {ip_address}")
-                return True  # No issues
+                return True, f"Unknown IPv4 address detected: {ip_address}"  # Unknown, but safe
         else:
             logging.debug(f"Invalid IP address format detected: {ip_address}")
-            return False  # Invalid IP format
+            return True, f"Invalid IP address format: {ip_address}"
 
     except Exception as ex:
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
-        return False  # Error during scan
+        return False, f"Error scanning IP address {ip_address}: {ex}"
 
 # Function to extract all files from an archive using 7z.exe (no focus on extension)
 def extract_all_files_with_7z(file_path):
