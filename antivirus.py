@@ -55,14 +55,22 @@ logging.info("Application started at %s", datetime.now().strftime("%Y-%m-%d %H:%
 # Start timing total duration
 total_start_time = time.time()
 
+# Start individual module timing
 start_time = time.time()
 import subprocess
 print(f"subprocess module loaded in {time.time() - start_time:.6f} seconds")
 
-# Start individual module timing
+start_time = time.time()
+from urllib.parse import urlparse
+print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
+
 start_time = time.time()
 import yara
 print(f"yara module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+from googlesearch import search
+print(f"googlesearch.search module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 import yara_x
@@ -85,11 +93,7 @@ import requests
 print(f"requests module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, 
-    QFileDialog, QMessageBox, QStackedWidget, 
-    QInputDialog, QTextEdit
-)
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget, QInputDialog, QTextEdit, QLineEdit
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
@@ -765,17 +769,29 @@ def scan_yara(file_path):
         logging.error(f"An error occurred during YARA scan: {ex}")
         return None
 
+def clean_url(url):
+    """
+    Cleans the URL to return only the domain (e.g., https://google.com -> google.com).
+    """
+    parsed_url = urlparse(url)
+    if not parsed_url.netloc:
+        return None  # Invalid URL
+    return parsed_url.netloc  # Return the domain (e.g., google.com)
+
 def scan_website_content(url):
     """
     Scan website content using scan_file_real_time function.
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
-        # Validate URL
+        # Validate and clean URL
         parsed_url = urlparse(url)
-        if not parsed_url.scheme or not parsed_url.netloc:
+        cleaned_url = clean_url(url)
+        if not cleaned_url:
             logging.error(f"Invalid URL format: {url}")
             return False, "Invalid URL format", ""
+
+        logging.info(f"Scanning cleaned URL: {cleaned_url}")
 
         # Create a session with headers to mimic a browser
         session = requests.Session()
@@ -784,7 +800,7 @@ def scan_website_content(url):
         })
 
         # Fetch the website content
-        logging.info(f"Fetching content from: {url}")
+        logging.info(f"Fetching content from: {cleaned_url}")
         response = session.get(url, timeout=30)
         response.raise_for_status()
 
@@ -795,13 +811,13 @@ def scan_website_content(url):
 
         try:
             # Scan the temporary file using existing scan_file_real_time function
-            logging.info(f"Scanning website content from: {url}")
+            logging.info(f"Scanning website content from: {cleaned_url}")
             is_malicious, threat_details, scanner_name = scan_file_real_time(temp_path)
 
             # Additional website-specific checks
             if contains_discord_code(response.text):
                 is_malicious = True
-                threat_details = "Discord webhook/invite detected"
+                threat_details = "Discord webhook detected"
                 scanner_name = "WebContentAnalyzer"
 
             # Scan for malicious URLs, domains, and IPs in the content
@@ -823,49 +839,69 @@ def scan_website_content(url):
         logging.error(f"Error scanning website content: {ex}")
         return False, f"Error scanning content: {str(ex)}", ""
 
-# Update AntivirusUI class to use the new scanner
-class AntivirusUI(QWidget):
-    def scan_url(self):
-        """Handle URL scanning with content analysis"""
-        url, ok = QInputDialog.getText(self, "Scan URL", "Enter URL to scan:")
-        if ok and url:
-            self.results_display.clear()
-            self.results_display.append(f"Scanning URL and content: {url}\n")
-            
-            try:
-                # First scan the URL itself
-                scan_url_general(url)
-                
-                # Check URLhaus database
-                found_in_urlhaus = False
-                for entry in urlhaus_data:
-                    if entry['url'] in url:
-                        self.results_display.append("⚠️ WARNING: Malicious URL detected in URLhaus database!")
-                        self.results_display.append(f"Threat Type: {entry['threat']}")
-                        self.results_display.append(f"Date Added: {entry['dateadded']}")
-                        self.results_display.append(f"Status: {entry['url_status']}")
-                        found_in_urlhaus = True
-                        break
+# PySide6 GUI
+class LocalSearchAntivirus(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Local Search Antivirus - Hydra Dragon")
+        self.setup_ui()
 
-                # Now scan the website content
-                self.results_display.append("\nAnalyzing website content...")
+    def setup_ui(self):
+        layout = QVBoxLayout()
+
+        # Set the window icon
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))  # Simgeyi ayarlayın
+
+        # Kullanıcıdan anahtar kelime girişi
+        self.keyword_input = QLineEdit()
+        self.keyword_input.setPlaceholderText("Enter a keyword to search websites")
+        layout.addWidget(self.keyword_input)
+
+        # Ara ve Tara butonu
+        self.search_button = QPushButton("Search & Scan")
+        self.search_button.clicked.connect(self.search_and_scan)
+        layout.addWidget(self.search_button)
+
+        # Sonuçları göstermek için metin alanı
+        self.result_text = QTextEdit()
+        self.result_text.setReadOnly(True)
+        layout.addWidget(self.result_text)
+
+        self.setLayout(layout)
+
+    def search_and_scan(self):
+        keyword = self.keyword_input.text().strip()
+        if not keyword:
+            self.result_text.setText("Please enter a keyword.")
+            return
+
+        self.result_text.setText(f"Searching websites for: {keyword}\n")
+        QApplication.processEvents()
+
+        try:
+            # Web sitelerini ara
+            websites = search(keyword, num_results=5)  # İlk 5 sonuç
+
+            for url in websites:
+                self.result_text.append(f"Scanning: {url}")
+                QApplication.processEvents()
+
+                # URL'yi tara
                 is_malicious, threat_details, scanner_name = scan_website_content(url)
-                
+
                 if is_malicious:
-                    self.results_display.append(f"\n⚠️ WARNING: Malicious content detected!")
-                    self.results_display.append(f"Threat Details: {threat_details}")
-                    self.results_display.append(f"Detected By: {scanner_name}")
-                elif not found_in_urlhaus:
-                    self.results_display.append("\n✅ URL and content appear to be safe")
-                    
-            except Exception as ex:
-                self.results_display.append(f"Error during scan: {str(ex)}")
+                    self.result_text.append(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
+                else:
+                    self.result_text.append(f"[CLEAN] {url}\nScanner: {scanner_name}\n")
+
+        except Exception as e:
+            self.result_text.append(f"Error during search and scan: {e}")
 
 def main():
     try:
         app = QApplication(sys.argv)
         app.setStyleSheet(antivirus_style)  # Apply the style sheet
-        main_gui = AntivirusUI()
+        main_gui = LocalSearchAntivirus()
         main_gui.show()
         sys.exit(app.exec())
     except Exception as ex:
