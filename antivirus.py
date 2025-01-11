@@ -55,6 +55,10 @@ logging.info("Application started at %s", datetime.now().strftime("%Y-%m-%d %H:%
 # Start timing total duration
 total_start_time = time.time()
 
+start_time = time.time()
+import subprocess
+print(f"subprocess module loaded in {time.time() - start_time:.6f} seconds")
+
 # Start individual module timing
 start_time = time.time()
 import yara
@@ -73,6 +77,10 @@ import binascii
 print(f"binascii module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import threading
+print(f"threading module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 import requests
 print(f"requests module loaded in {time.time() - start_time:.6f} seconds")
 
@@ -83,10 +91,6 @@ from PySide6.QtWidgets import (
     QInputDialog, QTextEdit
 )
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-from PySide6.QtCore import QObject, QThread, Signal
-print(f"PySide6.QtCore modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 from PySide6.QtGui import QIcon
@@ -129,6 +133,9 @@ def restart_clamd():
 
 general_extracted_dir = os.path.join(script_dir, "general_extracted")
 website_rules_dir = os.path.join(script_dir, "website")
+yara_folder_path = os.path.join(script_dir, "yara")
+excluded_rules_dir = os.path.join(script_dir, "excluded")
+excluded_rules_path = os.path.join(excluded_rules_dir, "excluded_rules.txt")
 ipv4_addresses_path = os.path.join(website_rules_dir, "IPv4Malware.txt")
 ipv4_whitelist_path = os.path.join(website_rules_dir, "IPv4Whitelist.txt")
 ipv6_addresses_path = os.path.join(website_rules_dir, "IPv6Malware.txt")
