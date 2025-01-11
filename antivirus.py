@@ -815,7 +815,7 @@ def scan_website_content(url):
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
-        logging.info(f"Scanning cleaned URL: {cleaned_url}")
+        logging.info(f"Scanning cleaned URL: {url}")
 
         # Create a session with headers to mimic a browser
         session = requests.Session()
@@ -824,7 +824,7 @@ def scan_website_content(url):
         })
 
         # Fetch the website content
-        logging.info(f"Fetching content from: {cleaned_url}")
+        logging.info(f"Fetching content from: {url}")
         response = session.get(url, timeout=30)
         response.raise_for_status()
 
@@ -835,7 +835,7 @@ def scan_website_content(url):
 
         try:
             # Scan the temporary file using existing scan_file_real_time function
-            logging.info(f"Scanning website content from: {cleaned_url}")
+            logging.info(f"Scanning website content from: {url}")
             is_malicious, threat_details, scanner_name = scan_file_real_time(temp_path)
 
             # Additional website-specific checks
