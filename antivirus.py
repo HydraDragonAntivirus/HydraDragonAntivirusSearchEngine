@@ -48,6 +48,18 @@ start_time = time.time()
 import yara_x
 print(f"yara_x module loaded in {time.time() - start_time:.6f} seconds")
 
+start_time = time.time()
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget
+print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+from PySide6.QtCore import QObject, QThread, Signal
+print(f"PySide6.QtCore modules loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+from PySide6.QtGui import QIcon
+print(f"PySide6.QtGui.QIcon module loaded in {time.time() - start_time:.6f} seconds")
+
 # Calculate and print total time
 total_end_time = time.time()
 total_duration = total_end_time - total_start_time
@@ -129,6 +141,45 @@ freshclam_path = "C:\\Program Files\\ClamAV\\freshclam.exe"
 clamav_file_paths = ["C:\\Program Files\\ClamAV\\database\\daily.cvd", "C:\\Program Files\\ClamAV\\database\\daily.cld"]
 clamav_database_directory_path = "C:\\Program Files\\ClamAV\\database"
 seven_zip_path = "C:\\Program Files\\7-Zip\\7z.exe"  # Path to 7z.exe
+
+antivirus_style = """
+QWidget {
+    background-color: #2b2b2b;
+    color: #e0e0e0;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+}
+
+QPushButton {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                                stop:0.2 #007bff, stop:0.8 #0056b3);
+    color: white;
+    border: 2px solid #007bff;
+    padding: 4px 10px;  /* Adjusted padding */
+    border-radius: 8px;  /* Adjusted border-radius */
+    min-width: 250px;  /* Adjusted min-width */
+    font-weight: bold;
+    text-align: center;
+    qproperty-iconSize: 16px;
+}
+
+QPushButton:hover {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                                stop:0.2 #0056b3, stop:0.8 #004380);
+    border-color: #0056b3;
+}
+
+QPushButton:pressed {
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+                                stop:0.2 #004380, stop:0.8 #003d75);
+    border-color: #004380;
+}
+
+QFileDialog {
+    background-color: #2b2b2b;
+    color: #e0e0e0;
+}
+"""
 
 try:
     # Load excluded rules from text file
@@ -467,7 +518,7 @@ def scan_ip_address_general(ip_address):
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
         print(f"Error scanning IP address {ip_address}: {ex}")
 
-def scan_file_real_time(file_path, signature_check, pe_file=False):
+def scan_file_real_time(file_path):
     """Scan file in real-time using multiple engines."""
     logging.info(f"Started scanning file: {file_path}")
 
@@ -476,8 +527,6 @@ def scan_file_real_time(file_path, signature_check, pe_file=False):
         try:
             result = scan_file_with_clamd(file_path)
             if result not in ("Clean", ""):
-                if signature_check["is_valid"]:
-                    result = "SIG." + result
                 logging.warning(f"Infected file detected (ClamAV): {file_path} - Virus: {result}")
                 return True, result, "ClamAV"
             logging.info(f"No malware detected by ClamAV in file: {file_path}")
@@ -488,8 +537,6 @@ def scan_file_real_time(file_path, signature_check, pe_file=False):
         try:
             yara_result = scan_yara(file_path)
             if yara_result is not None and yara_result not in ("Clean", ""):
-                if signature_check["is_valid"]:
-                    yara_result = "SIG." + yara_result
                 logging.warning(f"Infected file detected (YARA): {file_path} - Virus: {yara_result}")
                 return True, yara_result, "YARA"
             logging.info(f"Scanned file with YARA: {file_path} - No viruses detected")
@@ -501,8 +548,6 @@ def scan_file_real_time(file_path, signature_check, pe_file=False):
             if tarfile.is_tarfile(file_path):
                 scan_result, virus_name = scan_tar_file(file_path)
                 if scan_result and virus_name not in ("Clean", "F", ""):
-                    if signature_check["is_valid"]:
-                        virus_name = "SIG." + virus_name
                     logging.warning(f"Infected file detected (TAR): {file_path} - Virus: {virus_name}")
                     return True, virus_name, "TAR"
                 logging.info(f"No malware detected in TAR file: {file_path}")
@@ -518,8 +563,6 @@ def scan_file_real_time(file_path, signature_check, pe_file=False):
             if zipfile.is_zipfile(file_path):
                 scan_result, virus_name = scan_zip_file(file_path)
                 if scan_result and virus_name not in ("Clean", ""):
-                    if signature_check["is_valid"]:
-                        virus_name = "SIG." + virus_name
                     logging.warning(f"Infected file detected (ZIP): {file_path} - Virus: {virus_name}")
                     return True, virus_name, "ZIP"
                 logging.info(f"No malware detected in ZIP file: {file_path}")
@@ -535,8 +578,6 @@ def scan_file_real_time(file_path, signature_check, pe_file=False):
             if is_7z_file(file_path):
                 scan_result, virus_name = scan_7z_file(file_path)
                 if scan_result and virus_name not in ("Clean", ""):
-                    if signature_check["is_valid"]:
-                        virus_name = "SIG." + virus_name
                     logging.warning(f"Infected file detected (7z): {file_path} - Virus: {virus_name}")
                     return True, virus_name, "7z"
                 logging.info(f"No malware detected in 7z file: {file_path}")
