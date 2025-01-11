@@ -61,6 +61,10 @@ import subprocess
 print(f"subprocess module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
+import tempfile
+print(f"tempfile module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
 from urllib.parse import urlparse
 print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
 
@@ -771,12 +775,18 @@ def scan_yara(file_path):
 
 def clean_url(url):
     """
-    Cleans the URL to return only the domain (e.g., https://google.com -> google.com).
+    Cleans the URL to return only the domain (e.g., https://www.google.com -> google.com).
     """
     parsed_url = urlparse(url)
     if not parsed_url.netloc:
         return None  # Invalid URL
-    return parsed_url.netloc  # Return the domain (e.g., google.com)
+    
+    # Remove "www." if it exists
+    domain = parsed_url.netloc
+    if domain.startswith("www."):
+        domain = domain[4:]  # Strip the "www." prefix
+    
+    return domain  # Return the cleaned domain
 
 def scan_website_content(url):
     """
