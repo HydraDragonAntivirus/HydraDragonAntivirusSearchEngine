@@ -112,6 +112,7 @@ ipv4_addresses_path = os.path.join(website_rules_dir, "IPv4Malware.txt")
 ipv4_whitelist_path = os.path.join(website_rules_dir, "IPv4Whitelist.txt")
 ipv6_addresses_path = os.path.join(website_rules_dir, "IPv6Malware.txt")
 ipv6_whitelist_path = os.path.join(website_rules_dir, "IPv6Whitelist.txt")
+# Define all website file paths
 malware_domains_path = os.path.join(website_rules_dir, "MalwareDomains.txt")
 malware_domains_mail_path = os.path.join(website_rules_dir, "MalwareDomainsMail.txt")
 phishing_domains_path = os.path.join(website_rules_dir, "PhishingDomains.txt")
@@ -120,6 +121,15 @@ mining_domains_path = os.path.join(website_rules_dir, "MiningDomains.txt")
 spam_domains_path = os.path.join(website_rules_dir, "SpamDomains.txt")
 whitelist_domains_path = os.path.join(website_rules_dir, "WhiteListDomains.txt")
 whitelist_domains_mail_path = os.path.join(website_rules_dir, "WhiteListDomainsMail.txt")
+# Define corresponding subdomain files
+malware_sub_domains_path = os.path.join(website_rules_dir, "MalwareSubDomains.txt")
+malware_mail_sub_domains_path = os.path.join(website_rules_dir, "MalwareMailSubDomains.txt")
+phishing_sub_domains_path = os.path.join(website_rules_dir, "PhishingSubDomains.txt")
+abuse_sub_domains_path = os.path.join(website_rules_dir, "AbuseSubDomains.txt")
+mining_sub_domains_path = os.path.join(website_rules_dir, "MiningSubDomains.txt")
+spam_sub_domains_path = os.path.join(website_rules_dir, "SpamSubDomains.txt")
+whitelist_sub_domains_path = os.path.join(website_rules_dir, "WhiteListSubDomains.txt")
+whitelist_mail_sub_domains_path = os.path.join(website_rules_dir, "WhiteListMailSubDomains.txt")
 urlhaus_path = os.path.join(website_rules_dir, "urlhaus.txt")
 antivirus_list_path = os.path.join(script_dir, "hosts", "antivirus_list.txt")
 antivirus_domains_data = []
@@ -136,6 +146,14 @@ mining_domains_data = []
 spam_domains_data = []
 whitelist_domains_data = []
 whitelist_domains_mail_data = []
+malware_sub_domains_data = []
+malware_mail_sub_domains_data = []
+phishing_sub_domains_data = []
+abuse_sub_domains_data = []
+mining_sub_domains_data = []
+spam_sub_domains_data = []
+whitelist_sub_domains_data = []
+whitelist_mail_sub_domains_data = []
 # Scanned entities with "_general" suffix
 scanned_urls_general = []
 scanned_domains_general = []
@@ -184,8 +202,8 @@ QFileDialog {
 }
 """
 
-def load_domains_data():
-    global ipv4_addresses_signatures_data, ipv4_whitelist_data, ipv6_addresses_signatures_data, ipv6_whitelist_data, urlhaus_data, malware_domains_data, malware_domains_mail_data, phishing_domains_data, abuse_domains_data, mining_domains_data, spam_domains_data, whitelist_domains_data, whitelist_domains_mail_data
+def load_website_data():
+    global ipv4_addresses_signatures_data, ipv4_whitelist_data, ipv6_addresses_signatures_data, ipv6_whitelist_data, urlhaus_data, malware_domains_data, malware_domains_mail_data, phishing_domains_data, abuse_domains_data, mining_domains_data, spam_domains_data, whitelist_domains_data, whitelist_domains_mail_data, malware_sub_domains_data, malware_mail_sub_domains_data, phishing_sub_domains_data, abuse_sub_domains_data, mining_sub_domains_data, spam_sub_domains_data, whitelist_sub_domains_data, whitelist_mail_sub_domains_data
 
     try:
         # Load IPv4 addresses
@@ -294,9 +312,81 @@ def load_domains_data():
         print(f"Error loading Whitelist domains: {ex}")
         whitelist_domains_data = []
 
+    try:
+        # Load Malware subdomains
+        with open(malware_sub_domains_path, 'r') as file:
+            malware_sub_domains_data = file.read().splitlines()
+        print("Malware subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Malware subdomains: {ex}")
+        malware_sub_domains_data = []
+
+    try:
+        # Load Malware mail subdomains
+        with open(malware_mail_sub_domains_path, 'r') as file:
+            malware_mail_sub_domains_data = file.read().splitlines()
+        print("Malware mail subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Malware mail subdomains: {ex}")
+        malware_mail_sub_domains_data = []
+
+    try:
+        # Load Phishing subdomains
+        with open(phishing_sub_domains_path, 'r') as file:
+            phishing_sub_domains_data = file.read().splitlines()
+        print("Phishing subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Phishing subdomains: {ex}")
+        phishing_sub_domains_data = []
+
+    try:
+        # Load Abuse subdomains
+        with open(abuse_sub_domains_path, 'r') as file:
+            abuse_sub_domains_data = file.read().splitlines()
+        print("Abuse subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Abuse subdomains: {ex}")
+        abuse_sub_domains_data = []
+
+    try:
+        # Load Mining subdomains
+        with open(mining_sub_domains_path, 'r') as file:
+            mining_sub_domains_data = file.read().splitlines()
+        print("Mining subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Mining subdomains: {ex}")
+        mining_sub_domains_data = []
+
+    try:
+        # Load Spam subdomains
+        with open(spam_sub_domains_path, 'r') as file:
+            spam_sub_domains_data = file.read().splitlines()
+        print("Spam subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Spam subdomains: {ex}")
+        spam_sub_domains_data = []
+
+    try:
+        # Load Whitelist subdomains
+        with open(whitelist_sub_domains_path, 'r') as file:
+            whitelist_sub_domains_data = file.read().splitlines()
+        print("Whitelist subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Whitelist subdomains: {ex}")
+        whitelist_sub_domains_data = []
+
+    try:
+        # Load Whitelist mail subdomains
+        with open(whitelist_mail_sub_domains_path, 'r') as file:
+            whitelist_mail_sub_domains_data = file.read().splitlines()
+        print("Whitelist mail subdomains loaded successfully!")
+    except Exception as ex:
+        print(f"Error loading Whitelist mail subdomains: {ex}")
+        whitelist_mail_sub_domains_data = []
+
     print("All domain and ip address files loaded successfully!")
 
-load_domains_data()
+load_website_data()
 
 # Function to check if the IP is a local IP address
 def is_local_ip(ip):
@@ -380,45 +470,93 @@ def scan_code_for_links(decompiled_code):
 # Updated generalized scan functions to return True/False with reason for success or failure
 def scan_domain_general(domain):
     try:
-        if domain in scanned_domains_general:
-            logging.info(f"Domain {domain} has already been scanned.")
+        # Convert domain to lowercase for consistent comparison
+        domain_lower = domain.lower()
+
+        if domain_lower in scanned_domains_general:
+            logging.info(f"Domain {domain_lower} has already been scanned.")
             return True, "Already scanned"  # No issue found, continue scanning
 
-        scanned_domains_general.append(domain)  # Add to the scanned list
-        logging.info(f"Scanning domain: {domain}")
+        scanned_domains_general.append(domain_lower)  # Add to the scanned list
+        logging.info(f"Scanning domain: {domain_lower}")
 
-        # Check for malicious domains
-        if any(domain.lower() == malicious_domain or domain.lower().endswith(f".{malicious_domain}") for malicious_domain in malware_domains_data):
-            logging.warning(f"Malicious domain detected: {domain}")
-            return False, f"Malicious domain detected: {domain}"
+        # Check against spam subdomains
+        if any(domain_lower == spam_sub_domain or domain_lower.endswith(f".{spam_sub_domain}") for spam_sub_domain in spam_sub_domains_data):
+            logging.warning(f"Spam subdomain detected: {domain_lower}")
+            return False, f"Spam subdomain detected: {domain_lower}"
 
-        # Check for phishing domains
-        if any(domain.lower() == phishing_domain or domain.lower().endswith(f".{phishing_domain}") for phishing_domain in phishing_domains_data):
-            logging.warning(f"Phishing domain detected: {domain}")
-            return False, f"Phishing domain detected: {domain}"
+        # Check against mining subdomains
+        if any(domain_lower == mining_sub_domain or domain_lower.endswith(f".{mining_sub_domain}") for mining_sub_domain in mining_sub_domains_data):
+            logging.warning(f"Mining subdomain detected: {domain_lower}")
+            return False, f"Mining subdomain detected: {domain_lower}"
 
-        # Check for abuse domains
-        if any(domain.lower() == abuse_domain or domain.lower().endswith(f".{abuse_domain}") for abuse_domain in abuse_domains_data):
-            logging.warning(f"Abuse domain detected: {domain}")
-            return False, f"Abuse domain detected: {domain}"
+        # Check against abuse subdomains
+        if any(domain_lower == abuse_sub_domain or domain_lower.endswith(f".{abuse_sub_domain}") for abuse_sub_domain in abuse_sub_domains_data):
+            logging.warning(f"Abuse subdomain detected: {domain_lower}")
+            return False, f"Abuse subdomain detected: {domain_lower}"
 
-        # Check for mining domains
-        if any(domain.lower() == mining_domain or domain.lower().endswith(f".{mining_domain}") for mining_domain in mining_domains_data):
-            logging.warning(f"Mining domain detected: {domain}")
-            return False, f"Mining domain detected: {domain}"
+        # Check against phishing subdomains
+        if any(domain_lower == phishing_sub_domain or domain_lower.endswith(f".{phishing_sub_domain}") for phishing_sub_domain in phishing_sub_domains_data):
+            logging.warning(f"Phishing subdomain detected: {domain_lower}")
+            return False, f"Phishing subdomain detected: {domain_lower}"
 
-        # Check for spam domains
-        if any(domain.lower() == spam_domain or domain.lower().endswith(f".{spam_domain}") for spam_domain in spam_domains_data):
-            logging.warning(f"Spam domain detected: {domain}")
-            return False, f"Spam domain detected: {domain}"
+        # Check against malware subdomains
+        if any(domain_lower == malware_sub_domain or domain_lower.endswith(f".{malware_sub_domain}") for malware_sub_domain in malware_sub_domains_data):
+            logging.warning(f"Malware subdomain detected: {domain_lower}")
+            return False, f"Malware subdomain detected: {domain_lower}"
+
+        # Check against spam domains
+        if any(domain_lower == spam_domain or domain_lower.endswith(f".{spam_domain}") for spam_domain in spam_domains_data):
+            logging.warning(f"Spam domain detected: {domain_lower}")
+            return False, f"Spam domain detected: {domain_lower}"
+
+        # Check against mining domains
+        if any(domain_lower == mining_domain or domain_lower.endswith(f".{mining_domain}") for mining_domain in mining_domains_data):
+            logging.warning(f"Mining domain detected: {domain_lower}")
+            return False, f"Mining domain detected: {domain_lower}"
+
+        # Check against abuse domains
+        if any(domain_lower == abuse_domain or domain_lower.endswith(f".{abuse_domain}") for abuse_domain in abuse_domains_data):
+            logging.warning(f"Abuse domain detected: {domain_lower}")
+            return False, f"Abuse domain detected: {domain_lower}"
+
+        # Check against phishing domains
+        if any(domain_lower == phishing_domain or domain_lower.endswith(f".{phishing_domain}") for phishing_domain in phishing_domains_data):
+            logging.warning(f"Phishing domain detected: {domain_lower}")
+            return False, f"Phishing domain detected: {domain_lower}"
+
+        # Check against malware domains
+        if any(domain_lower == malware_domain or domain_lower.endswith(f".{malware_domain}") for malware_domain in malware_domains_data):
+            logging.warning(f"Malware domain detected: {domain_lower}")
+            return False, f"Malware domain detected: {domain_lower}"
+
+        # Check against malware mail domains
+        if any(domain_lower == malware_mail_domain or domain_lower.endswith(f".{malware_mail_domain}") for malware_mail_domain in malware_domains_mail_data):
+            logging.warning(f"Malware mail domain detected: {domain_lower}")
+            return False, f"Malware mail domain detected: {domain_lower}"
 
         # Check if domain is whitelisted
-        if any(domain.lower() == whitelisted_domain or domain.lower().endswith(f".{whitelisted_domain}") for whitelisted_domain in whitelist_domains_data):
-            logging.info(f"Domain {domain} is whitelisted")
-            return True, f"Whitelisted domain: {domain}"  # Whitelisted domain is safe
+        if any(domain_lower == whitelist_domain or domain_lower.endswith(f".{whitelist_domain}") for whitelist_domain in whitelist_domains_data):
+            logging.info(f"Domain {domain_lower} is whitelisted")
+            return True, f"Whitelisted domain: {domain_lower}"  # Whitelisted domain is safe
 
-        logging.info(f"Domain {domain} is unknown")
-        return True, f"Unknown domain detected: {domain}"  # Unknown domain, but not malicious
+        # Check if domain is whitelisted in mail data
+        if any(domain_lower == whitelist_mail_domain or domain_lower.endswith(f".{whitelist_mail_domain}") for whitelist_mail_domain in whitelist_domains_mail_data):
+            logging.info(f"Domain {domain_lower} is whitelisted (mail domain)")
+            return True, f"Whitelisted mail domain: {domain_lower}"  # Whitelisted mail domain is safe
+
+        # Check if domain is whitelisted in subdomains
+        if any(domain_lower == whitelist_sub_domain or domain_lower.endswith(f".{whitelist_sub_domain}") for whitelist_sub_domain in whitelist_sub_domains_data):
+            logging.info(f"Domain {domain_lower} is whitelisted (subdomain)")
+            return True, f"Whitelisted subdomain: {domain_lower}"  # Whitelisted subdomain is safe
+
+        # Check if domain is whitelisted in mail subdomains
+        if any(domain_lower == whitelist_mail_sub_domain or domain_lower.endswith(f".{whitelist_mail_sub_domain}") for whitelist_mail_sub_domain in whitelist_mail_sub_domains_data):
+            logging.info(f"Domain {domain_lower} is whitelisted (mail subdomain)")
+            return True, f"Whitelisted mail subdomain: {domain_lower}"  # Whitelisted mail subdomain is safe
+
+        logging.info(f"Domain {domain_lower} is unknown")
+        return True, f"Unknown domain: {domain_lower}"  # Unknown domain, but not malicious
 
     except Exception as ex:
         logging.error(f"Error scanning domain {domain}: {ex}")
