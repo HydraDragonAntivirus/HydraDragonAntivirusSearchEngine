@@ -439,10 +439,11 @@ def scan_code_for_links(decompiled_code):
             if not result:
                 return False, f"Malicious URL detected: {reason}"
 
-        # Scan for domains (simplified regex)
-        domains = set(re.findall(r'[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', decompiled_code))
-        for domain in domains:
-            result, reason = scan_domain_general(domain)
+        # Scan for domains using urlparse
+        for domain in urls:
+            parsed_url = urlparse(domain)
+            domain_name = parsed_url.netloc  # Extract the domain from the URL
+            result, reason = scan_domain_general(domain_name)
             if not result:
                 return False, f"Malicious domain detected: {reason}"
 
