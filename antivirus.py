@@ -396,35 +396,6 @@ def is_local_ip(ip):
     except ValueError:
         return False
 
-# Check for Discord webhook URLs and invite links (including Canary)
-def contains_discord_code(decompiled_code):
-    """
-    Check if the decompiled code contains a Discord webhook URL, Canary webhook URL, or a Discord invite link.
-    """
-    # Regular expressions for Discord links
-    discord_webhook_pattern = r'https://discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+'
-    discord_canary_webhook_pattern = r'https://canary\.discord\.com/api/webhooks/[0-9]+/[A-Za-z0-9_-]+'
-    discord_invite_pattern = r'https://discord\.gg/[A-Za-z0-9]+'
-
-    # Search for matches
-    discord_webhook_matches = re.findall(discord_webhook_pattern, decompiled_code)
-    discord_canary_webhook_matches = re.findall(discord_canary_webhook_pattern, decompiled_code)
-    discord_invite_matches = re.findall(discord_invite_pattern, decompiled_code)
-
-    # Logging results
-    if discord_webhook_matches:
-        logging.warning(f"Malicious Discord webhook URLs detected: {discord_webhook_matches}")
-        return True
-
-    if discord_canary_webhook_matches:
-        logging.warning(f"Malicious Discord Canary webhook URLs detected: {discord_canary_webhook_matches}")
-        return True
-
-    if discord_invite_matches:
-        logging.info(f"Discord invite links detected: {discord_invite_matches}")
-
-    return False
-
 def scan_code_for_links(decompiled_code):
     """
     Scan the decompiled code for domains, URLs, and IP addresses, removing duplicates.
@@ -432,16 +403,16 @@ def scan_code_for_links(decompiled_code):
     or (False, reason) if any issues are detected, using categories like "malicious", "whitelisted", or "unknown".
     """
     try:
-        # Scan for URLs
-        urls = set(re.findall(r'https?://[^\s/$.?#].[^\s]*', decompiled_code))
+        # Scan for URLs (http, https, or other schemes like ftp, file, etc.)
+        urls = set(re.findall(r'\b(?:https?|ftp|file|ftps|mailto|telnet|sftp)://[^\s/$.?#].[^\s]*\b', decompiled_code))
         for url in urls:
             result, reason = scan_url_general(url)
             if not result:
                 return False, f"Malicious URL detected: {reason}"
 
-        # Scan for domains using urlparse
-        for domain in urls:
-            parsed_url = urlparse(domain)
+        # Scan for domains using urlparse (for any URLs found)
+        for url in urls:
+            parsed_url = urlparse(url)
             domain_name = parsed_url.netloc  # Extract the domain from the URL
             result, reason = scan_domain_general(domain_name)
             if not result:
@@ -651,9 +622,43 @@ def scan_ip_address_general(ip_address):
         logging.error(f"Error scanning IP address {ip_address}: {ex}")
         return False, f"Error scanning IP address {ip_address}: {ex}"
 
+def scan_main_domain(url):
+    """
+    Scan the main domain of the URL for malicious activity.
+    Returns a tuple of (is_malicious, threat_details, scanner_name).
+    """
+    try:
+        logging.info(f"Scanning main domain: {url}")
+
+        # Extract the main domain (e.g., example.com)
+        parsed_url = urlparse(url)
+        main_domain = parsed_url.netloc
+
+        logging.info(f"Scanning main domain: {main_domain}")
+
+        # List to hold malicious domains found
+        malicious_domains = []
+
+        # Scan the domain for known issues
+        result, reason = scan_domain_general(main_domain)
+        if not result:
+            malicious_domains.append(main_domain)
+            return True, f"Malicious domain detected: {reason}", "DomainScanner"
+
+        # If no issues are found, return clean status
+        if malicious_domains:
+            # Limit to 5 malicious domains if found
+            return True, f"Malicious domains detected: {', '.join(malicious_domains[:5])}", "DomainScanner"
+
+        return False, "No malicious domain detected.", "DomainScanner"
+
+    except Exception as ex:
+        logging.error(f"Error scanning main domain: {ex}")
+        return False, f"Error scanning main domain: {str(ex)}", ""
+
 def scan_website_content(url):
     """
-    Scan website content by saving it to a specific directory and analyzing it.
+    Scan website content by analyzing the main domain for malicious activity.
     Returns a tuple of (is_malicious, threat_details, scanner_name)
     """
     try:
@@ -671,57 +676,9 @@ def scan_website_content(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         })
 
-        # Fetch the website content
-        logging.info(f"Fetching content from: {url}")
-        response = session.get(url, timeout=30)
-        response.raise_for_status()
-
-        # Generate a file name based on the URL (sanitize the URL for a valid file name)
-        filename = main_domain.replace('https://', '').replace('http://', '').replace('/', '_') + '.html'
-        file_path = os.path.join(website_extracted_dir, filename)
-
-        # Save the website content to the directory
-        with open(file_path, 'wb') as file:
-            file.write(response.content)
-
-        # List to hold malicious domains found
-        malicious_domains = []
-
-        try:
-            # Scan the saved file using the existing scan_file_real_time function
-            logging.info(f"Scanning website content from: {file_path}")
-            is_malicious, threat_details, scanner_name = scan_file_real_time(file_path)
-
-            # If the file is flagged as malicious, return immediately
-            if is_malicious:
-                malicious_domains.append(main_domain)
-
-            # Check for Discord webhook (if any)
-            if contains_discord_code(response.text):
-                malicious_domains.append(main_domain)
-                return True, "Discord webhook detected", "WebContentAnalyzer"
-
-            # Scan for malicious URLs, domains, and IPs in the content
-            result, reason = scan_code_for_links(response.text)
-            if not result:
-                # If malicious domains are found, append them and return the result
-                malicious_domains.append(main_domain)
-                return True, reason, scanner_name
-
-            # If everything checks out, return True, indicating the site is safe
-            if malicious_domains:
-                # Limit to 5 malicious domains
-                return True, f"Malicious domains detected: {', '.join(malicious_domains[:5])}", scanner_name
-
-            # If no malicious domains found
-            return False, "No malicious content detected.", scanner_name
-
-        finally:
-            # Clean up the saved file after scanning (if needed)
-            try:
-                os.remove(file_path)
-            except Exception as ex:
-                logging.error(f"Error removing saved file: {ex}")
+        # Now scan the main domain for any malicious behavior
+        is_malicious, threat_details, scanner_name = scan_main_domain(url)
+        return is_malicious, threat_details, scanner_name
 
     except requests.exceptions.RequestException as ex:
         logging.error(f"Error fetching website content: {ex}")
@@ -746,41 +703,34 @@ class WorkerThread(QThread):
 
             # Validate if the domain is a proper domain
             if not self.is_valid_domain(domain):
-                self.update_results.emit(f"[ERROR] Invalid domain: {domain}\n")
-                return False
+                return False  # Skip invalid domains
 
             # Check if the domain resolves to an IP (DNS resolution)
             try:
                 socket.gethostbyname(domain)  # Try to resolve the domain
             except socket.gaierror:
-                self.update_results.emit(f"[ERROR] Domain {domain} is unreachable (DNS resolution failed).\n")
-                return False
+                return False  # Skip unreachable domains
 
             # Check the domain's registration status using WHOIS
             try:
                 domain_info = whois.whois(domain)
                 if not domain_info.status:
-                    self.update_results.emit(f"[WARNING] Domain {domain} does not have valid WHOIS data or is not active.\n")
-                    return False
+                    return False  # Skip domains with no WHOIS data or inactive domains
             except Exception as e:
-                self.update_results.emit(f"[ERROR] Error retrieving WHOIS information for {domain}: {e}\n")
-                return False
+                return False  # Skip if WHOIS info cannot be retrieved
 
             # Check if the domain is reachable by making an HTTP request
             try:
                 response = requests.get(url, timeout=5)
-                if response.status_code == 200:
-                    return True
-                else:
-                    self.update_results.emit(f"[WARNING] Domain {domain} returned status code {response.status_code}.\n")
-                    return False
+                if response.status_code != 200:
+                    return False  # Skip domains that do not return a status code of 200
             except requests.exceptions.RequestException as e:
-                self.update_results.emit(f"[ERROR] Domain {domain} is unreachable - HTTP error: {e}\n")
-                return False
+                return False  # Skip if HTTP request fails
+
+            return True  # If all checks pass, domain is reachable
 
         except Exception as e:
-            self.update_results.emit(f"[ERROR] Error checking domain {url}: {e}\n")
-            return False
+            return False  # Skip if any error occurs
 
     def is_valid_domain(self, domain):
         """Check if the domain is valid."""
@@ -792,8 +742,10 @@ class WorkerThread(QThread):
         """Run the search and scan tasks in the background."""
         try:
             # Simulate searching for websites based on the keyword
-            websites = search(self.keyword, num_results=5)  # First 5 results
+            websites = search(self.keyword, num_results=50)  # Fetch more than 5 results for searching
             self.update_results.emit(f"Searching websites for: {self.keyword}\n")
+
+            malicious_count = 0  # Track the number of malicious results
 
             for url in websites:
                 self.update_results.emit(f"Scanning: {url}\n")
@@ -806,12 +758,14 @@ class WorkerThread(QThread):
                 is_malicious, threat_details, scanner_name = scan_website_content(url)
 
                 if is_malicious:
+                    malicious_count += 1
                     self.update_results.emit(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
-                else:
-                    self.update_results.emit(f"[CLEAN] {url}\n")
 
-                # Clear the lists after each URL scan
-                self.clean_scan_lists()
+                if malicious_count >= 5:  # Stop if 5 malicious links are found
+                    break
+
+            if malicious_count < 5:
+                self.update_results.emit("Less than 5 malicious websites found in the search results.\n")
 
         except Exception as e:
             self.update_results.emit(f"Error during search and scan: {e}\n")
