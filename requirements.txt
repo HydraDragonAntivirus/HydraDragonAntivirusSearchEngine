@@ -1,2 +1,3 @@
 googlesearch-python
 python-whois
+# pip install --upgrade requests urllib3 charset_normalizer
