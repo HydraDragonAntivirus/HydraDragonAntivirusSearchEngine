@@ -469,11 +469,13 @@ def process_domain(domain):
                 log_lines.append("No suggested filename in Content-Disposition; skipping download.")
                 return "\n".join(log_lines)
             
-            # Download the content in binary mode.
-            content = b""
+            # Download the content in binary mode using a list for efficiency.
+            chunks = []
             for chunk in response.iter_content(chunk_size=8192):
                 if chunk:
-                    content += chunk
+                    chunks.append(chunk)
+            content = b"".join(chunks)
+            
             if content:
                 # Compute MD5 hash of the downloaded content.
                 md5_hash = hashlib.md5(content).hexdigest()
@@ -509,7 +511,6 @@ def process_domain(domain):
                         return "\n".join(log_lines)
                     # Build the final suggested filename.
                     safe_domain = domain.replace("://", "_").replace(".", "_")
-                    # Optionally, you might want to preserve the original filename.
                     suggested_filename = prefix + filename
                     saved_path = save_executable_file(domain, content, suggested_filename=suggested_filename)
                     if saved_path:
