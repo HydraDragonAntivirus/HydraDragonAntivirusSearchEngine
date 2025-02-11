@@ -19,7 +19,7 @@ application_log_file = os.path.join(log_directory, "antivirus.log")
 # Configure logging for application log
 logging.basicConfig(
     filename=application_log_file,
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(levelname)s - %(message)s',
 )
 
@@ -53,7 +53,7 @@ from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, Q
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-from PySide6.QtCore import QThread, Signal,  QMutex, QMutexLocker
+from PySide6.QtCore import QThread, Signal
 print(f"PySide6.QtCore modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
@@ -128,10 +128,6 @@ scanned_urls_general = []
 scanned_domains_general = []
 scanned_ipv4_addresses_general = []
 scanned_ipv6_addresses_general = []
-
-# Global set to avoid re-processing domains with thread safety
-processed_domains = []
-processed_domains_lock = QMutex()
 
 os.makedirs(zeroday_dir, exist_ok=True)
 
@@ -416,159 +412,175 @@ def query_md5_online_sync(md5_hash):
     except Exception as ex:
         return (f"Error: {ex}", "")
 
-def normalize_domain(domain):
-    """Normalize domain by extracting netloc."""
-    if "://" not in domain:
-        domain = "http://" + domain
-    return urlparse(domain).netloc
+# Global set to avoid re-processing domains.
+processed_domains = []
 
-def sanitize_filename(filename):
-    """Sanitize filename to prevent path traversal and remove invalid chars."""
-    filename = os.path.basename(filename)
-    return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)[:255]
-
-def save_executable_file(domain, suggested_filename):
-    """Create a safe file path for downloading content."""
+def save_executable_file(domain, content, suggested_filename=None):
     try:
-        safe_domain = domain.replace("://", "_").replace(".", "_")
+        # Use the suggested filename if provided; otherwise, build one from the domain and timestamp.
         if not suggested_filename:
-            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
-            suggested_filename = f"{safe_domain}_{timestamp}.bin"
-        else:
-            suggested_filename = sanitize_filename(suggested_filename)
-        
+            safe_domain = domain.replace("://", "_").replace(".", "_")
+            suggested_filename = f"{safe_domain}_{datetime.now().strftime('%Y%m%d%H%M%S')}.bin"
         filepath = os.path.join(zeroday_dir, suggested_filename)
-        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        with open(filepath, "wb") as f:
+            f.write(content)
+        logging.info(f"Saved file from {domain} as {filepath}")
         return filepath
     except Exception as ex:
-        logging.error(f"Error creating path for {domain}: {ex}")
+        logging.error(f"Error saving file from {domain}: {ex}")
         return None
 
+# ------------------------------------------------------------------------------
+# Function: Process a single domain.
+#
+# This function constructs a URL from the domain and sends a GET request.
+# It downloads the content only if the response explicitly requests a file download.
+# That is, the Content-Disposition header must contain "attachment" AND a suggested filename.
+# If these conditions are not met, the domain is skipped.
+# ------------------------------------------------------------------------------
 def process_domain(domain):
-    """Process a single domain with improved error handling and safety checks."""
     log_lines = [f"\nProcessing domain: {domain}"]
     
-    # Normalize and check domain
-    normalized = normalize_domain(domain)
-    with QMutexLocker(processed_domains_lock):
-        if normalized in processed_domains:
-            return f"{domain} already processed.\n"
-        processed_domains.add(normalized)
+    # Skip if already processed
+    if domain in processed_domains:
+        return f"{domain} already processed.\n"
+    processed_domains.add(domain)
     
-    # Build URL
-    url = domain if "://" in domain else f"http://{domain}"
-    log_lines.append(f"Attempting download from: {url}")
+    # Construct the URL: if no scheme is provided, prepend "http://"
+    if "://" in domain:
+        url = domain
+    else:
+        url = "http://" + domain
+    log_lines.append(f"Attempting to download file from: {url}")
     
     try:
-        with requests.get(url, stream=True, timeout=15) as response:
-            if response.status_code != 200:
-                log_lines.append(f"HTTP Error {response.status_code}")
-                return "\n".join(log_lines)
-
+        # Make the GET request with streaming enabled.
+        response = requests.get(url, stream=True, timeout=10)
+        if response.status_code == 200:
             content_disp = response.headers.get("Content-Disposition", "").lower()
-            log_lines.append(f"Content-Disposition: {content_disp}")
-
-            if "attachment" not in content_disp or "filename=" not in content_disp:
-                log_lines.append("Missing attachment or filename - skipping")
-                return "\n".join(log_lines)
-
-            # Extract and sanitize filename
-            try:
-                filename = content_disp.split("filename=", 1)[1].split(";")[0].strip('"')
-                filename = sanitize_filename(filename)
-            except Exception as e:
-                log_lines.append(f"Filename extraction failed: {e}")
-                return "\n".join(log_lines)
-
-            # Create file path
-            prefix = ""
-            if domain in malware_sub_domains_data:
-                prefix += "malsub_"
-            elif domain in spam_sub_domains_data:
-                prefix += "spamsub_"
-            # Add other domain type checks here...
-
-            suggested_filename = f"{prefix}{filename}"
-            filepath = save_executable_file(domain, suggested_filename)
-            if not filepath:
-                return "\n".join(log_lines)
-
-            # Stream content to file and compute hash
-            md5_hash = hashlib.md5()
-            try:
-                with open(filepath, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=8192):
-                        if chunk:
-                            f.write(chunk)
-                            md5_hash.update(chunk)
-            except IOError as e:
-                log_lines.append(f"File write error: {e}")
-                os.remove(filepath)
-                return "\n".join(log_lines)
-
-            # Check file hash (implement your actual hash check here)
-            file_hash = md5_hash.hexdigest()
-            log_lines.append(f"File MD5: {file_hash}")
+            log_lines.append(f"Response Content-Disposition: {content_disp}")
             
-            # Simulated security check
-            risk_level = "Benign" if len(file_hash) % 2 == 0 else "Malicious"
-            if risk_level == "Benign":
-                os.remove(filepath)
-                log_lines.append("File considered benign - deleted")
+            # Check if the response explicitly indicates a file download.
+            # It must include both "attachment" and a suggested filename (i.e. "filename=").
+            if "attachment" not in content_disp:
+                log_lines.append("No file download requested (missing 'attachment' in Content-Disposition); skipping domain.")
+                return "\n".join(log_lines)
+            if "filename=" not in content_disp:
+                log_lines.append("No suggested filename in Content-Disposition; skipping download.")
+                return "\n".join(log_lines)
+            
+            # Download the content in binary mode.
+            content = b""
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    content += chunk
+            if content:
+                # Compute MD5 hash of the downloaded content.
+                md5_hash = hashlib.md5(content).hexdigest()
+                risk_level, virus_name = query_md5_online_sync(md5_hash)
+                log_lines.append(f"MD5: {md5_hash} | Query result: {risk_level} {virus_name}")
+                # Only collect (save) the file if it is not considered clean.
+                if risk_level.startswith("Benign"):
+                    log_lines.append("File is considered clean; skipping collection.")
+                else:
+                    # Build a prefix based on sub-domain list membership.
+                    prefix = ""
+                    if domain in malware_sub_domains_data:
+                        prefix += "malsub_"
+                    elif domain in spam_sub_domains_data:
+                        prefix += "spamsub_"
+                    elif domain in phishing_sub_domains_data:
+                        prefix += "phishsub_"
+                    elif domain in abuse_sub_domains_data:
+                        prefix += "abusesub_"
+                    elif domain in mining_sub_domains_data:
+                        prefix += "miningsub_"
+                    # Prepend the virus name (if provided) to the prefix.
+                    if virus_name:
+                        prefix = virus_name + "_" + prefix
+                    # Extract the suggested filename from the Content-Disposition header.
+                    try:
+                        filename = content_disp.split("filename=")[1].strip().strip('"')
+                    except Exception:
+                        filename = None
+                    # If for some reason no filename could be extracted, skip downloading.
+                    if not filename:
+                        log_lines.append("No filename extracted; skipping download.")
+                        return "\n".join(log_lines)
+                    # Build the final suggested filename.
+                    safe_domain = domain.replace("://", "_").replace(".", "_")
+                    # Optionally, you might want to preserve the original filename.
+                    suggested_filename = prefix + filename
+                    saved_path = save_executable_file(domain, content, suggested_filename=suggested_filename)
+                    if saved_path:
+                        log_lines.append(f"Downloaded and saved file: {saved_path}")
             else:
-                log_lines.append(f"Saved potential threat: {filepath}")
-
+                log_lines.append("No content downloaded.")
+        else:
+            log_lines.append(f"Failed to download from {url} (status code: {response.status_code}).")
     except Exception as e:
-        log_lines.append(f"Error processing {url}: {str(e)}")
+        log_lines.append(f"Error downloading from {url}: {e}")
     
     return "\n".join(log_lines)
 
+# ------------------------------------------------------------------------------
+# QThread subclass that uses ThreadPoolExecutor (up to 100 workers) to process domains concurrently.
+# ------------------------------------------------------------------------------
 class MalwareCollectorWorker(QThread):
-    update_results = pyqtSignal(str)
-    finished = pyqtSignal()
-
+    update_results = Signal(str)
+    finished = Signal()
+    
     def run(self):
-        self.update_results.emit("Starting malware collection...\n")
-        
-        # Collect all domains from security lists
-        domain_lists = [
-            malware_domains_data, malware_domains_mail_data,
-            phishing_domains_data, abuse_domains_data,
-            mining_domains_data, spam_domains_data,
-            malware_sub_domains_data, malware_mail_sub_domains_data,
-            phishing_sub_domains_data, abuse_sub_domains_data,
-            mining_sub_domains_data, spam_sub_domains_data
-        ]
-        
-        domains = set()
-        for lst in domain_lists:
-            domains.update(lst)
-        
-        if not domains:
-            self.update_results.emit("No domains to process!\n")
+        try:
+            self.update_results.emit("Starting zero-day malware collection from your domain lists...\n")
+            # Create a union of domains from your malware-related lists.
+            domains_to_scan = set()
+            for lst in [malware_domains_data, malware_domains_mail_data,
+                        phishing_domains_data, abuse_domains_data,
+                        mining_domains_data, spam_domains_data,
+                        malware_sub_domains_data, malware_mail_sub_domains_data,
+                        phishing_sub_domains_data, abuse_sub_domains_data,
+                        mining_sub_domains_data, spam_sub_domains_data]:
+                domains_to_scan.update(lst)
+            
+            if not domains_to_scan:
+                self.update_results.emit("No domains found in your malware lists.\n")
+                self.finished.emit()
+                return
+            
+            # Use ThreadPoolExecutor with up to 100 workers.
+            with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
+                future_to_domain = {executor.submit(process_domain, domain): domain for domain in domains_to_scan}
+                for future in concurrent.futures.as_completed(future_to_domain):
+                    domain = future_to_domain[future]
+                    try:
+                        result = future.result()
+                        self.update_results.emit(result)
+                    except Exception as e:
+                        self.update_results.emit(f"Error processing {domain}: {e}\n")
+            self.update_results.emit("\nZero-day malware collection completed.\n")
+        except Exception as e:
+            self.update_results.emit(f"Error in MalwareCollectorWorker: {e}\n")
+        finally:
             self.finished.emit()
-            return
 
-        # Use limited workers to prevent resource exhaustion
-        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
-            futures = {executor.submit(process_domain, domain): domain for domain in domains}
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
-                self.update_results.emit(result)
-
-        self.update_results.emit("\nCollection completed!\n")
-        self.finished.emit()
-
+# ------------------------------------------------------------------------------
+# MAIN GUI CLASS
+# ------------------------------------------------------------------------------
 class LocalSearchAntivirus(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Malware Collector - Hydra Dragon")
+        self.setWindowTitle("Zero-Day Malware Collector - Hydra Dragon")
         self.setup_ui()
-        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
-
+    
     def setup_ui(self):
         layout = QVBoxLayout()
-        self.scan_button = QPushButton("Start Collection")
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
+        
+        info_label = QLabel("Click the button below to start downloading files from your malware domains.")
+        layout.addWidget(info_label)
+        
+        self.scan_button = QPushButton("Collect Zero-Day Malware Files")
         self.scan_button.clicked.connect(self.start_scan)
         layout.addWidget(self.scan_button)
         
@@ -577,20 +589,35 @@ class LocalSearchAntivirus(QWidget):
         layout.addWidget(self.result_text)
         
         self.setLayout(layout)
-
+    
     def start_scan(self):
-        self.result_text.clear()
-        self.worker = MalwareCollectorWorker()
-        self.worker.update_results.connect(self.result_text.append)
-        self.worker.finished.connect(lambda: self.scan_button.setEnabled(True))
-        self.scan_button.setEnabled(False)
-        self.worker.start()
+        self.result_text.setText("Starting zero-day malware collection...\n")
+        QApplication.processEvents()
+        self.worker_thread = MalwareCollectorWorker()
+        self.worker_thread.update_results.connect(self.update_results)
+        self.worker_thread.finished.connect(self.on_finished)
+        self.worker_thread.start()
+    
+    def update_results(self, text):
+        self.result_text.append(text)
+        QApplication.processEvents()
+    
+    def on_finished(self):
+        self.result_text.append("\nCollection completed.")
+        QApplication.processEvents()
 
+# ------------------------------------------------------------------------------
+# MAIN ENTRY POINT
+# ------------------------------------------------------------------------------
 def main():
-    app = QApplication(sys.argv)
-    window = LocalSearchAntivirus()
-    window.show()
-    sys.exit(app.exec())
+    try:
+        app = QApplication(sys.argv)
+        app.setStyleSheet(antivirus_style)
+        main_gui = LocalSearchAntivirus()
+        main_gui.show()
+        sys.exit(app.exec())
+    except Exception as ex:
+        print(f"An error occurred: {ex}")
 
 if __name__ == "__main__":
     main()
