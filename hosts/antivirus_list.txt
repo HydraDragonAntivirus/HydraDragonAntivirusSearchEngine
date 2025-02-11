@@ -17,6 +17,7 @@ eset.com
 f-secure.com
 fortinet.com
 gdatasoftware.com
+gdata-software.com
 hitmanpro.com
 ikarussecurity.com
 k7computing.com
@@ -43,3 +44,10 @@ drweb.ru
 intego.com
 crowdstrike.com
 esetnod32.ru
+nictasoft.com
+jotti.org
+any.run
+tria.ge
+opswat.com
+surfshark.com
+cybereason.com

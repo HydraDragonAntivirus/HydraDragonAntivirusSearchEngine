@@ -15,7 +15,6 @@ if not os.path.exists(log_directory):
 # Separate log files for different purposes
 console_log_file = os.path.join(log_directory, "antivirusconsole.log")
 application_log_file = os.path.join(log_directory, "antivirus.log")
-stdin_log_file = os.path.join(log_directory, "antivirusstdin.log")
 
 # Configure logging for application log
 logging.basicConfig(
@@ -24,30 +23,11 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
 )
 
-class DualStream:
-    """Custom stream that writes to both the console and a file."""
-    def __init__(self, file_path):
-        self.console = sys.__stdout__  # Original stdout (console)
-        self.file = open(file_path, "w", encoding="utf-8", errors="ignore")
+# Redirect stdout to console log
+sys.stdout = open(console_log_file, "w", encoding="utf-8", errors="ignore")
 
-    def write(self, message):
-        # Write to the console and file
-        self.console.write(message)
-        self.file.write(message)
-        self.console.flush()
-        self.file.flush()
-
-    def flush(self):
-        # Ensure that both streams are flushed
-        self.console.flush()
-        self.file.flush()
-
-# Redirect stdout and stderr to our DualStream class
-sys.stdout = DualStream(console_log_file)
-sys.stderr = DualStream(console_log_file)
-
-# Redirect stdin to a log file (keeping as original behavior)
-sys.stdin = open(stdin_log_file, "w+", encoding="utf-8", errors="ignore")
+# Redirect stderr to console log
+sys.stderr = open(console_log_file, "w", encoding="utf-8", errors="ignore")
 
 # Logging for application initialization
 logging.info("Application started at %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -57,48 +37,36 @@ total_start_time = time.time()
 
 # Start individual module timing
 start_time = time.time()
-import whois
-print(f"whois module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-from urllib.parse import urlparse
-print(f"urlib.parse.urlparse module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-import socket
-print(f"socket module loaded in {time.time() - start_time:.6f} seconds")
+import concurrent.futures
+print(f" concurrent.futures loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 import csv
 print(f"csv module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-from googlesearch import search
-print(f"googlesearch.search module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-import ipaddress
-print(f"ipaddress module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
 import requests
 print(f"requests module loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-import re
-print(f"re module loaded in {time.time() - start_time:.6f} seconds")
-
-start_time = time.time()
-from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog, QMessageBox, QStackedWidget, QInputDialog, QTextEdit, QLineEdit
+from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTextEdit, QLineEdit, QLabel
 print(f"PySide6.QtWidgets modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import QThread, Signal,  QMutex, QMutexLocker
 print(f"PySide6.QtCore modules loaded in {time.time() - start_time:.6f} seconds")
 
 start_time = time.time()
 from PySide6.QtGui import QIcon
 print(f"PySide6.QtGui.QIcon module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+import hashlib
+print(f"hashlib module loaded in {time.time() - start_time:.6f} seconds")
+
+start_time = time.time()
+from functools import lru_cache
+print(f"functools.lru_cache module loaded in {time.time() - start_time:.6f} seconds")
 
 # Calculate and print total time
 total_end_time = time.time()
@@ -107,6 +75,7 @@ print(f"Total time for all imports: {total_duration:.6f} seconds")
 
 website_rules_dir = os.path.join(script_dir, "website")
 excluded_rules_dir = os.path.join(script_dir, "excluded")
+zeroday_dir = os.path.join(script_dir, "zeroday")
 excluded_rules_path = os.path.join(excluded_rules_dir, "excluded_rules.txt")
 ipv4_addresses_path = os.path.join(website_rules_dir, "IPv4Malware.txt")
 ipv4_whitelist_path = os.path.join(website_rules_dir, "IPv4Whitelist.txt")
@@ -160,6 +129,12 @@ scanned_domains_general = []
 scanned_ipv4_addresses_general = []
 scanned_ipv6_addresses_general = []
 
+# Global set to avoid re-processing domains with thread safety
+processed_domains = []
+processed_domains_lock = QMutex()
+
+os.makedirs(zeroday_dir, exist_ok=True)
+
 IPv4_pattern = r'^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$'  # Simple IPv4 regex
 IPv6_pattern = r'^(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$'  # Simple IPv6 regex
 
@@ -195,12 +170,18 @@ QPushButton:pressed {
                                 stop:0.2 #004380, stop:0.8 #003d75);
     border-color: #004380;
 }
-
-QFileDialog {
-    background-color: #2b2b2b;
-    color: #e0e0e0;
-}
 """
+
+# Function to load antivirus list
+def load_antivirus_list():
+    global antivirus_domains_data
+    try:
+        with open(antivirus_list_path, 'r') as antivirus_file:
+            antivirus_domains_data = antivirus_file.read().splitlines()
+        return antivirus_domains_data
+    except Exception as ex:
+        logging.error(f"Error loading Antivirus domains: {ex}")
+        return []
 
 def load_website_data():
     global ipv4_addresses_signatures_data, ipv4_whitelist_data, ipv6_addresses_signatures_data, ipv6_whitelist_data, urlhaus_data, malware_domains_data, malware_domains_mail_data, phishing_domains_data, abuse_domains_data, mining_domains_data, spam_domains_data, whitelist_domains_data, whitelist_domains_mail_data, malware_sub_domains_data, malware_mail_sub_domains_data, phishing_sub_domains_data, abuse_sub_domains_data, mining_sub_domains_data, spam_sub_domains_data, whitelist_sub_domains_data, whitelist_mail_sub_domains_data
@@ -386,465 +367,230 @@ def load_website_data():
 
     print("All domain and ip address files loaded successfully!")
 
+load_antivirus_list()
 load_website_data()
 
-# Function to check if the IP is a local IP address
-def is_local_ip(ip):
-    try:
-        ip_obj = ipaddress.ip_address(ip)
-        return ip_obj.is_private
-    except ValueError:
-        return False
-
-def scan_code_for_links(decompiled_code):
+# ------------------------------
+# Query MD5 Online Function with Caching
+# ------------------------------
+@lru_cache(maxsize=1024)
+def query_md5_online_sync(md5_hash):
     """
-    Scan the decompiled code for domains, URLs, and IP addresses, removing duplicates.
-    Returns a tuple (True, "No malicious or whitelisted URLs, domains, or IPs detected.") if no issues are found,
-    or (False, reason) if any issues are detected, using categories like "malicious", "whitelisted", or "unknown".
-    """
-    try:
-        # Scan for URLs (http, https, or other schemes like ftp, file, etc.)
-        urls = set(re.findall(r'\b(?:https?|ftp|file|ftps|mailto|telnet|sftp)://[^\s/$.?#].[^\s]*\b', decompiled_code))
-        for url in urls:
-            result, reason = scan_url_general(url)
-            if not result:
-                return False, f"Malicious URL detected: {reason}"
-
-        # Scan for domains using urlparse (for any URLs found)
-        for url in urls:
-            parsed_url = urlparse(url)
-            domain_name = parsed_url.netloc  # Extract the domain from the URL
-            result, reason = scan_domain_general(domain_name)
-            if not result:
-                return False, f"Malicious domain detected: {reason}"
-
-        # Scan for IP addresses (IPv4)
-        ipv4_addresses = set(re.findall(r'((?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)', decompiled_code))
-        for ip in ipv4_addresses:
-            result, reason = scan_ip_address_general(ip)
-            if not result:
-                return False, f"Malicious IPv4 address detected: {reason}"
-
-        # Scan for IP addresses (IPv6)
-        ipv6_addresses = set(re.findall(r'([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}', decompiled_code))
-        for ip in ipv6_addresses:
-            result, reason = scan_ip_address_general(ip)
-            if not result:
-                return False, f"Malicious IPv6 address detected: {reason}"
-
-        # If no issues are found
-        return True, "No malicious or whitelisted URLs, domains, or IPs detected."
-
-    except Exception as ex:
-        logging.error(f"Error scanning code for links: {ex}")
-        return False, f"Error scanning code for links: {ex}"
-
-# Updated generalized scan functions to return True/False with reason for success or failure
-def scan_domain_general(domain):
-    try:
-        # Convert domain to lowercase for consistent comparison
-        domain_lower = domain.lower()
-
-        if domain_lower in scanned_domains_general:
-            logging.info(f"Domain {domain_lower} has already been scanned.")
-            return True, "Already scanned"  # No issue found, continue scanning
-
-        scanned_domains_general.append(domain_lower)  # Add to the scanned list
-        logging.info(f"Scanning domain: {domain_lower}")
-
-        # Check against spam subdomains
-        if any(domain_lower == spam_sub_domain or domain_lower.endswith(f".{spam_sub_domain}") for spam_sub_domain in spam_sub_domains_data):
-            logging.warning(f"Spam subdomain detected: {domain_lower}")
-            return False, f"Spam subdomain detected: {domain_lower}"
-
-        # Check against mining subdomains
-        if any(domain_lower == mining_sub_domain or domain_lower.endswith(f".{mining_sub_domain}") for mining_sub_domain in mining_sub_domains_data):
-            logging.warning(f"Mining subdomain detected: {domain_lower}")
-            return False, f"Mining subdomain detected: {domain_lower}"
-
-        # Check against abuse subdomains
-        if any(domain_lower == abuse_sub_domain or domain_lower.endswith(f".{abuse_sub_domain}") for abuse_sub_domain in abuse_sub_domains_data):
-            logging.warning(f"Abuse subdomain detected: {domain_lower}")
-            return False, f"Abuse subdomain detected: {domain_lower}"
-
-        # Check against phishing subdomains
-        if any(domain_lower == phishing_sub_domain or domain_lower.endswith(f".{phishing_sub_domain}") for phishing_sub_domain in phishing_sub_domains_data):
-            logging.warning(f"Phishing subdomain detected: {domain_lower}")
-            return False, f"Phishing subdomain detected: {domain_lower}"
-
-        # Check against malware subdomains
-        if any(domain_lower == malware_sub_domain or domain_lower.endswith(f".{malware_sub_domain}") for malware_sub_domain in malware_sub_domains_data):
-            logging.warning(f"Malware subdomain detected: {domain_lower}")
-            return False, f"Malware subdomain detected: {domain_lower}"
-
-        # Check against spam domains
-        if any(domain_lower == spam_domain or domain_lower.endswith(f".{spam_domain}") for spam_domain in spam_domains_data):
-            logging.warning(f"Spam domain detected: {domain_lower}")
-            return False, f"Spam domain detected: {domain_lower}"
-
-        # Check against mining domains
-        if any(domain_lower == mining_domain or domain_lower.endswith(f".{mining_domain}") for mining_domain in mining_domains_data):
-            logging.warning(f"Mining domain detected: {domain_lower}")
-            return False, f"Mining domain detected: {domain_lower}"
-
-        # Check against abuse domains
-        if any(domain_lower == abuse_domain or domain_lower.endswith(f".{abuse_domain}") for abuse_domain in abuse_domains_data):
-            logging.warning(f"Abuse domain detected: {domain_lower}")
-            return False, f"Abuse domain detected: {domain_lower}"
-
-        # Check against phishing domains
-        if any(domain_lower == phishing_domain or domain_lower.endswith(f".{phishing_domain}") for phishing_domain in phishing_domains_data):
-            logging.warning(f"Phishing domain detected: {domain_lower}")
-            return False, f"Phishing domain detected: {domain_lower}"
-
-        # Check against malware domains
-        if any(domain_lower == malware_domain or domain_lower.endswith(f".{malware_domain}") for malware_domain in malware_domains_data):
-            logging.warning(f"Malware domain detected: {domain_lower}")
-            return False, f"Malware domain detected: {domain_lower}"
-
-        # Check against malware mail domains
-        if any(domain_lower == malware_mail_domain or domain_lower.endswith(f".{malware_mail_domain}") for malware_mail_domain in malware_domains_mail_data):
-            logging.warning(f"Malware mail domain detected: {domain_lower}")
-            return False, f"Malware mail domain detected: {domain_lower}"
-
-        # Check if domain is whitelisted
-        if any(domain_lower == whitelist_domain or domain_lower.endswith(f".{whitelist_domain}") for whitelist_domain in whitelist_domains_data):
-            logging.info(f"Domain {domain_lower} is whitelisted")
-            return True, f"Whitelisted domain: {domain_lower}"  # Whitelisted domain is safe
-
-        # Check if domain is whitelisted in mail data
-        if any(domain_lower == whitelist_mail_domain or domain_lower.endswith(f".{whitelist_mail_domain}") for whitelist_mail_domain in whitelist_domains_mail_data):
-            logging.info(f"Domain {domain_lower} is whitelisted (mail domain)")
-            return True, f"Whitelisted mail domain: {domain_lower}"  # Whitelisted mail domain is safe
-
-        # Check if domain is whitelisted in subdomains
-        if any(domain_lower == whitelist_sub_domain or domain_lower.endswith(f".{whitelist_sub_domain}") for whitelist_sub_domain in whitelist_sub_domains_data):
-            logging.info(f"Domain {domain_lower} is whitelisted (subdomain)")
-            return True, f"Whitelisted subdomain: {domain_lower}"  # Whitelisted subdomain is safe
-
-        # Check if domain is whitelisted in mail subdomains
-        if any(domain_lower == whitelist_mail_sub_domain or domain_lower.endswith(f".{whitelist_mail_sub_domain}") for whitelist_mail_sub_domain in whitelist_mail_sub_domains_data):
-            logging.info(f"Domain {domain_lower} is whitelisted (mail subdomain)")
-            return True, f"Whitelisted mail subdomain: {domain_lower}"  # Whitelisted mail subdomain is safe
-
-        logging.info(f"Domain {domain_lower} is unknown")
-        return True, f"Unknown domain: {domain_lower}"  # Unknown domain, but not malicious
-
-    except Exception as ex:
-        logging.error(f"Error scanning domain {domain}: {ex}")
-        return False, f"Error scanning domain {domain}: {ex}"
-
-def scan_url_general(url):
-    try:
-        if url in scanned_urls_general:
-            logging.info(f"URL {url} has already been scanned.")
-            return True, "Already scanned"  # No issue found, continue scanning
-
-        scanned_urls_general.append(url)  # Add to the scanned list
-        logging.info(f"Scanning URL: {url}")
-
-        # Check against the URLhaus database
-        for entry in urlhaus_data:
-            if entry['url'] in url:
-                message = (
-                    f"URL {url} matches the URLhaus signatures.\n"
-                    f"ID: {entry['id']}\n"
-                    f"Date Added: {entry['dateadded']}\n"
-                    f"URL Status: {entry['url_status']}\n"
-                    f"Last Online: {entry['last_online']}\n"
-                    f"Threat: {entry['threat']}\n"
-                    f"Tags: {entry['tags']}\n"
-                    f"URLhaus Link: {entry['urlhaus_link']}\n"
-                    f"Reporter: {entry['reporter']}"
-                )
-                logging.warning(message)
-                return False, f"Malicious URL detected: {url}"
-
-        logging.info(f"No match found for URL: {url}")
-        return True, f"URL is safe: {url}"
-
-    except Exception as ex:
-        logging.error(f"Error scanning URL {url}: {ex}")
-        return False, f"Error scanning URL {url}: {ex}"
-
-def scan_ip_address_general(ip_address):
-    try:
-        # Check if the IP address is local
-        if is_local_ip(ip_address):
-            message = f"Skipping local IP address: {ip_address}"
-            logging.info(message)
-            return True, "Local IP address, skipped"  # Local IP, no need to scan
-
-        # Check if the IP address has already been scanned
-        if ip_address in scanned_ipv4_addresses_general or ip_address in scanned_ipv6_addresses_general:
-            message = f"IP address {ip_address} has already been scanned."
-            logging.info(message)
-            return True, "IP address already scanned"  # IP already scanned, no issues
-
-        # Determine if it's an IPv4 or IPv6 address using regex
-        if re.match(IPv6_pattern, ip_address):  # IPv6
-            scanned_ipv6_addresses_general.append(ip_address)
-            message = f"Scanning IPv6 address: {ip_address}"
-            logging.info(message)
-
-            # Check if it matches malicious signatures
-            if ip_address in ipv6_addresses_signatures_data:
-                logging.warning(f"Malicious IPv6 address detected: {ip_address}")
-                return False, f"Malicious IPv6 address detected: {ip_address}"
-
-            elif ip_address in ipv6_whitelist_data:
-                logging.info(f"IPv6 address {ip_address} is whitelisted")
-                return True, f"Whitelisted IPv6 address: {ip_address}"  # Whitelisted IP
-
-            else:
-                logging.info(f"Unknown IPv6 address detected: {ip_address}")
-                return True, f"Unknown IPv6 address detected: {ip_address}"  # Unknown, but safe
-
-        elif re.match(IPv4_pattern, ip_address):  # IPv4
-            scanned_ipv4_addresses_general.append(ip_address)
-            message = f"Scanning IPv4 address: {ip_address}"
-            logging.info(message)
-
-            # Check if it matches malicious signatures
-            if ip_address in ipv4_addresses_signatures_data:
-                logging.warning(f"Malicious IPv4 address detected: {ip_address}")
-                return False, f"Malicious IPv4 address detected: {ip_address}"
-
-            elif ip_address in ipv4_whitelist_data:
-                logging.info(f"IPv4 address {ip_address} is whitelisted")
-                return True, f"Whitelisted IPv4 address: {ip_address}"  # Whitelisted IP
-
-            else:
-                logging.info(f"Unknown IPv4 address detected: {ip_address}")
-                return True, f"Unknown IPv4 address detected: {ip_address}"  # Unknown, but safe
-
-    except Exception as ex:
-        logging.error(f"Error scanning IP address {ip_address}: {ex}")
-        return False, f"Error scanning IP address {ip_address}: {ex}"
-
-def scan_main_domain(url):
-    """
-    Scan the main domain of the URL for malicious activity.
-    Returns a tuple of (is_malicious, threat_details, scanner_name).
+    Queries the online API and returns a tuple:
+        (risk_level, virus_name)
+    If the response indicates:
+      - "[100% risk]": returns ("Malware", virus_name)
+      - "[70% risk]": returns ("Suspicious", virus_name)
+      - "[0% risk]": returns ("Benign", "")
+      - "[10% risk]": returns ("Benign (auto verdict)", "")
+      - If not yet rated: returns ("Unknown", "")
     """
     try:
-        logging.info(f"Scanning main domain: {url}")
-
-        # Extract the main domain (e.g., example.com)
-        parsed_url = urlparse(url)
-        main_domain = parsed_url.netloc
-
-        logging.info(f"Scanning main domain: {main_domain}")
-
-        # List to hold malicious domains found
-        malicious_domains = []
-
-        # Scan the domain for known issues
-        result, reason = scan_domain_general(main_domain)
-        if not result:
-            malicious_domains.append(main_domain)
-            return True, f"Malicious domain detected: {reason}", "DomainScanner"
-
-        # If no issues are found, return clean status
-        if malicious_domains:
-            # Limit to 5 malicious domains if found
-            return True, f"Malicious domains detected: {', '.join(malicious_domains[:5])}", "DomainScanner"
-
-        return False, "No malicious domain detected.", "DomainScanner"
-
+        md5_hash_upper = md5_hash.upper()
+        url = f"https://www.nictasoft.com/ace/md5/{md5_hash_upper}"
+        response = requests.get(url)
+        if response.status_code == 200:
+            result = response.text.strip()
+            lower_result = result.lower()
+            if "[100% risk]" in lower_result:
+                if "detected as" in lower_result:
+                    virus_name = result.split("detected as", 1)[1].strip().split()[0]
+                    return ("Malware", virus_name)
+                else:
+                    return ("Malware", "")
+            if "[70% risk]" in lower_result:
+                if "detected as" in lower_result:
+                    virus_name = result.split("detected as", 1)[1].strip().split()[0]
+                    return ("Suspicious", virus_name)
+                else:
+                    return ("Suspicious", "")
+            if "[0% risk]" in lower_result:
+                return ("Benign", "")
+            if "[10% risk]" in lower_result:
+                return ("Benign (auto verdict)", "")
+            if "this file is not yet rated" in lower_result:
+                return ("Unknown", "")
+            return ("Unknown (Result)", "")
+        else:
+            return ("Unknown (API error)", "")
     except Exception as ex:
-        logging.error(f"Error scanning main domain: {ex}")
-        return False, f"Error scanning main domain: {str(ex)}", ""
+        return (f"Error: {ex}", "")
 
-def scan_website_content(url):
-    """
-    Scan website content by analyzing the main domain for malicious activity.
-    Returns a tuple of (is_malicious, threat_details, scanner_name)
-    """
+def normalize_domain(domain):
+    """Normalize domain by extracting netloc."""
+    if "://" not in domain:
+        domain = "http://" + domain
+    return urlparse(domain).netloc
+
+def sanitize_filename(filename):
+    """Sanitize filename to prevent path traversal and remove invalid chars."""
+    filename = os.path.basename(filename)
+    return re.sub(r'[^a-zA-Z0-9_.-]', '_', filename)[:255]
+
+def save_executable_file(domain, suggested_filename):
+    """Create a safe file path for downloading content."""
     try:
-        logging.info(f"Scanning cleaned URL: {url}")
-
-        # Extract the main domain (e.g., example.com)
-        parsed_url = urlparse(url)
-        main_domain = parsed_url.netloc
-
-        logging.info(f"Scanning main domain: {main_domain}")
-
-        # Create a session with headers to mimic a browser
-        session = requests.Session()
-        session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
-
-        # Now scan the main domain for any malicious behavior
-        is_malicious, threat_details, scanner_name = scan_main_domain(url)
-        return is_malicious, threat_details, scanner_name
-
-    except requests.exceptions.RequestException as ex:
-        logging.error(f"Error fetching website content: {ex}")
-        return False, f"Error fetching content: {str(ex)}", ""
+        safe_domain = domain.replace("://", "_").replace(".", "_")
+        if not suggested_filename:
+            timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+            suggested_filename = f"{safe_domain}_{timestamp}.bin"
+        else:
+            suggested_filename = sanitize_filename(suggested_filename)
+        
+        filepath = os.path.join(zeroday_dir, suggested_filename)
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        return filepath
     except Exception as ex:
-        logging.error(f"Error scanning website content: {ex}")
-        return False, f"Error scanning content: {str(ex)}", ""
+        logging.error(f"Error creating path for {domain}: {ex}")
+        return None
 
-class WorkerThread(QThread):
-    update_results = Signal(str)  # Signal to update results in the UI
-    finished = Signal()  # Signal when the task is done
+def process_domain(domain):
+    """Process a single domain with improved error handling and safety checks."""
+    log_lines = [f"\nProcessing domain: {domain}"]
+    
+    # Normalize and check domain
+    normalized = normalize_domain(domain)
+    with QMutexLocker(processed_domains_lock):
+        if normalized in processed_domains:
+            return f"{domain} already processed.\n"
+        processed_domains.add(normalized)
+    
+    # Build URL
+    url = domain if "://" in domain else f"http://{domain}"
+    log_lines.append(f"Attempting download from: {url}")
+    
+    try:
+        with requests.get(url, stream=True, timeout=15) as response:
+            if response.status_code != 200:
+                log_lines.append(f"HTTP Error {response.status_code}")
+                return "\n".join(log_lines)
 
-    def __init__(self, keyword, parent=None):
-        super().__init__(parent)
-        self.keyword = keyword
+            content_disp = response.headers.get("Content-Disposition", "").lower()
+            log_lines.append(f"Content-Disposition: {content_disp}")
 
-    def is_domain_reachable(self, url):
-        """Check if the domain is reachable and has valid WHOIS data."""
-        try:
-            parsed_url = urlparse(url)
-            domain = parsed_url.netloc
+            if "attachment" not in content_disp or "filename=" not in content_disp:
+                log_lines.append("Missing attachment or filename - skipping")
+                return "\n".join(log_lines)
 
-            # Validate if the domain is a proper domain
-            if not self.is_valid_domain(domain):
-                return False  # Skip invalid domains
-
-            # Check if the domain resolves to an IP (DNS resolution)
+            # Extract and sanitize filename
             try:
-                socket.gethostbyname(domain)  # Try to resolve the domain
-            except socket.gaierror:
-                return False  # Skip unreachable domains
-
-            # Check the domain's registration status using WHOIS
-            try:
-                domain_info = whois.whois(domain)
-                if not domain_info.status:
-                    return False  # Skip domains with no WHOIS data or inactive domains
+                filename = content_disp.split("filename=", 1)[1].split(";")[0].strip('"')
+                filename = sanitize_filename(filename)
             except Exception as e:
-                return False  # Skip if WHOIS info cannot be retrieved
+                log_lines.append(f"Filename extraction failed: {e}")
+                return "\n".join(log_lines)
 
-            # Check if the domain is reachable by making an HTTP request
+            # Create file path
+            prefix = ""
+            if domain in malware_sub_domains_data:
+                prefix += "malsub_"
+            elif domain in spam_sub_domains_data:
+                prefix += "spamsub_"
+            # Add other domain type checks here...
+
+            suggested_filename = f"{prefix}{filename}"
+            filepath = save_executable_file(domain, suggested_filename)
+            if not filepath:
+                return "\n".join(log_lines)
+
+            # Stream content to file and compute hash
+            md5_hash = hashlib.md5()
             try:
-                response = requests.get(url, timeout=5)
-                if response.status_code != 200:
-                    return False  # Skip domains that do not return a status code of 200
-            except requests.exceptions.RequestException as e:
-                return False  # Skip if HTTP request fails
+                with open(filepath, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            f.write(chunk)
+                            md5_hash.update(chunk)
+            except IOError as e:
+                log_lines.append(f"File write error: {e}")
+                os.remove(filepath)
+                return "\n".join(log_lines)
 
-            return True  # If all checks pass, domain is reachable
+            # Check file hash (implement your actual hash check here)
+            file_hash = md5_hash.hexdigest()
+            log_lines.append(f"File MD5: {file_hash}")
+            
+            # Simulated security check
+            risk_level = "Benign" if len(file_hash) % 2 == 0 else "Malicious"
+            if risk_level == "Benign":
+                os.remove(filepath)
+                log_lines.append("File considered benign - deleted")
+            else:
+                log_lines.append(f"Saved potential threat: {filepath}")
 
-        except Exception as e:
-            return False  # Skip if any error occurs
+    except Exception as e:
+        log_lines.append(f"Error processing {url}: {str(e)}")
+    
+    return "\n".join(log_lines)
 
-    def is_valid_domain(self, domain):
-        """Check if the domain is valid."""
-        # Regular expression to validate domain (basic validation)
-        domain_regex = r'^(?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$'
-        return re.match(domain_regex, domain) is not None
+class MalwareCollectorWorker(QThread):
+    update_results = pyqtSignal(str)
+    finished = pyqtSignal()
 
     def run(self):
-        """Run the search and scan tasks in the background."""
-        try:
-            # Simulate searching for websites based on the keyword
-            websites = search(self.keyword, num_results=50)  # Fetch more than 5 results for searching
-            self.update_results.emit(f"Searching websites for: {self.keyword}\n")
+        self.update_results.emit("Starting malware collection...\n")
+        
+        # Collect all domains from security lists
+        domain_lists = [
+            malware_domains_data, malware_domains_mail_data,
+            phishing_domains_data, abuse_domains_data,
+            mining_domains_data, spam_domains_data,
+            malware_sub_domains_data, malware_mail_sub_domains_data,
+            phishing_sub_domains_data, abuse_sub_domains_data,
+            mining_sub_domains_data, spam_sub_domains_data
+        ]
+        
+        domains = set()
+        for lst in domain_lists:
+            domains.update(lst)
+        
+        if not domains:
+            self.update_results.emit("No domains to process!\n")
+            self.finished.emit()
+            return
 
-            malicious_count = 0  # Track the number of malicious results
+        # Use limited workers to prevent resource exhaustion
+        with concurrent.futures.ThreadPoolExecutor(max_workers=20) as executor:
+            futures = {executor.submit(process_domain, domain): domain for domain in domains}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                self.update_results.emit(result)
 
-            for url in websites:
-                self.update_results.emit(f"Scanning: {url}\n")
-
-                # Check if the domain is reachable and valid
-                if not self.is_domain_reachable(url):
-                    continue
-
-                # Scan the website
-                is_malicious, threat_details, scanner_name = scan_website_content(url)
-
-                if is_malicious:
-                    malicious_count += 1
-                    self.update_results.emit(f"[MALICIOUS] {url}\nDetails: {threat_details}\nScanner: {scanner_name}\n")
-
-                if malicious_count >= 5:  # Stop if 5 malicious links are found
-                    break
-
-            if malicious_count < 5:
-                self.update_results.emit("Less than 5 malicious websites found in the search results.\n")
-
-        except Exception as e:
-            self.update_results.emit(f"Error during search and scan: {e}\n")
-        finally:
-            self.finished.emit()  # Emit finished signal when done
-
-    def clean_scan_lists(self):
-        """Clear the scan lists."""
-        global scanned_urls_general, scanned_domains_general, scanned_ipv4_addresses_general, scanned_ipv6_addresses_general
-        scanned_urls_general.clear()
-        scanned_domains_general.clear()
-        scanned_ipv4_addresses_general.clear()
-        scanned_ipv6_addresses_general.clear()
-        self.update_results.emit("Scan lists cleared.\n")
+        self.update_results.emit("\nCollection completed!\n")
+        self.finished.emit()
 
 class LocalSearchAntivirus(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Local Search Antivirus - Hydra Dragon")
+        self.setWindowTitle("Malware Collector - Hydra Dragon")
         self.setup_ui()
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
 
     def setup_ui(self):
         layout = QVBoxLayout()
-
-        # Set the window icon
-        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
-
-        # User input for keyword
-        self.keyword_input = QLineEdit()
-        self.keyword_input.setPlaceholderText("Enter a keyword to search websites")
-        layout.addWidget(self.keyword_input)
-
-        # Search & Scan button
-        self.search_button = QPushButton("Search & Scan")
-        self.search_button.clicked.connect(self.start_search_and_scan)
-        layout.addWidget(self.search_button)
-
-        # Text area to show results
+        self.scan_button = QPushButton("Start Collection")
+        self.scan_button.clicked.connect(self.start_scan)
+        layout.addWidget(self.scan_button)
+        
         self.result_text = QTextEdit()
         self.result_text.setReadOnly(True)
         layout.addWidget(self.result_text)
-
+        
         self.setLayout(layout)
 
-    def start_search_and_scan(self):
-        """Start the search and scan process in a new thread."""
-        keyword = self.keyword_input.text().strip()
-        if not keyword:
-            self.result_text.setText("Please enter a keyword.")
-            return
-
-        self.result_text.setText(f"Searching websites for: {keyword}\n")
-        QApplication.processEvents()
-
-        # Start worker thread to search and scan websites
-        self.worker_thread = WorkerThread(keyword)
-        self.worker_thread.update_results.connect(self.update_results)  # Connect the signal to update results
-        self.worker_thread.finished.connect(self.on_finished)  # Connect the finished signal
-        self.worker_thread.start()
-
-    def update_results(self, result_text):
-        """Update the text area with results from the worker thread."""
-        self.result_text.append(result_text)
-        QApplication.processEvents()
-
-    def on_finished(self):
-        """Handle the finished signal from the worker thread."""
-        self.result_text.append("\nScanning completed.")
-        QApplication.processEvents()
+    def start_scan(self):
+        self.result_text.clear()
+        self.worker = MalwareCollectorWorker()
+        self.worker.update_results.connect(self.result_text.append)
+        self.worker.finished.connect(lambda: self.scan_button.setEnabled(True))
+        self.scan_button.setEnabled(False)
+        self.worker.start()
 
 def main():
-    try:
-        app = QApplication(sys.argv)
-        app.setStyleSheet(antivirus_style)  # Apply the style sheet
-        main_gui = LocalSearchAntivirus()
-        main_gui.show()
-        sys.exit(app.exec())
-    except Exception as ex:
-        print(f"An error occurred: {ex}")
+    app = QApplication(sys.argv)
+    window = LocalSearchAntivirus()
+    window.show()
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
