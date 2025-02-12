@@ -419,7 +419,7 @@ async fn process_url(
             .to_str()
             .unwrap_or("")
             .to_lowercase();
-        if ext == "pdf" || ext == "xml" || ext == "jpg" || ext == "png"  || ext == "jpeg" || ext == "atom"  || ext == "webp" {
+        if ext == "pdf" || ext == "xml" || ext == "jpg" || ext == "png"  || ext == "jpeg" || ext == "atom" || ext == "webp" || ext == "gif" || ext == "vcf" {
             let msg = format!("File from {} has a forbidden extension ({}); skipping saving.", normalized_url, ext);
             let _ = log_message(&msg);
             return ProcessResult { new_urls: vec![] };
@@ -489,10 +489,6 @@ fn update_progress(processed: usize, total: usize) {
     print!("\rProcessed: {}/{}", processed, total);
     io::stdout().flush().unwrap();
 }
-
-/// Processes a Task (wraps process_url) and returns any new URLs.
-/// In this design, tasks at depth 0 return new URLs (to be enqueued as depth 1),
-/// while tasks at deeper depths return an empty list.
 async fn process_task(
     task: Task,
     client: Arc<reqwest::Client>,
@@ -514,7 +510,7 @@ async fn process_task(
         semaphore,
     )
     .await;
-    if task.depth < max_depth - 1 {
+    if task.depth < max_depth {
         result.new_urls
     } else {
         vec![]
