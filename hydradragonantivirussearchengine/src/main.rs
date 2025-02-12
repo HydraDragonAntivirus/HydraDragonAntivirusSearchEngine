@@ -2,7 +2,7 @@ use anyhow::Result;
 use chrono::Local;
 use futures::future::join_all;
 use md5::{Digest, Md5};
-use reqwest::{StatusCode, Url};
+use reqwest::{StatusCode, Url, Client};
 use scraper::{Html, Selector};
 use std::{
     collections::HashSet,
@@ -50,38 +50,41 @@ fn log_message(message: &str) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Holds the domain lists loaded from files.
-struct DomainCollections {
-    malware_domains: HashSet<String>,
-    malware_domains_mail: HashSet<String>,
-    phishing_domains: HashSet<String>,
-    abuse_domains: HashSet<String>,
-    mining_domains: HashSet<String>,
-    spam_domains: HashSet<String>,
-    malware_sub_domains: HashSet<String>,
-    malware_mail_sub_domains: HashSet<String>,
-    phishing_sub_domains: HashSet<String>,
-    abuse_sub_domains: HashSet<String>,
-    mining_sub_domains: HashSet<String>,
-    spam_sub_domains: HashSet<String>,
+/// Appends an unknown IP address to the appropriate file.
+/// IPv4 addresses are saved to "IPv4Unknown.txt" while IPv6 addresses are saved to "IPv6Unknown.txt".
+fn append_unknown_ip(ip: &str) -> std::io::Result<()> {
+    // Decide on the filename based on IP type.
+    // (Change the file names if you prefer different naming.)
+    let unknown_filename = if ip.parse::<IpAddr>()
+        .map(|ip| ip.is_ipv4())
+        .unwrap_or(true)
+    {
+        "IPv4SuspiciousUnknownZeroDay.txt"
+    } else {
+        "IPv6SuspiciousUnknownZeroday.txt"
+    };
+
+    // Open (or create) the file in append mode.
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(unknown_filename)?;
+    writeln!(file, "{}", ip)?;
+    Ok(())
 }
 
-impl DomainCollections {
-    /// Returns the union of all domains.
-    fn union_all(&self) -> HashSet<String> {
+/// Holds the malware IP lists loaded from files.
+pub struct IpCollections {
+    ipv4_malware: HashSet<String>,
+    ipv6_malware: HashSet<String>,
+}
+
+impl IpCollections {
+    /// Returns a union of both IPv4 and IPv6 malware IPs.
+    pub fn union_all(&self) -> HashSet<String> {
         let mut union = HashSet::new();
-        union.extend(self.malware_domains.iter().cloned());
-        union.extend(self.malware_domains_mail.iter().cloned());
-        union.extend(self.phishing_domains.iter().cloned());
-        union.extend(self.abuse_domains.iter().cloned());
-        union.extend(self.mining_domains.iter().cloned());
-        union.extend(self.spam_domains.iter().cloned());
-        union.extend(self.malware_sub_domains.iter().cloned());
-        union.extend(self.malware_mail_sub_domains.iter().cloned());
-        union.extend(self.phishing_sub_domains.iter().cloned());
-        union.extend(self.abuse_sub_domains.iter().cloned());
-        union.extend(self.mining_sub_domains.iter().cloned());
-        union.extend(self.spam_sub_domains.iter().cloned());
+        union.extend(self.ipv4_malware.iter().cloned());
+        union.extend(self.ipv6_malware.iter().cloned());
         union
     }
 }
@@ -103,26 +106,16 @@ fn load_lines(path: &Path) -> Result<HashSet<String>> {
     Ok(set)
 }
 
-/// Loads all required domain lists from the given website directory.
-fn load_domain_collections(website_dir: &Path) -> Result<DomainCollections> {
-    Ok(DomainCollections {
-        malware_domains: load_lines(&website_dir.join("MalwareDomains.txt"))?,
-        malware_domains_mail: load_lines(&website_dir.join("MalwareDomainsMail.txt"))?,
-        phishing_domains: load_lines(&website_dir.join("PhishingDomains.txt"))?,
-        abuse_domains: load_lines(&website_dir.join("AbuseDomains.txt"))?,
-        mining_domains: load_lines(&website_dir.join("MiningDomains.txt"))?,
-        spam_domains: load_lines(&website_dir.join("SpamDomains.txt"))?,
-        malware_sub_domains: load_lines(&website_dir.join("MalwareSubDomains.txt"))?,
-        malware_mail_sub_domains: load_lines(&website_dir.join("MalwareSubDomainsMail.txt"))?,
-        phishing_sub_domains: load_lines(&website_dir.join("PhishingSubDomains.txt"))?,
-        abuse_sub_domains: load_lines(&website_dir.join("AbuseSubDomains.txt"))?,
-        mining_sub_domains: load_lines(&website_dir.join("MiningDomains.txt"))?,
-        spam_sub_domains: load_lines(&website_dir.join("SpamSubDomains.txt"))?,
+/// Loads the malware IP lists from the given website directory.
+fn load_ip_collections(website_dir: &Path) -> Result<IpCollections> {
+    Ok(IpCollections {
+        ipv4_malware: load_lines(&website_dir.join("IPv4Malware.txt"))?,
+        ipv6_malware: load_lines(&website_dir.join("IPv6Malware.txt"))?,
     })
 }
 
 /// Holds the whitelist sets loaded from files.
-struct WhiteListCollections {
+pub struct WhiteListCollections {
     domains: HashSet<String>,
     sub_domains: HashSet<String>,
     domains_mail: HashSet<String>,
@@ -175,7 +168,7 @@ struct Task {
 }
 
 /// Holds the result of processing one URL.
-struct ProcessResult {
+pub struct ProcessResult {
     new_urls: Vec<String>,
 }
 
@@ -203,7 +196,7 @@ fn extract_filename(content_disp: &str) -> Option<String> {
 }
 
 /// Queries the MD5 API online for a given MD5 hash (in uppercase).
-async fn query_md5_online(client: &reqwest::Client, md5: &str) -> Result<(String, String)> {
+async fn query_md5_online(client: &Client, md5: &str) -> Result<(String, String)> {
     let url = format!("https://www.nictasoft.com/ace/md5/{}", md5);
     let response = client
         .get(&url)
@@ -239,55 +232,82 @@ async fn query_md5_online(client: &reqwest::Client, md5: &str) -> Result<(String
     Ok(("Unknown (Result)".to_string(), "".to_string()))
 }
 
-/// Processes a URL. If its host is whitelisted, the URL is skipped.
-/// Otherwise, if not HTML, it downloads and (if malicious) saves the file;
-/// if HTML, it extracts new URLs.
-async fn process_url(
+/// --- process_url function ---
+/// This function downloads a URL and then either:
+///   - If the content is HTML, it extracts new URLs (from <a href="..."> links)
+///     that are not whitelisted. Only URLs whose hosts are valid IP addresses are kept.
+///   - Otherwise, it calculates the file’s MD5 hash,
+///     queries an online risk analysis service, and (if malicious) saves the file.
+///     Additionally, if the risk level is "Unknown", the IP address is logged to a file
+///     (but only once, so duplicates are not created).
+/// The returned `ProcessResult` includes any new URLs found.
+pub async fn process_url(
     url: String,
     depth: usize,
-    client: Arc<reqwest::Client>,
-    collections: Arc<DomainCollections>,
+    client: Arc<Client>,
     whitelist: Arc<WhiteListCollections>,
     zeroday_dir: Arc<PathBuf>,
     processed: Arc<Mutex<HashSet<String>>>,
     semaphore: Arc<Semaphore>,
+    unknown_ips: Arc<Mutex<HashSet<String>>>,
 ) -> ProcessResult {
-    let _permit = semaphore.acquire().await;
-    let start_msg = format!("Processing URL (depth {}): {}", depth, url);
-    let _ = log_message(&start_msg);
+    // Acquire the semaphore and log the URL being processed.
+    let _permit = semaphore.acquire().await.unwrap();
+    let _ = log_message(&format!("Processing URL (depth {}): {}", depth, url));
 
     {
-        let mut proc_lock = processed.lock().unwrap();
-        if proc_lock.contains(&url) {
+        // Skip if the URL was already processed.
+        let mut processed_lock = processed.lock().unwrap();
+        if processed_lock.contains(&url) {
             return ProcessResult { new_urls: vec![] };
         }
-        proc_lock.insert(url.clone());
+        processed_lock.insert(url.clone());
     }
 
     let normalized_url = normalize_url(&url);
-
-    if let Ok(parsed) = Url::parse(&normalized_url) {
-        if let Some(host) = parsed.host_str() {
-            if is_whitelisted(host, &whitelist) {
-                let msg = format!("Skipping whitelisted URL: {}", normalized_url);
-                let _ = log_message(&msg);
-                return ProcessResult { new_urls: vec![] };
-            }
+    let host = match Url::parse(&normalized_url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(|s| s.to_lowercase()))
+    {
+        Some(h) => h,
+        None => {
+            let _ = log_message(&format!("Failed to parse URL: {}", normalized_url));
+            return ProcessResult { new_urls: vec![] };
         }
+    };
+
+    // Only process URLs whose host is a valid IP address.
+    if host.parse::<IpAddr>().is_err() {
+        let _ = log_message(&format!("Skipping non-IP host: {}", host));
+        return ProcessResult { new_urls: vec![] };
     }
 
-    let resp = match client.get(&normalized_url).timeout(Duration::from_secs(10)).send().await {
+    // Also skip if the host is whitelisted.
+    if is_whitelisted(&host, &whitelist) {
+        let _ = log_message(&format!("Skipping whitelisted host: {}", host));
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    // Download the URL.
+    let resp = match client
+        .get(&normalized_url)
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
-            let msg = format!("Error downloading {}: {}", normalized_url, e);
-            let _ = log_message(&msg);
+            let _ = log_message(&format!("Error downloading {}: {}", normalized_url, e));
             return ProcessResult { new_urls: vec![] };
         }
     };
 
     if resp.status() != StatusCode::OK {
-        let msg = format!("Failed to download {} (status: {})", normalized_url, resp.status());
-        let _ = log_message(&msg);
+        let _ = log_message(&format!(
+            "Failed to download {} (status: {})",
+            normalized_url,
+            resp.status()
+        ));
         return ProcessResult { new_urls: vec![] };
     }
 
@@ -298,219 +318,146 @@ async fn process_url(
         .unwrap_or("")
         .to_lowercase();
 
-    if !content_type.contains("text/html") {
-        let content = match resp.bytes().await {
-            Ok(b) => b,
+    // Read the response content as bytes.
+    let content = match resp.bytes().await {
+        Ok(b) => b,
+        Err(e) => {
+            let _ = log_message(&format!("Error reading content from {}: {}", normalized_url, e));
+            return ProcessResult { new_urls: vec![] };
+        }
+    };
+
+    if content.is_empty() {
+        let _ = log_message(&format!("No content downloaded from {}", normalized_url));
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    // ----------------------------------
+    // HTML Branch: Extract new URLs
+    // ----------------------------------
+    if content_type.contains("text/html") {
+        // Parse the HTML document.
+        let document = Html::parse_document(&String::from_utf8_lossy(&content));
+
+        // Create a selector for <a href="..."> elements.
+        let selector = match Selector::parse("a[href]") {
+            Ok(sel) => sel,
             Err(e) => {
-                let msg = format!("Error reading content from {}: {}", normalized_url, e);
-                let _ = log_message(&msg);
+                let _ = log_message(&format!("Error creating HTML selector: {}", e));
                 return ProcessResult { new_urls: vec![] };
             }
         };
-        if content.is_empty() {
-            let msg = format!("No content downloaded from {}.", normalized_url);
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
 
-        // --- First: Check extension before computing MD5 ---
-        let filename = headers
-            .get("content-disposition")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|cd| extract_filename(cd))
-            .unwrap_or_else(|| {
-                // Fallback: use the last segment of the URL path.
-                if let Ok(parsed) = Url::parse(&normalized_url) {
-                    if let Some(segment) = parsed.path_segments().and_then(|s| s.last()) {
-                        segment.to_string()
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            });
-        if filename.is_empty() || Path::new(&filename).extension().is_none() {
-            let msg = format!(
-                "File from {} does not have a valid filename (or extension); skipping saving.",
-                normalized_url
-            );
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-        let ext = Path::new(&filename)
-            .extension()
-            .unwrap()
-            .to_str()
-            .unwrap_or("")
-            .to_lowercase();
-        if ext == "pdf"
-            || ext == "xml"
-            || ext == "jpg"
-            || ext == "png"
-            || ext == "jpeg"
-            || ext == "atom"
-            || ext == "webp"
-            || ext == "gif"
-            || ext == "vcf"
-            || ext == "docx"
-            || ext == "ics"
-        {
-            let msg = format!(
-                "File from {} has a forbidden extension ({}); skipping saving.",
-                normalized_url, ext
-            );
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-        // --- End: Extension Check ---
-
-        // Now compute MD5 and perform risk analysis.
-        let mut hasher = Md5::new();
-        hasher.update(&content);
-        let digest = hasher.finalize();
-        let md5_hash = format!("{:x}", digest);
-        let md5_hash_upper = md5_hash.to_uppercase();
-
-        let (risk_level, virus_name) =
-            match query_md5_online(&client, &md5_hash_upper).await {
-                Ok(res) => res,
-                Err(e) => (format!("Error: {}", e), "".to_string()),
-            };
-
-        let risk_msg = format!(
-            "URL: {} MD5: {} Risk: {} {}",
-            normalized_url, md5_hash_upper, risk_level, virus_name
-        );
-        let _ = log_message(&risk_msg);
-
-        if risk_level.starts_with("Benign")
-            || risk_level.starts_with("Benign (auto verdict)")
-        {
-            let msg = format!(
-                "File from {} is considered clean; skipping collection.",
-                normalized_url
-            );
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-
-        // Determine the host string from the URL.
-        let host = if let Ok(parsed) = Url::parse(&normalized_url) {
-            parsed.host_str().unwrap_or("").to_string()
-        } else {
-            normalized_url.clone()
-        };
-
-        // --- Build the file prefix based on which domain list(s) flagged this host ---
-        let mut prefix = String::new();
-        if collections.malware_domains.contains(&host) {
-            prefix.push_str("MalwareDomains_");
-        }
-        if collections.malware_domains_mail.contains(&host) {
-            prefix.push_str("MalwareDomainsMail_");
-        }
-        if collections.phishing_domains.contains(&host) {
-            prefix.push_str("PhishingDomains_");
-        }
-        if collections.abuse_domains.contains(&host) {
-            prefix.push_str("AbuseDomains_");
-        }
-        if collections.mining_domains.contains(&host) {
-            prefix.push_str("MiningDomains_");
-        }
-        if collections.spam_domains.contains(&host) {
-            prefix.push_str("SpamDomains_");
-        }
-        if collections.malware_sub_domains.contains(&host) {
-            prefix.push_str("MalwareSubDomains_");
-        }
-        if collections.malware_mail_sub_domains.contains(&host) {
-            prefix.push_str("MalwareSubDomainsMail_");
-        }
-        if collections.phishing_sub_domains.contains(&host) {
-            prefix.push_str("PhishingSubDomains_");
-        }
-        if collections.abuse_sub_domains.contains(&host) {
-            prefix.push_str("AbuseSubDomains_");
-        }
-        if collections.mining_sub_domains.contains(&host) {
-            prefix.push_str("MiningSubDomains_");
-        }
-        if collections.spam_sub_domains.contains(&host) {
-            prefix.push_str("SpamSubDomains_");
-        }
-        if !virus_name.is_empty() {
-            prefix = format!("{}_{prefix}", virus_name);
-        }
-        // --- End Build Prefix ---
-
-        let suggested_filename = format!("{}{}", prefix, filename);
-        let file_path = zeroday_dir.join(&suggested_filename);
-
-        match fs::write(&file_path, &content).await {
-            Ok(_) => {
-                let msg = format!("Downloaded and saved file: {:?}", file_path);
-                let _ = log_message(&msg);
-                return ProcessResult { new_urls: vec![] };
-            }
-            Err(e) => {
-                let msg = format!("Error saving file from {}: {}", normalized_url, e);
-                let _ = log_message(&msg);
-                return ProcessResult { new_urls: vec![] };
-            }
-        }
-    } else {
-        // --- HTML Content Processing ---
-        const MAX_DEPTH: usize = 10; // Process depth 0 up to 10.
-        let text_content = match resp.text().await {
-            Ok(t) => t,
-            Err(e) => {
-                let msg = format!("Error reading HTML content from {}: {}", normalized_url, e);
-                let _ = log_message(&msg);
-                return ProcessResult { new_urls: vec![] };
-            }
-        };
-        if depth >= MAX_DEPTH {
-            let msg = format!(
-                "HTML content from {} reached max recursion depth; skipping link extraction.",
-                normalized_url
-            );
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-        let document = Html::parse_document(&text_content);
-        let selector = Selector::parse("a[href]").unwrap();
+        // Get a base URL from the normalized URL.
         let base_url = match Url::parse(&normalized_url) {
-            Ok(u) => u,
+            Ok(url) => url,
             Err(e) => {
-                let msg = format!("Error parsing base URL {}: {}", normalized_url, e);
-                let _ = log_message(&msg);
+                let _ = log_message(&format!("Error parsing base URL {}: {}", normalized_url, e));
                 return ProcessResult { new_urls: vec![] };
             }
         };
+
+        // Only keep new URLs whose hosts are valid IP addresses.
         let mut new_urls = Vec::new();
         for element in document.select(&selector) {
             if let Some(href) = element.value().attr("href") {
                 if let Ok(resolved) = base_url.join(href) {
-                    // Instead of only accepting same-host URLs,
-                    // check if the resolved host is not whitelisted.
                     if let Some(resolved_host) = resolved.host_str() {
-                        if !is_whitelisted(resolved_host, &whitelist) {
+                        if resolved_host.parse::<IpAddr>().is_ok() && !is_whitelisted(resolved_host, &whitelist) {
                             new_urls.push(resolved.to_string());
                         }
                     }
                 }
             }
         }
-        let msg = format!(
-            "HTML content from {} scanned; found {} related URLs.",
-            normalized_url,
-            new_urls.len()
-        );
-        let _ = log_message(&msg);
+
+        let count = new_urls.len();
+        let _ = log_message(&format!(
+            "Extracted {} new IP URL(s) from HTML document: {}",
+            count, normalized_url
+        ));
+
         return ProcessResult { new_urls };
     }
+
+    // ----------------------------------
+    // Non-HTML Branch: Process file
+    // ----------------------------------
+    // Determine the filename from the Content-Disposition header or the URL path.
+    let mut filename = String::new();
+    if let Some(cd) = headers.get("content-disposition").and_then(|v| v.to_str().ok()) {
+        filename = extract_filename(cd).unwrap_or_default();
+    }
+    if filename.is_empty() {
+        if let Ok(parsed) = Url::parse(&normalized_url) {
+            if let Some(segment) = parsed.path_segments().and_then(|s| s.last()) {
+                filename = segment.to_string();
+            }
+        }
+    }
+    if filename.is_empty() {
+        let _ = log_message(&format!("Unable to determine filename for {}. Skipping.", normalized_url));
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    // Calculate the MD5 hash of the file content.
+    let mut hasher = Md5::new();
+    hasher.update(&content);
+    let digest = hasher.finalize();
+    let md5_hash = format!("{:x}", digest).to_uppercase();
+
+    // Query the online MD5 risk analysis service.
+    let (risk_level, virus_name) = match query_md5_online(&client, &md5_hash).await {
+        Ok(result) => result,
+        Err(e) => {
+            let _ = log_message(&format!("Error querying MD5 for {}: {}", normalized_url, e));
+            return ProcessResult { new_urls: vec![] };
+        }
+    };
+    let _ = log_message(&format!(
+        "URL: {} MD5: {} Risk: {} Virus: {}",
+        normalized_url, md5_hash, risk_level, virus_name
+    ));
+
+    // Skip if the file is considered clean.
+    if risk_level.starts_with("Benign (auto verdict)") {
+        let _ = log_message(&format!("File from {} is considered clean by auto verdict; skipping.", normalized_url));
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    if risk_level.starts_with("Benign") {
+        let _ = log_message(&format!("File from {} is considered clean; skipping.", normalized_url));
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    // --- NEW: If the risk level is unknown, log the IP address to file (only once) ---
+    if risk_level.to_lowercase().starts_with("unknown") {
+        // Use the shared unknown_ips set to avoid duplicates.
+        let mut unknown_lock = unknown_ips.lock().unwrap();
+        if !unknown_lock.contains(&host) {
+            unknown_lock.insert(host.clone());
+            if let Err(e) = append_unknown_ip(&host) {
+                let _ = log_message(&format!("Failed to save unknown IP {}: {}", host, e));
+            } else {
+                let _ = log_message(&format!("Logged unknown IP: {}", host));
+            }
+        }
+        return ProcessResult { new_urls: vec![] };
+    }
+
+    // Save the file (for Malware or Suspicious risk levels).
+    let file_path = zeroday_dir.join(&filename);
+    match fs::write(&file_path, &content).await {
+        Ok(_) => {
+            let _ = log_message(&format!("Downloaded and saved file: {:?}", file_path));
+        }
+        Err(e) => {
+            let _ = log_message(&format!("Error saving file from {}: {}", normalized_url, e));
+        }
+    }
+
+    // For non-HTML files no new URLs are extracted.
+    ProcessResult { new_urls: vec![] }
 }
 
 /// Updates the progress display on one line using a carriage return.
@@ -518,25 +465,26 @@ fn update_progress(processed: usize, total: usize) {
     print!("\rProcessed: {}/{}", processed, total);
     io::stdout().flush().unwrap();
 }
+
 async fn process_task(
     task: Task,
-    client: Arc<reqwest::Client>,
-    collections: Arc<DomainCollections>,
+    client: Arc<Client>,
     whitelist: Arc<WhiteListCollections>,
     zeroday_dir: Arc<PathBuf>,
     processed: Arc<Mutex<HashSet<String>>>,
     semaphore: Arc<Semaphore>,
     max_depth: usize,
+    unknown_ips: Arc<Mutex<HashSet<String>>>,
 ) -> Vec<String> {
     let result = process_url(
         task.url,
         task.depth,
         client,
-        collections,
         whitelist,
         zeroday_dir,
         processed,
         semaphore,
+        unknown_ips,
     )
     .await;
     if task.depth < max_depth {
@@ -560,33 +508,37 @@ async fn async_main() -> Result<()> {
     let log_dir = script_dir.join("log");
     std::fs::create_dir_all(&log_dir)?;
 
-    let domain_collections = Arc::new(load_domain_collections(&website_dir)?);
-    let union_domains = domain_collections.union_all();
-    if union_domains.is_empty() {
-        let msg = "No domains found in your malware lists.";
+    // Load only the IP malware lists.
+    let ip_collections = Arc::new(load_ip_collections(&website_dir)?);
+    let union_ips = ip_collections.union_all();
+    if union_ips.is_empty() {
+        let msg = "No IP addresses found in your malware lists.";
         log_message(msg)?;
         println!("{}", msg);
         return Ok(());
     }
-    let start_msg = format!("Starting scan for {} domains.", union_domains.len());
+    let start_msg = format!("Starting scan for {} IP addresses.", union_ips.len());
     log_message(&start_msg)?;
 
     let whitelist = Arc::new(load_whitelist_collections(&website_dir)?);
 
     let client = Arc::new(
-        reqwest::Client::builder()
+        Client::builder()
             .user_agent("ZeroDayMalwareCollector/1.0")
             .build()?,
     );
     let processed_set = Arc::new(Mutex::new(HashSet::new()));
+    // Create a shared set for unknown IP addresses to avoid duplicates.
+    let unknown_ips = Arc::new(Mutex::new(HashSet::new()));
     let semaphore = Arc::new(Semaphore::new(100));
 
-    let initial_count = union_domains.len();
+    let initial_count = union_ips.len();
     let (tx0, rx0) = mpsc::unbounded_channel::<Task>();
     let (tx1, rx1) = mpsc::unbounded_channel::<Task>();
 
-    for url in union_domains {
-        tx0.send(Task { url, depth: 0 }).unwrap();
+    // Enqueue each IP address as an initial task.
+    for ip in union_ips {
+        tx0.send(Task { url: ip, depth: 0 }).unwrap();
     }
     // Wrap receivers in TokioMutex so multiple workers can share them.
     let rx0 = Arc::new(TokioMutex::new(rx0));
@@ -605,13 +557,13 @@ async fn async_main() -> Result<()> {
         let rx0_clone = rx0.clone();
         let rx1_clone = rx1.clone();
         let client = client.clone();
-        let collections = domain_collections.clone();
         let whitelist = whitelist.clone();
         let zeroday_dir = zeroday_dir.clone();
         let processed_set = processed_set.clone();
         let semaphore = semaphore.clone();
         let total_count = total_count.clone();
         let processed_count = processed_count.clone();
+        let unknown_ips = unknown_ips.clone();
         workers.push(tokio::spawn(async move {
             loop {
                 // Use biased select: if a depth 1 task is available, process it first.
@@ -624,23 +576,21 @@ async fn async_main() -> Result<()> {
                     Some(t) => t,
                     None => break,
                 };
-                // Capture the current depth before moving `task`
                 let current_depth = task.depth;
                 let new_urls = process_task(
                     task,
                     client.clone(),
-                    collections.clone(),
                     whitelist.clone(),
                     zeroday_dir.clone(),
                     processed_set.clone(),
                     semaphore.clone(),
                     max_depth,
+                    unknown_ips.clone(),
                 ).await;
                 processed_count.fetch_add(1, Ordering::Relaxed);
                 if !new_urls.is_empty() {
                     for url in new_urls {
                         total_count.fetch_add(1, Ordering::Relaxed);
-                        // Use the captured depth here instead of accessing `task.depth`
                         tx1_clone.send(Task { url, depth: current_depth + 1 }).unwrap();
                     }
                 }
