@@ -353,6 +353,8 @@ async fn process_url(
             || ext == "webp"
             || ext == "gif"
             || ext == "vcf"
+            || ext == "docx"
+            || ext == "ics"
         {
             let msg = format!(
                 "File from {} has a forbidden extension ({}); skipping saving.",
@@ -460,7 +462,7 @@ async fn process_url(
         }
     } else {
         // --- HTML Content Processing ---
-        const MAX_DEPTH: usize = 3; // Process depth 0, 1, and 2.
+        const MAX_DEPTH: usize = 10; // Process depth 0 up to 10.
         let text_content = match resp.text().await {
             Ok(t) => t,
             Err(e) => {
@@ -491,9 +493,12 @@ async fn process_url(
         for element in document.select(&selector) {
             if let Some(href) = element.value().attr("href") {
                 if let Ok(resolved) = base_url.join(href) {
-                    // Enqueue only links on the same host.
-                    if resolved.host_str() == base_url.host_str() {
-                        new_urls.push(resolved.to_string());
+                    // Instead of only accepting same-host URLs,
+                    // check if the resolved host is not whitelisted.
+                    if let Some(resolved_host) = resolved.host_str() {
+                        if !is_whitelisted(resolved_host, &whitelist) {
+                            new_urls.push(resolved.to_string());
+                        }
                     }
                 }
             }
@@ -591,9 +596,9 @@ async fn async_main() -> Result<()> {
     let processed_count = Arc::new(AtomicUsize::new(0));
     let done = Arc::new(AtomicBool::new(false));
 
-    // Set max_depth to 3 (process depth 0, 1, and 2)
-    let max_depth = 3;
-    let worker_count = 20;
+    // Set max_depth to 3 (process depth 0 to 10)
+    let max_depth = 10;
+    let worker_count = 50;
     let mut workers = Vec::new();
     for _ in 0..worker_count {
         let tx1_clone = tx1.clone();
