@@ -292,7 +292,8 @@ async fn process_url(
     }
 
     let headers = resp.headers().clone();
-    let content_type = headers.get("content-type")
+    let content_type = headers
+        .get("content-type")
         .and_then(|ct| ct.to_str().ok())
         .unwrap_or("")
         .to_lowercase();
@@ -312,28 +313,82 @@ async fn process_url(
             return ProcessResult { new_urls: vec![] };
         }
 
+        // --- First: Check extension before computing MD5 ---
+        let filename = headers
+            .get("content-disposition")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|cd| extract_filename(cd))
+            .unwrap_or_else(|| {
+                // Fallback: use the last segment of the URL path.
+                if let Ok(parsed) = Url::parse(&normalized_url) {
+                    if let Some(segment) = parsed.path_segments().and_then(|s| s.last()) {
+                        segment.to_string()
+                    } else {
+                        String::new()
+                    }
+                } else {
+                    String::new()
+                }
+            });
+        if filename.is_empty() || Path::new(&filename).extension().is_none() {
+            let msg = format!(
+                "File from {} does not have a valid filename (or extension); skipping saving.",
+                normalized_url
+            );
+            let _ = log_message(&msg);
+            return ProcessResult { new_urls: vec![] };
+        }
+        let ext = Path::new(&filename)
+            .extension()
+            .unwrap()
+            .to_str()
+            .unwrap_or("")
+            .to_lowercase();
+        if ext == "pdf"
+            || ext == "xml"
+            || ext == "jpg"
+            || ext == "png"
+            || ext == "jpeg"
+            || ext == "atom"
+            || ext == "webp"
+            || ext == "gif"
+            || ext == "vcf"
+        {
+            let msg = format!(
+                "File from {} has a forbidden extension ({}); skipping saving.",
+                normalized_url, ext
+            );
+            let _ = log_message(&msg);
+            return ProcessResult { new_urls: vec![] };
+        }
+        // --- End: Extension Check ---
+
+        // Now compute MD5 and perform risk analysis.
         let mut hasher = Md5::new();
         hasher.update(&content);
         let digest = hasher.finalize();
         let md5_hash = format!("{:x}", digest);
         let md5_hash_upper = md5_hash.to_uppercase();
 
-        let (risk_level, virus_name) = match query_md5_online(&client, &md5_hash_upper).await {
-            Ok(res) => res,
-            Err(e) => (format!("Error: {}", e), "".to_string()),
-        };
+        let (risk_level, virus_name) =
+            match query_md5_online(&client, &md5_hash_upper).await {
+                Ok(res) => res,
+                Err(e) => (format!("Error: {}", e), "".to_string()),
+            };
 
-        let risk_msg = format!("URL: {} MD5: {} Risk: {} {}", normalized_url, md5_hash_upper, risk_level, virus_name);
+        let risk_msg = format!(
+            "URL: {} MD5: {} Risk: {} {}",
+            normalized_url, md5_hash_upper, risk_level, virus_name
+        );
         let _ = log_message(&risk_msg);
 
-        if risk_level.starts_with("Benign") {
-            let msg = format!("File from {} is considered clean; skipping collection.", normalized_url);
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-
-        if risk_level.starts_with("Benign (auto verdict)") {
-            let msg = format!("File from {} is considered clean by auto verdict; skipping collection.", normalized_url);
+        if risk_level.starts_with("Benign")
+            || risk_level.starts_with("Benign (auto verdict)")
+        {
+            let msg = format!(
+                "File from {} is considered clean; skipping collection.",
+                normalized_url
+            );
             let _ = log_message(&msg);
             return ProcessResult { new_urls: vec![] };
         }
@@ -383,48 +438,10 @@ async fn process_url(
         if collections.spam_sub_domains.contains(&host) {
             prefix.push_str("SpamSubDomains_");
         }
-        // Prepend the virus name (if any) to indicate which virus detection triggered this.
         if !virus_name.is_empty() {
             prefix = format!("{}_{prefix}", virus_name);
         }
         // --- End Build Prefix ---
-
-        // --- Fallback Filename Logic ---
-        // First try to get a filename from Content-Disposition.
-        let filename = headers.get("content-disposition")
-            .and_then(|v| v.to_str().ok())
-            .and_then(|cd| extract_filename(cd))
-            .unwrap_or_else(|| {
-                // Fallback: use the last segment of the URL path.
-                if let Ok(parsed) = Url::parse(&normalized_url) {
-                    if let Some(segment) = parsed.path_segments().and_then(|s| s.last()) {
-                        segment.to_string()
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    String::new()
-                }
-            });
-        // Only save if the filename is nonempty and has an extension.
-        if filename.is_empty() || Path::new(&filename).extension().is_none() {
-            let msg = format!("File from {} does not have a valid filename (or extension); skipping saving.", normalized_url);
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-        // --- Forbidden Extension Check ---
-        let ext = Path::new(&filename)
-            .extension()
-            .unwrap()
-            .to_str()
-            .unwrap_or("")
-            .to_lowercase();
-        if ext == "pdf" || ext == "xml" || ext == "jpg" || ext == "png"  || ext == "jpeg" || ext == "atom" || ext == "webp" || ext == "gif" || ext == "vcf" {
-            let msg = format!("File from {} has a forbidden extension ({}); skipping saving.", normalized_url, ext);
-            let _ = log_message(&msg);
-            return ProcessResult { new_urls: vec![] };
-        }
-        // --- End Forbidden Extension Check ---
 
         let suggested_filename = format!("{}{}", prefix, filename);
         let file_path = zeroday_dir.join(&suggested_filename);
@@ -453,7 +470,10 @@ async fn process_url(
             }
         };
         if depth >= MAX_DEPTH {
-            let msg = format!("HTML content from {} reached max recursion depth; skipping link extraction.", normalized_url);
+            let msg = format!(
+                "HTML content from {} reached max recursion depth; skipping link extraction.",
+                normalized_url
+            );
             let _ = log_message(&msg);
             return ProcessResult { new_urls: vec![] };
         }
@@ -478,7 +498,11 @@ async fn process_url(
                 }
             }
         }
-        let msg = format!("HTML content from {} scanned; found {} related URLs.", normalized_url, new_urls.len());
+        let msg = format!(
+            "HTML content from {} scanned; found {} related URLs.",
+            normalized_url,
+            new_urls.len()
+        );
         let _ = log_message(&msg);
         return ProcessResult { new_urls };
     }
@@ -595,6 +619,8 @@ async fn async_main() -> Result<()> {
                     Some(t) => t,
                     None => break,
                 };
+                // Capture the current depth before moving `task`
+                let current_depth = task.depth;
                 let new_urls = process_task(
                     task,
                     client.clone(),
@@ -604,13 +630,13 @@ async fn async_main() -> Result<()> {
                     processed_set.clone(),
                     semaphore.clone(),
                     max_depth,
-                )
-                .await;
+                ).await;
                 processed_count.fetch_add(1, Ordering::Relaxed);
                 if !new_urls.is_empty() {
                     for url in new_urls {
                         total_count.fetch_add(1, Ordering::Relaxed);
-                        tx1_clone.send(Task { url, depth: 1 }).unwrap();
+                        // Use the captured depth here instead of accessing `task.depth`
+                        tx1_clone.send(Task { url, depth: current_depth + 1 }).unwrap();
                     }
                 }
             }
