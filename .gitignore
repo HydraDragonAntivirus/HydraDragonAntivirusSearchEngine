@@ -1,7 +1,7 @@
 # Malware, Phishing etc. folder
-zeroday/
+/zeroday
 # Log
-log/
+/log
 # Website
 website/MalwareSubDomains.txt
 website/IPv4Malware.txt
