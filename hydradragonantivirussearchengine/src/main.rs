@@ -596,7 +596,7 @@ async fn async_main() -> Result<()> {
     let processed_count = Arc::new(AtomicUsize::new(0));
     let done = Arc::new(AtomicBool::new(false));
 
-    // Set max_depth to 3 (process depth 0 to 10)
+    // Set max_depth to 10 (process depth 0 to 10)
     let max_depth = 10;
     let worker_count = 50;
     let mut workers = Vec::new();
