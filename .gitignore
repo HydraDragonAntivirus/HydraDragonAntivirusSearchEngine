@@ -1,5 +1,10 @@
+# Website
+website/IPv4Malware.txt
 # Output
-NewDiscoveredIPs.csv
+NewDiscoveredIPs_benign_auto_verdict.csv
+NewDiscoveredIPs_phishing.csv
+NewDiscoveredIPs_benign.csv
+NewDiscoveredIPs_malicious.csv
 # Log
 /log
 # Byte-compiled / optimized / DLL files
@@ -176,4 +181,3 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
-website/IPv4Malware.txt
