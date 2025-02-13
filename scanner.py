@@ -9,6 +9,15 @@ import threading
 import requests
 from tqdm import tqdm
 from urllib.parse import urlparse
+from datetime import datetime, timezone
+
+# Category assignments:
+# - Malicious: Use category "20"
+CATEGORY_MALICIOUS = "20"
+# - Phishing: Use category "7"
+CATEGORY_PHISHING = "7"
+# - Benign: Empty category (i.e. no category)
+CATEGORY_BENIGN = ""
 
 # Determine the script directory and create a log folder and log file path
 script_dir = os.getcwd()
@@ -27,10 +36,17 @@ logging.basicConfig(
 # Maximum recursion depth
 MAX_DEPTH = 10
 
+# Global file handles for CSV outputs (will be set in main)
+out_malicious = None
+out_phishing = None
+out_benign = None
+out_benign_auto = None
+
 class Seed:
     def __init__(self, ip, source_type, version, port=None, depth=0, source_url=None):
         self.ip = ip.lower()
-        self.source_type = source_type  # "malicious" or "benign"
+        # source_type can be: "malicious", "phishing", or "benign"
+        self.source_type = source_type  
         self.version = version          # "ipv4" or "ipv6"
         self.port = port                # Port number if available
         self.depth = depth
@@ -41,34 +57,26 @@ class Seed:
         return f"Seed({self.ip}{port_str}, {self.source_type}, {self.version}, depth={self.depth})"
 
     def get_url(self):
-        """Generate the full URL for this seed"""
-        if self.port:
-            return f"http://{self.ip}:{self.port}"
-        return f"http://{self.ip}"
+        """Generate the full URL for this seed."""
+        return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
 
 def is_valid_ip(ip_string):
     """
     Validate IP address and return its version or None if invalid.
-    Also checks if IP is private.
+    Also skips private, loopback, link-local, multicast, and reserved addresses.
     """
     try:
         ip_obj = ipaddress.ip_address(ip_string)
-        # Skip private, loopback, link-local, multicast, and reserved IPs
         if ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or \
            ip_obj.is_multicast or ip_obj.is_reserved:
             return None
-
-        if isinstance(ip_obj, ipaddress.IPv4Address):
-            return "ipv4"
-        elif isinstance(ip_obj, ipaddress.IPv6Address):
-            return "ipv6"
+        return "ipv4" if isinstance(ip_obj, ipaddress.IPv4Address) else "ipv6"
     except ValueError:
         return None
 
 def extract_ip_and_port(text):
     """Extract valid IP addresses and their ports from text."""
     found_ips = []
-
     # IPv4 pattern: e.g. 192.168.1.1 or 192.168.1.1:8080
     ipv4_pattern = re.compile(
         r'\b(?P<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?P<port>[0-9]{1,5}))?\b'
@@ -77,21 +85,17 @@ def extract_ip_and_port(text):
     ipv6_bracket_pattern = re.compile(
         r'\[(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\](?::(?P<port>[0-9]{1,5}))?'
     )
-    # IPv6 without brackets: e.g. 2001:db8::1 (port information is not considered)
+    # IPv6 without brackets: e.g. 2001:db8::1 (no port info)
     ipv6_pattern = re.compile(
         r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b'
     )
 
-    # Process IPv6 addresses with brackets (including optional port)
     for match in ipv6_bracket_pattern.finditer(text):
         ip = match.group('ip')
         port_str = match.group('port')
         port = int(port_str) if port_str and port_str.isdigit() and 1 <= int(port_str) <= 65535 else None
-        ip_version = is_valid_ip(ip)
-        if ip_version:
-            found_ips.append((ip, port, ip_version))
-
-    # Process IPv4 addresses (with optional port)
+        if is_valid_ip(ip):
+            found_ips.append((ip, port, "ipv6"))
     for match in ipv4_pattern.finditer(text):
         ip = match.group('ip')
         port_str = match.group('port')
@@ -104,30 +108,25 @@ def extract_ip_and_port(text):
                 continue
         else:
             port = None
-        ip_version = is_valid_ip(ip)
-        if ip_version:
-            found_ips.append((ip, port, ip_version))
-
-    # Process IPv6 addresses without brackets (no port information)
+        if is_valid_ip(ip):
+            found_ips.append((ip, port, "ipv4"))
     for match in ipv6_pattern.finditer(text):
         ip = match.group('ip')
-        # Avoid duplicates if the IP is already added from the bracketed version.
         if any(existing[0] == ip for existing in found_ips):
             continue
-        ip_version = is_valid_ip(ip)
-        if ip_version:
-            found_ips.append((ip, None, ip_version))
-
+        if is_valid_ip(ip):
+            found_ips.append((ip, None, "ipv6"))
     return found_ips
 
 def load_lines(path):
+    """Load valid IPs from a file (one per line, optionally with port)."""
     s = set()
     if os.path.exists(path):
         with open(path, "r") as f:
             for line in f:
                 line = line.strip().lower()
                 if ':' in line:
-                    ip, port = line.rsplit(':', 1)
+                    ip, _ = line.rsplit(':', 1)
                 else:
                     ip = line
                 if ip and is_valid_ip(ip):
@@ -137,50 +136,54 @@ def load_lines(path):
 
 def load_seeds(website_dir):
     seeds = []
+    # Load malware and whitelist files
     malware_ipv4 = load_lines(os.path.join(website_dir, "IPv4Malware.txt"))
     malware_ipv6 = load_lines(os.path.join(website_dir, "IPv6Malware.txt"))
     whitelist_ipv4 = load_lines(os.path.join(website_dir, "IPv4WhiteList.txt"))
     whitelist_ipv6 = load_lines(os.path.join(website_dir, "IPv6WhiteList.txt"))
-    
     for ip in malware_ipv4:
         seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
     for ip in malware_ipv6:
         seeds.append(Seed(ip, "malicious", "ipv6", depth=0))
-    
     for ip in whitelist_ipv4:
         seeds.append(Seed(ip, "benign", "ipv4", depth=0))
     for ip in whitelist_ipv6:
         seeds.append(Seed(ip, "benign", "ipv6", depth=0))
-    
+    # Load phishing lists (highest priority)
+    phishing_ipv4_active = load_lines(os.path.join(website_dir, "IPv4PhishingActive.txt"))
+    phishing_ipv4_inactive = load_lines(os.path.join(website_dir, "IPv4PhishingInActive.txt"))
+    for ip in phishing_ipv4_active:
+        seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
+    for ip in phishing_ipv4_inactive:
+        seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
     global all_known_ips
-    all_known_ips = malware_ipv4 | malware_ipv6 | whitelist_ipv4 | whitelist_ipv6
-    
+    all_known_ips = (malware_ipv4 | malware_ipv6 | whitelist_ipv4 | whitelist_ipv6 |
+                     phishing_ipv4_active | phishing_ipv4_inactive)
     logging.debug(f"Total valid seeds loaded: {len(seeds)}")
     logging.debug(f"Total known IPs: {len(all_known_ips)}")
     return seeds
 
-# Global Collections
-all_known_ips = set()   # All IPs from original lists
-processed_set = set()   # IPs we've processed
-new_ips_from_malicious = set()  # New IPs found from malicious seeds
-new_ips_from_benign = set()     # New IPs found from benign seeds
+# Global collections to track processed IPs and discovered IPs per type.
+all_known_ips = set()
+processed_set = set()
+new_ips_from_malicious = set()
+new_ips_from_phishing = set()
+new_ips_from_benign = set()
+new_ips_from_benign_auto = set()
 
 class Counter:
     def __init__(self, initial=0):
         self.value = initial
         self.lock = threading.Lock()
         self.progress_bar = None
-
     def increment(self, amount=1):
         with self.lock:
             self.value += amount
             if self.progress_bar:
                 self.progress_bar.update(amount)
-
     def get(self):
         with self.lock:
             return self.value
-
     def set_progress_bar(self, pbar):
         self.progress_bar = pbar
 
@@ -190,10 +193,7 @@ processed_count = Counter(0)
 processed_lock = threading.Lock()
 output_lock = threading.Lock()
 
-# Global file handle and public IP variable
-out_new_ips = None
 MY_PUBLIC_IP = None
-
 def get_my_public_ip():
     """Determine and return the public IP address of this machine."""
     try:
@@ -208,23 +208,17 @@ def get_my_public_ip():
 def is_active_and_static(ip, port, timeout=5):
     """
     Check if the given IP (and optional port) is active (responsive) and static.
-    It sends an HTTP GET request to the URL built from the IP (and port) and then
-    verifies that after redirections, the final URL's hostname and port match the original.
+    Follows redirects and verifies that the final URL's hostname and port match.
     """
-    # Construct the URL from the IP and port.
     url = f"http://{ip}" + (f":{port}" if port else "")
     try:
         response = requests.get(url, timeout=timeout, allow_redirects=True)
         if response.status_code != 200:
             return False
-        
         parsed_url = urlparse(response.url)
         final_hostname = parsed_url.hostname
-        # If no port is explicitly provided in the final URL, assume default port 80.
         final_port = parsed_url.port if parsed_url.port else 80
         expected_port = port if port else 80
-        
-        # Verify that both the hostname and port match the original values.
         if final_hostname and is_valid_ip(final_hostname) and final_hostname == ip and final_port == expected_port:
             return True
         return False
@@ -267,35 +261,56 @@ def process_seed_worker(seed, seed_queue):
     if seed.depth < MAX_DEPTH:
         found_ips = extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
-            # Skip if the discovered IP matches your public IP
+            # Skip if the discovered IP matches your public IP.
             if MY_PUBLIC_IP and ip == MY_PUBLIC_IP:
                 logging.info(f"Skipping my own public IP: {ip}")
                 continue
             if is_known(ip):
                 continue
 
-            # For malicious seeds, run heuristic check: if the IP is not active/static,
-            # assign an automatic benign verdict.
+            # Determine new_source_type:
+            # For malicious seeds, if the IP fails the active/static check, mark as "benign (auto verdict)"
             new_source_type = seed.source_type
             if seed.source_type == "malicious":
                 if not is_active_and_static(ip, port):
-                    logging.info(f"IP {ip} did not pass the active/static check; auto-assigning benign verdict.")
+                    logging.info(f"IP {ip} did not pass active/static check; marking as benign (auto verdict).")
                     new_source_type = "benign (auto verdict)"
+            # (phishing seeds remain "phishing" and whitelist seeds remain "benign")
 
             with output_lock:
-                if new_source_type.startswith("malicious"):
-                    new_ips_from_malicious.add(ip)
-                else:
-                    new_ips_from_benign.add(ip)
-                
+                report_date = datetime.now(timezone.utc).isoformat()
                 new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
                 source_url = final_url
-                out_new_ips.write(f"{ip},{port if port else ''},{new_source_type},{seed.ip},{source_url},{new_ip_url}\n")
-                out_new_ips.flush()
+
+                # Choose output file and category based on new_source_type.
+                if new_source_type == "malicious":
+                    category = CATEGORY_MALICIOUS
+                    out_file = out_malicious
+                    new_ips_from_malicious.add(ip)
+                elif new_source_type == "phishing":
+                    category = CATEGORY_PHISHING
+                    out_file = out_phishing
+                    new_ips_from_phishing.add(ip)
+                elif new_source_type == "benign (auto verdict)":
+                    category = CATEGORY_BENIGN  # empty for benign
+                    out_file = out_benign_auto
+                    new_ips_from_benign_auto.add(ip)
+                else:  # "benign" (non-auto verdict)
+                    category = CATEGORY_BENIGN  # empty for benign
+                    out_file = out_benign
+                    new_ips_from_benign.add(ip)
+
+                comment = (f"Related with ip address detected by heuristics of "
+                           f"https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine "
+                           f"(Source IP: {seed.ip}, Source URL: {source_url}, Discovered URL: {new_ip_url}, Verdict: {new_source_type})")
+                comment = comment[:1024]  # Truncate if necessary
+                csv_line = f"{ip},\"{category}\",{report_date},\"{comment}\"\n"
+                if out_file:
+                    out_file.write(csv_line)
+                    out_file.flush()
 
             with processed_lock:
                 processed_set.add(ip)
-
             new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=seed.depth + 1, source_url=source_url)
             seed_queue.put(new_seed)
             tasks_count.increment()
@@ -316,18 +331,25 @@ def worker_thread(seed_queue):
         seed_queue.task_done()
 
 def main():
-    global out_new_ips, MY_PUBLIC_IP
+    global out_malicious, out_phishing, out_benign, out_benign_auto, MY_PUBLIC_IP
     MY_PUBLIC_IP = get_my_public_ip()
-
     website_dir = os.path.join(os.getcwd(), "website")
     seeds = load_seeds(website_dir)
     if not seeds:
         logging.error("No seed IP addresses found in the seed files.")
         sys.exit(1)
     
-    out_new_ips = open("NewDiscoveredIPs.csv", "w")
-    out_new_ips.write("IP,Port,SourceType,SourceIP,SourceURL,DiscoveredURL\n")
-    out_new_ips.flush()
+    # Open four CSV files with the required headings.
+    out_malicious = open("NewDiscoveredIPs_malicious.csv", "w")
+    out_phishing = open("NewDiscoveredIPs_phishing.csv", "w")
+    out_benign = open("NewDiscoveredIPs_benign.csv", "w")
+    out_benign_auto = open("NewDiscoveredIPs_benign_auto_verdict.csv", "w")
+    
+    header = "IP,Categories,ReportDate,Comment\n"
+    out_malicious.write(header)
+    out_phishing.write(header)
+    out_benign.write(header)
+    out_benign_auto.write(header)
     
     seed_queue = Queue()
     for seed in seeds:
@@ -346,9 +368,14 @@ def main():
     pbar.close()
     
     logging.info(f"Total new IPs found from malicious sources: {len(new_ips_from_malicious)}")
+    logging.info(f"Total new IPs found from phishing sources: {len(new_ips_from_phishing)}")
     logging.info(f"Total new IPs found from benign sources: {len(new_ips_from_benign)}")
+    logging.info(f"Total new IPs found from benign auto verdict: {len(new_ips_from_benign_auto)}")
     
-    out_new_ips.close()
+    out_malicious.close()
+    out_phishing.close()
+    out_benign.close()
+    out_benign_auto.close()
     logging.info("Scan completed.")
 
 if __name__ == "__main__":
