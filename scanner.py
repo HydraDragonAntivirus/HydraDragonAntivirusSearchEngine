@@ -19,7 +19,7 @@ log_file = os.path.join(log_folder, "scanner.log")
 
 # Configure logging
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
     handlers=[logging.FileHandler(log_file, mode='a')]
 )
@@ -208,22 +208,26 @@ def get_my_public_ip():
 def is_active_and_static(ip, port, timeout=5):
     """
     Check if the given IP (and optional port) is active (responsive) and static.
-    Performs an HTTP GET and then verifies that after redirects the URL's
-    hostname still matches the original IP address.
+    It sends an HTTP GET request to the URL built from the IP (and port) and then
+    verifies that after redirections, the final URL's hostname and port match the original.
     """
+    # Construct the URL from the IP and port.
     url = f"http://{ip}" + (f":{port}" if port else "")
     try:
         response = requests.get(url, timeout=timeout, allow_redirects=True)
         if response.status_code != 200:
             return False
-        final_hostname = urlparse(response.url).hostname
-        if final_hostname:
-            if is_valid_ip(final_hostname) and final_hostname == ip:
-                return True
-            else:
-                return False
-        else:
-            return False
+        
+        parsed_url = urlparse(response.url)
+        final_hostname = parsed_url.hostname
+        # If no port is explicitly provided in the final URL, assume default port 80.
+        final_port = parsed_url.port if parsed_url.port else 80
+        expected_port = port if port else 80
+        
+        # Verify that both the hostname and port match the original values.
+        if final_hostname and is_valid_ip(final_hostname) and final_hostname == ip and final_port == expected_port:
+            return True
+        return False
     except Exception as e:
         logging.error(f"Active/static check failed for {url}: {e}")
         return False
