@@ -66,44 +66,58 @@ def is_valid_ip(ip_string):
         return None
 
 def extract_ip_and_port(text):
-    """Extract valid IP addresses and their ports from text"""
-    patterns = [
-        r'\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}(?::[0-9]{1,5})?\b',  # IPv4 with optional port
-        r'\b(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4}(?::[0-9]{1,5})?\b'  # IPv6 with optional port
-    ]
-    
+    """Extract valid IP addresses and their ports from text."""
     found_ips = []
-    for pattern in patterns:
-        matches = re.finditer(pattern, text)
-        for match in matches:
-            ip_port = match.group(0)
-            # Split IP and port if port exists
-            if ':' in ip_port:
-                # Handle IPv6 addresses carefully
-                if ip_port.count(':') > 1:  # IPv6
-                    last_colon = ip_port.rfind(':')
-                    potential_port = ip_port[last_colon+1:]
-                    if potential_port.isdigit() and 1 <= int(potential_port) <= 65535:
-                        ip = ip_port[:last_colon]
-                        port = int(potential_port)
-                    else:
-                        ip = ip_port
-                        port = None
-                else:  # IPv4
-                    ip, port_str = ip_port.rsplit(':', 1)
-                    try:
-                        port = int(port_str)
-                        if not (1 <= port <= 65535):
-                            continue
-                    except ValueError:
-                        continue
-            else:
-                ip = ip_port
-                port = None
 
-            ip_version = is_valid_ip(ip)
-            if ip_version:
-                found_ips.append((ip, port, ip_version))
+    # IPv4 pattern: e.g. 192.168.1.1 or 192.168.1.1:8080
+    ipv4_pattern = re.compile(
+        r'\b(?P<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?P<port>[0-9]{1,5}))?\b'
+    )
+    # IPv6 with brackets: e.g. [2001:db8::1] or [2001:db8::1]:80
+    ipv6_bracket_pattern = re.compile(
+        r'\[(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\](?::(?P<port>[0-9]{1,5}))?'
+    )
+    # IPv6 without brackets: e.g. 2001:db8::1 (port information is not considered)
+    ipv6_pattern = re.compile(
+        r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b'
+    )
+
+    # Process IPv6 addresses with brackets (including optional port)
+    for match in ipv6_bracket_pattern.finditer(text):
+        ip = match.group('ip')
+        port_str = match.group('port')
+        port = int(port_str) if port_str and port_str.isdigit() and 1 <= int(port_str) <= 65535 else None
+        ip_version = is_valid_ip(ip)
+        if ip_version:
+            found_ips.append((ip, port, ip_version))
+
+    # Process IPv4 addresses (with optional port)
+    for match in ipv4_pattern.finditer(text):
+        ip = match.group('ip')
+        port_str = match.group('port')
+        if port_str:
+            try:
+                port = int(port_str)
+                if not (1 <= port <= 65535):
+                    continue
+            except ValueError:
+                continue
+        else:
+            port = None
+        ip_version = is_valid_ip(ip)
+        if ip_version:
+            found_ips.append((ip, port, ip_version))
+
+    # Process IPv6 addresses without brackets (no port information)
+    for match in ipv6_pattern.finditer(text):
+        ip = match.group('ip')
+        # Avoid duplicates if the IP is already added from the bracketed version.
+        if any(existing[0] == ip for existing in found_ips):
+            continue
+        ip_version = is_valid_ip(ip)
+        if ip_version:
+            found_ips.append((ip, None, ip_version))
+
     return found_ips
 
 def load_lines(path):
