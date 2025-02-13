@@ -30,7 +30,7 @@ log_file = os.path.join(log_folder, "scanner.log")
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler(log_file, mode='a')]
+    handlers=[logging.FileHandler(log_file, mode='a', encoding='utf-8')]
 )
 
 # Maximum recursion depth
