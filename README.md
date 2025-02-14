@@ -8,4 +8,3 @@
 - Winball501 (main developer, C# developer, designer, converted Python to C# project)
 ## TODO
 - Move to .NET 8.0
-- Allow the user to add active known malicious IPs to the CSV file.
