@@ -4,6 +4,7 @@
 - If you detect malware with your original IP, remove it from the logs and create an abuseipdb account to avoid being reported.
 - Please only submit new IP addresses, and not just to Comodo, but also to AbuseIPDB.
 - Don't forget to check your list before you use it.
+- You can use the examples folder JSON file to load settings.
 ## Credicts
 - HydraDragonAntivirus (main developer, repo owner, Python developer, C# developer, designer)
 - Winball501 (main developer, C# developer, designer, converted Python to C# project)
