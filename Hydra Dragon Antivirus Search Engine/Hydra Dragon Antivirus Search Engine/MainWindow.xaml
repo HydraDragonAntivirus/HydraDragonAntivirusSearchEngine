@@ -387,28 +387,32 @@
                         </Grid.RowDefinitions>
 
                         <!-- Malware Files Section -->
-                        <Border Grid.Column="0" Grid.Row="0" 
-                                BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
-                                BorderThickness="1" 
-                                CornerRadius="4" 
-                                Margin="5">
+                        <Border Grid.Column="0" Grid.Row="0"
+              BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Margin="5">
                             <Grid Margin="10">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <!-- Title -->
                                     <RowDefinition Height="*"/>
+                                    <!-- ListView -->
                                     <RowDefinition Height="Auto"/>
+                                    <!-- TextBox input -->
+                                    <RowDefinition Height="Auto"/>
+                                    <!-- Buttons -->
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="Malware Files" 
-                                           FontWeight="SemiBold" 
-                                           FontSize="16" 
-                                           Margin="0,0,0,10"/>
-
-                                <ListView x:Name="listBoxMalware" 
-                                          Grid.Row="1" 
-                                          Margin="0,0,0,10"
-                                          BorderThickness="1"
-                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                <TextBlock Text="Malware Files"
+                     FontWeight="SemiBold"
+                     FontSize="16"
+                     Margin="0,0,0,10"/>
+                                <ListView x:Name="listBoxMalware"
+                    Grid.Row="1"
+                    Margin="0,0,0,10"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="File Name" Width="200"/>
@@ -416,50 +420,59 @@
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
-
-                                <StackPanel Grid.Row="2" 
-                                            Orientation="Horizontal" 
-                                            HorizontalAlignment="Right">
-                                    <Button x:Name="BtnBrowseMalware" 
-                                            Content="Browse" 
-                                            Width="80" 
-                                            Margin="5,0"/>
-                                    <Button x:Name="BtnAddMalware" 
-                                            Content="Add" 
-                                            Width="80" 
-                                            Margin="5,0"
-                                            Style="{DynamicResource AccentButtonStyle}"/>
-                                    <Button x:Name="BtnDeleteMalware" 
-                                            Content="Remove" 
-                                            Width="80" 
-                                            Margin="5,0"/>
+                                <!-- TextBox for manual file entry -->
+                                <TextBox x:Name="textBoxMalwareInput"
+                   Grid.Row="2"
+                   Width="200"
+                   Margin="5,0"
+                   ToolTip="Enter file path"/>
+                                <StackPanel Grid.Row="3"
+                      Orientation="Horizontal"
+                      HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowseMalware"
+                    Content="Browse"
+                    Width="80"
+                    Margin="5,0"/>
+                                    <Button x:Name="BtnAddMalware"
+                    Content="Add"
+                    Width="80"
+                    Margin="5,0"
+                    Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeleteMalware"
+                    Content="Remove"
+                    Width="80"
+                    Margin="5,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- DDoS Files Section -->
-                        <Border Grid.Column="1" Grid.Row="0" 
-                                BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
-                                BorderThickness="1" 
-                                CornerRadius="4" 
-                                Margin="5">
+                        <Border Grid.Column="1" Grid.Row="0"
+              BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Margin="5">
                             <Grid Margin="10">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <!-- Title -->
                                     <RowDefinition Height="*"/>
+                                    <!-- ListView -->
                                     <RowDefinition Height="Auto"/>
+                                    <!-- TextBox input -->
+                                    <RowDefinition Height="Auto"/>
+                                    <!-- Buttons -->
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="DDoS Files" 
-                                           FontWeight="SemiBold" 
-                                           FontSize="16" 
-                                           Margin="0,0,0,10"/>
-
-                                <ListView x:Name="listBoxDDoS" 
-                                          Grid.Row="1" 
-                                          Margin="0,0,0,10"
-                                          BorderThickness="1"
-                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                <TextBlock Text="DDoS Files"
+                     FontWeight="SemiBold"
+                     FontSize="16"
+                     Margin="0,0,0,10"/>
+                                <ListView x:Name="listBoxDDoS"
+                    Grid.Row="1"
+                    Margin="0,0,0,10"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="File Name" Width="200"/>
@@ -467,50 +480,59 @@
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
-
-                                <StackPanel Grid.Row="2" 
-                                            Orientation="Horizontal" 
-                                            HorizontalAlignment="Right">
-                                    <Button x:Name="BtnBrowseDDoS" 
-                                            Content="Browse" 
-                                            Width="80" 
-                                            Margin="5,0"/>
-                                    <Button x:Name="BtnAddDDoS" 
-                                            Content="Add" 
-                                            Width="80" 
-                                            Margin="5,0"
-                                            Style="{DynamicResource AccentButtonStyle}"/>
-                                    <Button x:Name="BtnDeleteDDoS" 
-                                            Content="Remove" 
-                                            Width="80" 
-                                            Margin="5,0"/>
+                                <!-- TextBox for manual file entry -->
+                                <TextBox x:Name="textBoxDDoSInput"
+                   Grid.Row="2"
+                   Width="200"
+                   Margin="5,0"
+                   ToolTip="Enter file path"/>
+                                <StackPanel Grid.Row="3"
+                      Orientation="Horizontal"
+                      HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowseDDoS"
+                    Content="Browse"
+                    Width="80"
+                    Margin="5,0"/>
+                                    <Button x:Name="BtnAddDDoS"
+                    Content="Add"
+                    Width="80"
+                    Margin="5,0"
+                    Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeleteDDoS"
+                    Content="Remove"
+                    Width="80"
+                    Margin="5,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- Phishing Files Section -->
-                        <Border Grid.Column="0" Grid.Row="1" 
-                                BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
-                                BorderThickness="1" 
-                                CornerRadius="4" 
-                                Margin="5">
+                        <Border Grid.Column="0" Grid.Row="1"
+              BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Margin="5">
                             <Grid Margin="10">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <!-- Title -->
                                     <RowDefinition Height="*"/>
+                                    <!-- ListView -->
                                     <RowDefinition Height="Auto"/>
+                                    <!-- TextBox input -->
+                                    <RowDefinition Height="Auto"/>
+                                    <!-- Buttons -->
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="Phishing Files" 
-                                           FontWeight="SemiBold" 
-                                           FontSize="16" 
-                                           Margin="0,0,0,10"/>
-
-                                <ListView x:Name="listBoxPhishing" 
-                                          Grid.Row="1" 
-                                          Margin="0,0,0,10"
-                                          BorderThickness="1"
-                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                <TextBlock Text="Phishing Files"
+                     FontWeight="SemiBold"
+                     FontSize="16"
+                     Margin="0,0,0,10"/>
+                                <ListView x:Name="listBoxPhishing"
+                    Grid.Row="1"
+                    Margin="0,0,0,10"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="File Name" Width="200"/>
@@ -518,50 +540,59 @@
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
-
-                                <StackPanel Grid.Row="2" 
-                                            Orientation="Horizontal" 
-                                            HorizontalAlignment="Right">
-                                    <Button x:Name="BtnBrowsePhishing" 
-                                            Content="Browse" 
-                                            Width="80" 
-                                            Margin="5,0"/>
-                                    <Button x:Name="BtnAddPhishing" 
-                                            Content="Add" 
-                                            Width="80" 
-                                            Margin="5,0"
-                                            Style="{DynamicResource AccentButtonStyle}"/>
-                                    <Button x:Name="BtnDeletePhishing" 
-                                            Content="Remove" 
-                                            Width="80" 
-                                            Margin="5,0"/>
+                                <!-- TextBox for manual file entry -->
+                                <TextBox x:Name="textBoxPhishingInput"
+                   Grid.Row="2"
+                   Width="200"
+                   Margin="5,0"
+                   ToolTip="Enter file path"/>
+                                <StackPanel Grid.Row="3"
+                      Orientation="Horizontal"
+                      HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowsePhishing"
+                    Content="Browse"
+                    Width="80"
+                    Margin="5,0"/>
+                                    <Button x:Name="BtnAddPhishing"
+                    Content="Add"
+                    Width="80"
+                    Margin="5,0"
+                    Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeletePhishing"
+                    Content="Remove"
+                    Width="80"
+                    Margin="5,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
 
                         <!-- WhiteList Files Section -->
-                        <Border Grid.Column="1" Grid.Row="1" 
-                                BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
-                                BorderThickness="1" 
-                                CornerRadius="4" 
-                                Margin="5">
+                        <Border Grid.Column="1" Grid.Row="1"
+              BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
+              BorderThickness="1"
+              CornerRadius="4"
+              Margin="5">
                             <Grid Margin="10">
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
+                                    <!-- Title -->
                                     <RowDefinition Height="*"/>
+                                    <!-- ListView -->
                                     <RowDefinition Height="Auto"/>
+                                    <!-- TextBox input -->
+                                    <RowDefinition Height="Auto"/>
+                                    <!-- Buttons -->
                                 </Grid.RowDefinitions>
 
-                                <TextBlock Text="WhiteList Files" 
-                                           FontWeight="SemiBold" 
-                                           FontSize="16" 
-                                           Margin="0,0,0,10"/>
-
-                                <ListView x:Name="listBoxWhiteList" 
-                                          Grid.Row="1" 
-                                          Margin="0,0,0,10"
-                                          BorderThickness="1"
-                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                <TextBlock Text="WhiteList Files"
+                     FontWeight="SemiBold"
+                     FontSize="16"
+                     Margin="0,0,0,10"/>
+                                <ListView x:Name="listBoxWhiteList"
+                    Grid.Row="1"
+                    Margin="0,0,0,10"
+                    BorderThickness="1"
+                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="File Name" Width="200"/>
@@ -569,34 +600,39 @@
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
-
-                                <StackPanel Grid.Row="2" 
-                                            Orientation="Horizontal" 
-                                            HorizontalAlignment="Right">
-                                    <Button x:Name="BtnBrowseWhiteList" 
-                                            Content="Browse" 
-                                            Width="80" 
-                                            Margin="5,0"/>
-                                    <Button x:Name="BtnAddWhiteList" 
-                                            Content="Add" 
-                                            Width="80" 
-                                            Margin="5,0"
-                                            Style="{DynamicResource AccentButtonStyle}"/>
-                                    <Button x:Name="BtnDeleteWhiteList" 
-                                            Content="Remove" 
-                                            Width="80" 
-                                            Margin="5,0"/>
+                                <!-- TextBox for manual file entry -->
+                                <TextBox x:Name="textBoxWhiteListInput"
+                   Grid.Row="2"
+                   Width="200"
+                   Margin="5,0"
+                   ToolTip="Enter file path"/>
+                                <StackPanel Grid.Row="3"
+                      Orientation="Horizontal"
+                      HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowseWhiteList"
+                    Content="Browse"
+                    Width="80"
+                    Margin="5,0"/>
+                                    <Button x:Name="BtnAddWhiteList"
+                    Content="Add"
+                    Width="80"
+                    Margin="5,0"
+                    Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeleteWhiteList"
+                    Content="Remove"
+                    Width="80"
+                    Margin="5,0"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
                     </Grid>
 
                     <!-- Discovered IPs Section -->
-                    <Border Grid.Row="1" 
-                            BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
-                            BorderThickness="1" 
-                            CornerRadius="4" 
-                            Margin="5">
+                    <Border Grid.Row="1"
+            BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
+            BorderThickness="1"
+            CornerRadius="4"
+            Margin="5">
                         <Grid Margin="10">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -607,26 +643,26 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="Discovered IPs" 
-                                       Grid.ColumnSpan="2"
-                                       FontWeight="SemiBold" 
-                                       FontSize="16" 
-                                       Margin="0,0,0,10"/>
+                            <TextBlock Text="Discovered IPs"
+                   Grid.ColumnSpan="2"
+                   FontWeight="SemiBold"
+                   FontSize="16"
+                   Margin="0,0,0,10"/>
 
                             <!-- IPv4 List -->
-                            <Border Grid.Column="0" Grid.Row="1" 
-                                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}" 
-                                    BorderThickness="1" 
-                                    CornerRadius="4" 
-                                    Margin="5">
+                            <Border Grid.Column="0" Grid.Row="1"
+                BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="5">
                                 <DockPanel Margin="5">
-                                    <TextBlock Text="IPv4" 
-                                               DockPanel.Dock="Top" 
-                                               FontWeight="Medium" 
-                                               Margin="0,0,0,5"/>
-                                    <ListView x:Name="listBoxIPv4" 
-                                              Height="150"
-                                              BorderThickness="0">
+                                    <TextBlock Text="IPv4"
+                       DockPanel.Dock="Top"
+                       FontWeight="Medium"
+                       Margin="0,0,0,5"/>
+                                    <ListView x:Name="listBoxIPv4"
+                      Height="150"
+                      BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
                                                 <GridViewColumn Header="IP Address" Width="150"/>
@@ -639,19 +675,19 @@
                             </Border>
 
                             <!-- IPv6 List -->
-                            <Border Grid.Column="1" Grid.Row="1" 
-                                    BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}" 
-                                    BorderThickness="1" 
-                                    CornerRadius="4" 
-                                    Margin="5">
+                            <Border Grid.Column="1" Grid.Row="1"
+                BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="5">
                                 <DockPanel Margin="5">
-                                    <TextBlock Text="IPv6" 
-                                               DockPanel.Dock="Top" 
-                                               FontWeight="Medium" 
-                                               Margin="0,0,0,5"/>
-                                    <ListView x:Name="listBoxIPv6" 
-                                              Height="150"
-                                              BorderThickness="0">
+                                    <TextBlock Text="IPv6"
+                       DockPanel.Dock="Top"
+                       FontWeight="Medium"
+                       Margin="0,0,0,5"/>
+                                    <ListView x:Name="listBoxIPv6"
+                      Height="150"
+                      BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
                                                 <GridViewColumn Header="IP Address" Width="250"/>
