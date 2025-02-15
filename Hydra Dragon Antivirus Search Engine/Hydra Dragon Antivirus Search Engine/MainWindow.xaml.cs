@@ -175,7 +175,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Event handler for the "Save Settings" button.
         private void BtnSaveSettings_Click(object sender, EventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "JSON Files|*.json"
             };
@@ -331,7 +331,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // "Select" malware file.
         private void BtnSelectMalware_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
@@ -504,7 +504,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // "Select" whitelist file.
         private void BtnSelectWhitelist_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
