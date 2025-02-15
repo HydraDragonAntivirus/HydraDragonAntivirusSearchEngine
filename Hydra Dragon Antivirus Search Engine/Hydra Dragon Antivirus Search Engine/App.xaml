@@ -4,6 +4,6 @@
              xmlns:local="clr-namespace:Hydra_Dragon_Antivirus_Search_Engine"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
-         
+        <ResourceDictionary Source="/Themes/Generic.xaml"/>
     </Application.Resources>
 </Application>

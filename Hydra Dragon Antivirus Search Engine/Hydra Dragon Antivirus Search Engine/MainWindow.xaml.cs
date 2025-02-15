@@ -52,11 +52,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCsvMaxLines.Text = "10000"; // Maximum lines (including header)
             textBoxCsvMaxSize.Text = "2097152"; // 2 MB in bytes
             textBoxOutputFile.Text = "BulkReport.csv";
-            textBoxWhitelistOutputFile.Text = "WhitelistReport.csv";
+            textBoxWhiteListOutputFile.Text = "WhiteListReport.csv";
 
             textBoxCategoryMalicious.Text = "20";
             textBoxCategoryPhishing.Text = "7";
-            textBoxCategoryDdos.Text = "18";
+            textBoxCategoryDDoS.Text = "18";
             textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})";
         }
 
@@ -75,25 +75,25 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 CsvMaxLines = int.TryParse(textBoxCsvMaxLines.Text, out int lines) ? lines : 10000,
                 CsvMaxSize = int.TryParse(textBoxCsvMaxSize.Text, out int size) ? size : 2097152,
                 OutputFile = textBoxOutputFile.Text,
-                WhitelistOutputFile = textBoxWhitelistOutputFile.Text,
+                WhiteListOutputFile = textBoxWhiteListOutputFile.Text,
                 CategoryMalicious = textBoxCategoryMalicious.Text,
                 CategoryPhishing = textBoxCategoryPhishing.Text,
-                CategoryDdos = textBoxCategoryDdos.Text,
+                CategoryDDoS = textBoxCategoryDDoS.Text,
                 CommentTemplate = textBoxCommentTemplate.Text,
 
                 RealTimeCsvBulk = checkBoxRealTimeCsvBulk.IsChecked.GetValueOrDefault(),
                 RealTimeCsvBulkFile = textBoxRealTimeCsvBulkFile.Text,
-                RealTimeCsvWhitelist = checkBoxRealTimeCsvWhitelist.IsChecked.GetValueOrDefault(),
-                RealTimeCsvWhitelistFile = textBoxRealTimeCsvWhitelistFile.Text,
+                RealTimeCsvWhiteList = checkBoxRealTimeCsvWhiteList.IsChecked.GetValueOrDefault(),
+                RealTimeCsvWhiteListFile = textBoxRealTimeCsvWhiteListFile.Text,
                 RealTimeSave = checkBoxRealTimeSave.IsChecked.GetValueOrDefault(),
                 RealTimeFile = textBoxRealTimeFile.Text,
                 ScanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault(),
 
                 // Save file lists
                 MalwareFiles = malwareFiles,
-                DdosFiles = ddosFiles,
+                DDoSFiles = ddosFiles,
                 PhishingFiles = phishingFiles,
-                WhitelistFiles = whitelistFiles,
+                WhiteListFiles = whitelistFiles,
 
                 // Save last selected folder
                 LastFolderPath = lastPath
@@ -118,16 +118,16 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     textBoxCsvMaxLines.Text = settings.CsvMaxLines.ToString();
                     textBoxCsvMaxSize.Text = settings.CsvMaxSize.ToString();
                     textBoxOutputFile.Text = settings.OutputFile;
-                    textBoxWhitelistOutputFile.Text = settings.WhitelistOutputFile;
+                    textBoxWhiteListOutputFile.Text = settings.WhiteListOutputFile;
                     textBoxCategoryMalicious.Text = settings.CategoryMalicious;
                     textBoxCategoryPhishing.Text = settings.CategoryPhishing;
-                    textBoxCategoryDdos.Text = settings.CategoryDdos;
+                    textBoxCategoryDDoS.Text = settings.CategoryDDoS;
                     textBoxCommentTemplate.Text = settings.CommentTemplate;
 
                     checkBoxRealTimeCsvBulk.IsChecked = settings.RealTimeCsvBulk;
                     textBoxRealTimeCsvBulkFile.Text = settings.RealTimeCsvBulkFile;
-                    checkBoxRealTimeCsvWhitelist.IsChecked = settings.RealTimeCsvWhitelist;
-                    textBoxRealTimeCsvWhitelistFile.Text = settings.RealTimeCsvWhitelistFile;
+                    checkBoxRealTimeCsvWhiteList.IsChecked = settings.RealTimeCsvWhiteList;
+                    textBoxRealTimeCsvWhiteListFile.Text = settings.RealTimeCsvWhiteListFile;
                     checkBoxRealTimeSave.IsChecked = settings.RealTimeSave;
                     textBoxRealTimeFile.Text = settings.RealTimeFile;
                     checkBoxScanKnownActive.IsChecked = settings.ScanKnownActive;
@@ -136,11 +136,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     malwareFiles.Clear();
                     malwareFiles.AddRange(settings.MalwareFiles);
                     ddosFiles.Clear();
-                    ddosFiles.AddRange(settings.DdosFiles);
+                    ddosFiles.AddRange(settings.DDoSFiles);
                     phishingFiles.Clear();
                     phishingFiles.AddRange(settings.PhishingFiles);
                     whitelistFiles.Clear();
-                    whitelistFiles.AddRange(settings.WhitelistFiles);
+                    whitelistFiles.AddRange(settings.WhiteListFiles);
 
                     listBoxMalware.Items.Clear();
                     foreach (var item in settings.MalwareFiles)
@@ -148,10 +148,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         listBoxMalware.Items.Add(item);
                     }
 
-                    listBoxDdos.Items.Clear();
-                    foreach (var item in settings.DdosFiles)
+                    listBoxDDoS.Items.Clear();
+                    foreach (var item in settings.DDoSFiles)
                     {
-                        listBoxDdos.Items.Add(item);
+                        listBoxDDoS.Items.Add(item);
                     }
 
                     listBoxPhishing.Items.Clear();
@@ -160,10 +160,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         listBoxPhishing.Items.Add(item);
                     }
 
-                    listBoxWhitelist.Items.Clear();
-                    foreach (var item in settings.WhitelistFiles)
+                    listBoxWhiteList.Items.Clear();
+                    foreach (var item in settings.WhiteListFiles)
                     {
-                        listBoxWhitelist.Items.Add(item);
+                        listBoxWhiteList.Items.Add(item);
                     }
 
                     // Restore the last selected folder
@@ -219,10 +219,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 csvMaxSize = 2097152;
 
             string outputFileName = textBoxOutputFile.Text;
-            string whitelistOutputFileName = textBoxWhitelistOutputFile.Text;
+            string whitelistOutputFileName = textBoxWhiteListOutputFile.Text;
             string categoryMalicious = textBoxCategoryMalicious.Text;
             string categoryPhishing = textBoxCategoryPhishing.Text;
-            string categoryDdos = textBoxCategoryDdos.Text;
+            string categoryDDoS = textBoxCategoryDDoS.Text;
 
             cts = new CancellationTokenSource();
 
@@ -233,10 +233,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 File.WriteAllText(textBoxRealTimeCsvBulkFile.Text, "IP,Categories,ReportDate,Comment" + Environment.NewLine);
             }
-            // Initialize real‑time Whitelist CSV file with header if enabled.
-            if (checkBoxRealTimeCsvWhitelist.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
+            // Initialize real‑time WhiteList CSV file with header if enabled.
+            if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
-                File.WriteAllText(textBoxRealTimeCsvWhitelistFile.Text, "IP,Source,ReportDate,Comment" + Environment.NewLine);
+                File.WriteAllText(textBoxRealTimeCsvWhiteListFile.Text, "IP,Source,ReportDate,Comment" + Environment.NewLine);
             }
 
             bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
@@ -244,11 +244,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             scanner = new Scanner(
                 malwareFiles, ddosFiles, phishingFiles, whitelistFiles,
                 maxDepth, maxThreads,
-                categoryMalicious, categoryPhishing, categoryDdos,
+                categoryMalicious, categoryPhishing, categoryDDoS,
                 csvMaxLines, csvMaxSize,
                 outputFileName, whitelistOutputFileName,
                 UpdateLog, UpdateProgress,
-                AppendBulkCsvLineToFile, AppendWhitelistCsvLineToFile,
+                AppendBulkCsvLineToFile, AppendWhiteListCsvLineToFile,
                 commentTemplate,
                 AddIPv4ToListBox,
                 AddIPv6ToListBox,
@@ -273,7 +273,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 // Write both CSV outputs.
                 File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                File.WriteAllLines(whitelistOutputFileName, scanner.WhitelistCsvLines, Encoding.UTF8);
+                File.WriteAllLines(whitelistOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
                 MessageBox.Show("Scan completed and CSV files generated successfully.");
             }
         }
@@ -388,7 +388,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region DDoS List Handlers
 
         // "Select" DDoS file.
-        private void BtnSelectDdosFile_Click(object sender, EventArgs e)
+        private void BtnSelectDDoSFile_Click(object sender, EventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -403,20 +403,20 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string filePath = ofd.FileName;
                 lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
                 ddosFiles.Add(filePath);
-                listBoxDdos.Items.Add(filePath);
+                listBoxDDoS.Items.Add(filePath);
             }
         }
 
         // "Add" DDoS file (via text input).
-        private void BtnAddDdosFile_Click(object sender, EventArgs e)
+        private void BtnAddDDoSFile_Click(object sender, EventArgs e)
         {
-            if (File.Exists(textBoxDdosInput.Text))
+            if (File.Exists(textBoxDDoSInput.Text))
             {
-                if (textBoxDdosInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                if (textBoxDDoSInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
-                    listBoxDdos.Items.Add(textBoxDdosInput.Text);
-                    ddosFiles.Add(textBoxDdosInput.Text);
-                    textBoxDdosInput.Clear();
+                    listBoxDDoS.Items.Add(textBoxDDoSInput.Text);
+                    ddosFiles.Add(textBoxDDoSInput.Text);
+                    textBoxDDoSInput.Clear();
                 }
                 else
                 {
@@ -430,13 +430,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From DDoS List" button.
-        private void BtnDeleteDdosFile_Click(object sender, EventArgs e)
+        private void BtnDeleteDDoSFile_Click(object sender, EventArgs e)
         {
-            if (listBoxDdos.SelectedIndex >= 0)
+            if (listBoxDDoS.SelectedIndex >= 0)
             {
-                int index = listBoxDdos.SelectedIndex;
+                int index = listBoxDDoS.SelectedIndex;
                 ddosFiles.RemoveAt(index);
-                listBoxDdos.Items.RemoveAt(index);
+                listBoxDDoS.Items.RemoveAt(index);
             }
         }
 
@@ -499,10 +499,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #endregion
 
-        #region Whitelist List Handlers
+        #region WhiteList List Handlers
 
         // "Select" whitelist file.
-        private void BtnSelectWhitelist_Click(object sender, EventArgs e)
+        private void BtnSelectWhiteList_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new()
             {
@@ -519,20 +519,20 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
 
                 whitelistFiles.Add(filePath);   
-                listBoxWhitelist.Items.Add(filePath);  
+                listBoxWhiteList.Items.Add(filePath);  
             }
         }
 
         // "Add" whitelist file (via text input).
-        private void BtnAddWhitelist_Click(object sender, EventArgs e)
+        private void BtnAddWhiteList_Click(object sender, EventArgs e)
         {
-            if (File.Exists(textBoxWhitelistInput.Text))
+            if (File.Exists(textBoxWhiteListInput.Text))
             {
-                if (textBoxWhitelistInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                if (textBoxWhiteListInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
-                    listBoxWhitelist.Items.Add(textBoxWhitelistInput.Text);
-                    whitelistFiles.Add(textBoxWhitelistInput.Text);
-                    textBoxWhitelistInput.Clear();
+                    listBoxWhiteList.Items.Add(textBoxWhiteListInput.Text);
+                    whitelistFiles.Add(textBoxWhiteListInput.Text);
+                    textBoxWhiteListInput.Clear();
                 }
                 else
                 {
@@ -545,14 +545,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // "Delete Selected From Whitelist" button.
-        private void ButtonDeleteWhitelist_Click(object sender, EventArgs e)
+        // "Delete Selected From WhiteList" button.
+        private void ButtonDeleteWhiteList_Click(object sender, EventArgs e)
         {
-            if (listBoxWhitelist.SelectedIndex >= 0)
+            if (listBoxWhiteList.SelectedIndex >= 0)
             {
-                int index = listBoxWhitelist.SelectedIndex;
+                int index = listBoxWhiteList.SelectedIndex;
                 whitelistFiles.RemoveAt(index);
-                listBoxWhitelist.Items.RemoveAt(index);
+                listBoxWhiteList.Items.RemoveAt(index);
             }
         }
 
@@ -671,16 +671,16 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Updated AppendWhitelistCsvLineToFile method in Form1 with a locking mechanism:
+        // Updated AppendWhiteListCsvLineToFile method in Form1 with a locking mechanism:
         private readonly object whitelistCsvLock = new();
 
-        private void AppendWhitelistCsvLineToFile(string csvLine)
+        private void AppendWhiteListCsvLineToFile(string csvLine)
         {
-            if (checkBoxRealTimeCsvWhitelist.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
+            if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
                 lock (whitelistCsvLock)
                 {
-                    File.AppendAllText(textBoxRealTimeCsvWhitelistFile.Text, csvLine + Environment.NewLine);
+                    File.AppendAllText(textBoxRealTimeCsvWhiteListFile.Text, csvLine + Environment.NewLine);
                 }
             }
         }
@@ -697,24 +697,24 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public int CsvMaxLines { get; set; }
             public int CsvMaxSize { get; set; }
             public string OutputFile { get; set; } = string.Empty;
-            public string WhitelistOutputFile { get; set; } = string.Empty;
+            public string WhiteListOutputFile { get; set; } = string.Empty;
             public string CategoryMalicious { get; set; } = string.Empty;
             public string CategoryPhishing { get; set; } = string.Empty;
-            public string CategoryDdos { get; set; } = string.Empty;
+            public string CategoryDDoS { get; set; } = string.Empty;
             public string CommentTemplate { get; set; } = string.Empty;
             public bool RealTimeCsvBulk { get; set; }
             public string RealTimeCsvBulkFile { get; set; } = string.Empty;
-            public bool RealTimeCsvWhitelist { get; set; }
-            public string RealTimeCsvWhitelistFile { get; set; } = string.Empty;
+            public bool RealTimeCsvWhiteList { get; set; }
+            public string RealTimeCsvWhiteListFile { get; set; } = string.Empty;
             public bool RealTimeSave { get; set; }
             public string RealTimeFile { get; set; } = string.Empty;
             public bool ScanKnownActive { get; set; }
 
             // File lists for scanning
             public List<string> MalwareFiles { get; set; } = new();
-            public List<string> DdosFiles { get; set; } = new();
+            public List<string> DDoSFiles { get; set; } = new();
             public List<string> PhishingFiles { get; set; } = new();
-            public List<string> WhitelistFiles { get; set; } = new();
+            public List<string> WhiteListFiles { get; set; } = new();
 
             // Save the last selected folder
             public string LastFolderPath { get; set; } = string.Empty;
@@ -735,7 +735,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly int maxThreads;
             private readonly string categoryMalicious;
             private readonly string categoryPhishing;
-            private readonly string categoryDdos;
+            private readonly string categoryDDoS;
             private readonly int csvMaxLines;
             private readonly int csvMaxSize;
             private readonly string outputFileName;
@@ -746,7 +746,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly Action<int, int> progressCallback;
 
             public List<string> BulkCsvLines { get; private set; } = new List<string>();
-            public List<string> WhitelistCsvLines { get; private set; } = new List<string>();
+            public List<string> WhiteListCsvLines { get; private set; } = new List<string>();
 
             // Concurrent collections for seeds
             private readonly ConcurrentQueue<Seed> seedQueue = new();
@@ -761,7 +761,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly HttpClient httpClient = new();
 
             private readonly Action<string> realTimeBulkCsvCallback;
-            private readonly Action<string> realTimeWhitelistCsvCallback;
+            private readonly Action<string> realTimeWhiteListCsvCallback;
             private readonly Action<string> updateIPv4Callback;
             private readonly Action<string> updateIPv6Callback;
             private readonly HashSet<string> filesWithIPv4 = new(StringComparer.OrdinalIgnoreCase);
@@ -779,7 +779,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 int maxThreads,
                 string categoryMalicious,
                 string categoryPhishing,
-                string categoryDdos,
+                string categoryDDoS,
                 int csvMaxLines,
                 int csvMaxSize,
                 string outputFileName,
@@ -787,7 +787,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 Action<string> logCallback,
                 Action<int, int> progressCallback,
                 Action<string> realTimeBulkCsvCallback,
-                Action<string> realTimeWhitelistCsvCallback,
+                Action<string> realTimeWhiteListCsvCallback,
                 string commentTemplate,
                 Action<string> updateIPv4Callback,
                 Action<string> updateIPv6Callback,
@@ -802,7 +802,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.maxThreads = maxThreads;
                 this.categoryMalicious = categoryMalicious;
                 this.categoryPhishing = categoryPhishing;
-                this.categoryDdos = categoryDdos;
+                this.categoryDDoS = categoryDDoS;
                 this.csvMaxLines = csvMaxLines;
                 this.csvMaxSize = csvMaxSize;
                 this.outputFileName = outputFileName;
@@ -810,7 +810,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.logCallback = logCallback;
                 this.progressCallback = progressCallback;
                 this.realTimeBulkCsvCallback = realTimeBulkCsvCallback;
-                this.realTimeWhitelistCsvCallback = realTimeWhitelistCsvCallback;
+                this.realTimeWhiteListCsvCallback = realTimeWhiteListCsvCallback;
                 this.commentTemplate = commentTemplate ?? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})";
                 this.updateIPv4Callback = updateIPv4Callback;
                 this.updateIPv6Callback = updateIPv6Callback;
@@ -818,7 +818,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.allowAutoVerdict = allowAutoVerdict;
             }
 
-            private async Task ProcessWhitelistFileAsync(string file, CancellationToken token)
+            private async Task ProcessWhiteListFileAsync(string file, CancellationToken token)
             {
                 List<string> whitelistSites = new();
 
@@ -884,17 +884,17 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                                         if (whitelistedIPs.Add(ip))
                                         {
                                             string reportDate = DateTime.UtcNow.ToString("o");
-                                            string comment = $"Whitelist site visited: {actualUrl}";
+                                            string comment = $"WhiteList site visited: {actualUrl}";
                                             string csvLine = $"{ip},\"whitelist (visited)\",{reportDate},\"{EscapeCsvField(comment)}\"";
 
-                                            lock (WhitelistCsvLines)
+                                            lock (WhiteListCsvLines)
                                             {
-                                                if (WhitelistCsvLines.Count < csvMaxLines + 1)
+                                                if (WhiteListCsvLines.Count < csvMaxLines + 1)
                                                 {
-                                                    WhitelistCsvLines.Add(csvLine);
+                                                    WhiteListCsvLines.Add(csvLine);
                                                 }
                                             }
-                                            realTimeWhitelistCsvCallback?.Invoke(csvLine);
+                                            realTimeWhiteListCsvCallback?.Invoke(csvLine);
                                         }
                                     }
                                 }
@@ -923,7 +923,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 foreach (var file in whitelistFiles.Where(file => System.IO.Path.GetExtension(file)
                          .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
-                    await ProcessWhitelistFileAsync(file, token);
+                    await ProcessWhiteListFileAsync(file, token);
                 }
 
                 // Load seeds from blacklist files. This will also populate blacklistIPs.
@@ -1033,20 +1033,20 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
-                bool isWhitelisted = whitelistedIPs.Contains(ip);
-                if (isWhitelisted)
+                bool isWhiteListed = whitelistedIPs.Contains(ip);
+                if (isWhiteListed)
                 {
                     string reportDate = DateTime.UtcNow.ToString("o");
-                    string comment = $"Whitelisted from file: {file}";
+                    string comment = $"WhiteListed from file: {file}";
                     string csvLine = $"{ip},\"whitelist\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    lock (WhitelistCsvLines)
+                    lock (WhiteListCsvLines)
                     {
-                        if (WhitelistCsvLines.Count < csvMaxLines + 1)
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
                         {
-                            WhitelistCsvLines.Add(csvLine);  // No need for Contains check
+                            WhiteListCsvLines.Add(csvLine);  // No need for Contains check
                         }
                     }
-                    realTimeWhitelistCsvCallback?.Invoke(csvLine);
+                    realTimeWhiteListCsvCallback?.Invoke(csvLine);
                 }
                 else
                 {
@@ -1124,7 +1124,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         "malicious" => categoryMalicious,
                         "phishing" => categoryPhishing,
-                        "ddos" => categoryDdos,
+                        "ddos" => categoryDDoS,
                         _ => ""
                     };
                     string reportDate = DateTime.UtcNow.ToString("o");
@@ -1202,14 +1202,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             string reportDate = DateTime.UtcNow.ToString("o");
                             string comment = $"Auto-whitelisted benign IP from {seed.OriginalSourceUrl}";
                             string csvLine = $"{ip},\"whitelist\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                            lock (WhitelistCsvLines)
+                            lock (WhiteListCsvLines)
                             {
-                                if (WhitelistCsvLines.Count < csvMaxLines + 1)
+                                if (WhiteListCsvLines.Count < csvMaxLines + 1)
                                 {
-                                    WhitelistCsvLines.Add(csvLine);
+                                    WhiteListCsvLines.Add(csvLine);
                                 }
                             }
-                            realTimeWhitelistCsvCallback?.Invoke(csvLine);
+                            realTimeWhiteListCsvCallback?.Invoke(csvLine);
                             return;
                         }
                         // If auto verdicts are disabled, continue scanning without auto-whitelisting.
