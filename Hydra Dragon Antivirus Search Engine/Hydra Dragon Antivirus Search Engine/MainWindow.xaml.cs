@@ -1,14 +1,33 @@
-﻿using log4net.Config;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
+using System.IO;
+using System.Net.Http;
 using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-
-namespace Project_Malware_Finder
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
+using Microsoft.Win32;
+using log4net;
+namespace Hydra_Dragon_Antivirus_Search_Engine
 {
-    public partial class Form1 : Form
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
+    public partial class MainWindow : Window
     {
+        public MainWindow()
+        {
+            InitializeComponent();
+             
+        }
         // File lists for scanning and whitelist.
         private readonly List<string> malwareFiles = new();
         private readonly List<string> ddosFiles = new();
@@ -23,11 +42,7 @@ namespace Project_Malware_Finder
         // A full log list to support search and saving.
         private readonly List<string> fullLogList = new();
 
-        public Form1()
-        {
-            InitializeComponent();
-            XmlConfigurator.Configure();
-        }
+       
 
         private void Form1_Load(object sender, EventArgs e)
         {
@@ -66,13 +81,13 @@ namespace Project_Malware_Finder
                 CategoryDdos = textBoxCategoryDdos.Text,
                 CommentTemplate = textBoxCommentTemplate.Text,
 
-                RealTimeCsvBulk = checkBoxRealTimeCsvBulk.Checked,
+                RealTimeCsvBulk = checkBoxRealTimeCsvBulk.IsChecked.GetValueOrDefault(),
                 RealTimeCsvBulkFile = textBoxRealTimeCsvBulkFile.Text,
-                RealTimeCsvWhitelist = checkBoxRealTimeCsvWhitelist.Checked,
+                RealTimeCsvWhitelist = checkBoxRealTimeCsvWhitelist.IsChecked.GetValueOrDefault(),
                 RealTimeCsvWhitelistFile = textBoxRealTimeCsvWhitelistFile.Text,
-                RealTimeSave = checkBoxRealTimeSave.Checked,
+                RealTimeSave = checkBoxRealTimeSave.IsChecked.GetValueOrDefault(),
                 RealTimeFile = textBoxRealTimeFile.Text,
-                ScanKnownActive = checkBoxScanKnownActive.Checked,
+                ScanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault(),
 
                 // Save file lists
                 MalwareFiles = malwareFiles,
@@ -109,13 +124,13 @@ namespace Project_Malware_Finder
                     textBoxCategoryDdos.Text = settings.CategoryDdos;
                     textBoxCommentTemplate.Text = settings.CommentTemplate;
 
-                    checkBoxRealTimeCsvBulk.Checked = settings.RealTimeCsvBulk;
+                    checkBoxRealTimeCsvBulk.IsChecked = settings.RealTimeCsvBulk;
                     textBoxRealTimeCsvBulkFile.Text = settings.RealTimeCsvBulkFile;
-                    checkBoxRealTimeCsvWhitelist.Checked = settings.RealTimeCsvWhitelist;
+                    checkBoxRealTimeCsvWhitelist.IsChecked = settings.RealTimeCsvWhitelist;
                     textBoxRealTimeCsvWhitelistFile.Text = settings.RealTimeCsvWhitelistFile;
-                    checkBoxRealTimeSave.Checked = settings.RealTimeSave;
+                    checkBoxRealTimeSave.IsChecked = settings.RealTimeSave;
                     textBoxRealTimeFile.Text = settings.RealTimeFile;
-                    checkBoxScanKnownActive.Checked = settings.ScanKnownActive;
+                    checkBoxScanKnownActive.IsChecked = settings.ScanKnownActive;
 
                     // Restore file lists
                     malwareFiles.Clear();
@@ -128,13 +143,28 @@ namespace Project_Malware_Finder
                     whitelistFiles.AddRange(settings.WhitelistFiles);
 
                     listBoxMalware.Items.Clear();
-                    listBoxMalware.Items.AddRange(settings.MalwareFiles.ToArray());
+                    foreach (var item in settings.MalwareFiles)
+                    {
+                        listBoxMalware.Items.Add(item);
+                    }
+
                     listBoxDdos.Items.Clear();
-                    listBoxDdos.Items.AddRange(settings.DdosFiles.ToArray());
+                    foreach (var item in settings.DdosFiles)
+                    {
+                        listBoxDdos.Items.Add(item);
+                    }
+
                     listBoxPhishing.Items.Clear();
-                    listBoxPhishing.Items.AddRange(settings.PhishingFiles.ToArray());
+                    foreach (var item in settings.PhishingFiles)
+                    {
+                        listBoxPhishing.Items.Add(item);
+                    }
+
                     listBoxWhitelist.Items.Clear();
-                    listBoxWhitelist.Items.AddRange(settings.WhitelistFiles.ToArray());
+                    foreach (var item in settings.WhitelistFiles)
+                    {
+                        listBoxWhitelist.Items.Add(item);
+                    }
 
                     // Restore the last selected folder
                     lastPath = settings.LastFolderPath;
@@ -145,13 +175,15 @@ namespace Project_Malware_Finder
         // Event handler for the "Save Settings" button.
         private void BtnSaveSettings_Click(object sender, EventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "JSON Files|*.json"
             };
-            if (sfd.ShowDialog() == DialogResult.OK)
+
+          
+            if (sfd.ShowDialog() == true)
             {
-                SaveSettings(sfd.FileName);
+                SaveSettings(sfd.FileName); 
                 MessageBox.Show("Settings saved successfully.");
             }
         }
@@ -159,11 +191,14 @@ namespace Project_Malware_Finder
         // Event handler for the "Load Settings" button.
         private void BtnLoadSettings_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new()
+            var ofd = new OpenFileDialog
             {
                 Filter = "JSON Files|*.json"
             };
-            if (ofd.ShowDialog() == DialogResult.OK)
+
+            bool? result = ofd.ShowDialog();
+
+            if (result == true)
             {
                 LoadSettings(ofd.FileName);
                 MessageBox.Show("Settings loaded successfully.");
@@ -194,18 +229,18 @@ namespace Project_Malware_Finder
             string commentTemplate = textBoxCommentTemplate.Text;
 
             // Initialize real‑time Bulk CSV file with header if enabled.
-            if (checkBoxRealTimeCsvBulk.Checked && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
+            if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
                 File.WriteAllText(textBoxRealTimeCsvBulkFile.Text, "IP,Categories,ReportDate,Comment" + Environment.NewLine);
             }
             // Initialize real‑time Whitelist CSV file with header if enabled.
-            if (checkBoxRealTimeCsvWhitelist.Checked && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
+            if (checkBoxRealTimeCsvWhitelist.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
             {
                 File.WriteAllText(textBoxRealTimeCsvWhitelistFile.Text, "IP,Source,ReportDate,Comment" + Environment.NewLine);
             }
 
-            bool scanKnownActive = checkBoxScanKnownActive.Checked;
-            bool allowAutoVerdict = checkBoxAllowAutoVerdict.Checked;
+            bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
+            bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
             scanner = new Scanner(
                 malwareFiles, ddosFiles, phishingFiles, whitelistFiles,
                 maxDepth, maxThreads,
@@ -256,27 +291,33 @@ namespace Project_Malware_Finder
         // Update IPv4 list box with the .txt file name.
         private void AddIPv4ToListBox(string fileName)
         {
-            if (listBoxIPv4.InvokeRequired)
+            if (listBoxIPv4.Dispatcher.CheckAccess())
             {
-                listBoxIPv4.Invoke(new Action(() => listBoxIPv4.Items.Add(fileName)));
+               
+                listBoxIPv4.Items.Add(fileName);
             }
             else
             {
-                listBoxIPv4.Items.Add(fileName);
+                
+                listBoxIPv4.Dispatcher.Invoke(new Action(() => listBoxIPv4.Items.Add(fileName)));
             }
+
         }
 
         // Update IPv6 list box with the .txt file name.
         private void AddIPv6ToListBox(string fileName)
         {
-            if (listBoxIPv6.InvokeRequired)
+            if (listBoxIPv6.Dispatcher.CheckAccess())
             {
-                listBoxIPv6.Invoke(new Action(() => listBoxIPv6.Items.Add(fileName)));
+
+                listBoxIPv6.Items.Add(fileName);
             }
             else
             {
-                listBoxIPv6.Items.Add(fileName);
+
+                listBoxIPv6.Dispatcher.Invoke(new Action(() => listBoxIPv6.Items.Add(fileName)));
             }
+          
         }
 
         // Clear Log button clicked.
@@ -290,18 +331,22 @@ namespace Project_Malware_Finder
         // "Select" malware file.
         private void BtnSelectMalware_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new()
+            OpenFileDialog ofd = new OpenFileDialog()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
             };
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+          
+            bool? result = ofd.ShowDialog();
+
+            if (result == true) 
             {
                 string filePath = ofd.FileName;
-                lastPath = Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                malwareFiles.Add(filePath);
-                listBoxMalware.Items.Add(filePath);
+                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+
+                malwareFiles.Add(filePath); 
+                listBoxMalware.Items.Add(filePath);   
             }
         }
 
@@ -345,16 +390,18 @@ namespace Project_Malware_Finder
         // "Select" DDoS file.
         private void BtnSelectDdosFile_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new()
+            var ofd = new OpenFileDialog
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
             };
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+            bool? result = ofd.ShowDialog();
+
+            if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
                 ddosFiles.Add(filePath);
                 listBoxDdos.Items.Add(filePath);
             }
@@ -400,16 +447,18 @@ namespace Project_Malware_Finder
         // "Select" Phishing file.
         private void BtnSelectPhishingFile_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new()
+            var ofd = new OpenFileDialog
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
             };
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+            bool? result = ofd.ShowDialog();
+
+            if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
                 phishingFiles.Add(filePath);
                 listBoxPhishing.Items.Add(filePath);
             }
@@ -455,18 +504,22 @@ namespace Project_Malware_Finder
         // "Select" whitelist file.
         private void BtnSelectWhitelist_Click(object sender, EventArgs e)
         {
-            OpenFileDialog ofd = new()
+            OpenFileDialog ofd = new OpenFileDialog()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
             };
 
-            if (ofd.ShowDialog() == DialogResult.OK)
+             
+            bool? result = ofd.ShowDialog();
+
+            if (result == true) 
             {
                 string filePath = ofd.FileName;
-                lastPath = Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                whitelistFiles.Add(filePath);
-                listBoxWhitelist.Items.Add(filePath);
+                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+
+                whitelistFiles.Add(filePath);   
+                listBoxWhitelist.Items.Add(filePath);  
             }
         }
 
@@ -517,18 +570,20 @@ namespace Project_Malware_Finder
             string logEntry = $"{DateTime.Now}: {message}";
             fullLogList.Add(logEntry);  // Add the log entry to the fullLogList
 
-            // Update the listBoxLog in a thread-safe manner.
-            if (listBoxLog.InvokeRequired)
+          
+            if (listBoxLog.Dispatcher.CheckAccess())
             {
-                listBoxLog.Invoke(new Action(() => listBoxLog.Items.Add(logEntry)));
+            
+                listBoxLog.Items.Add(logEntry);
             }
             else
             {
-                listBoxLog.Items.Add(logEntry);
+                
+                listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add(logEntry)));
             }
 
             // Append the log entry to the realtime log file if enabled.
-            if (checkBoxRealTimeSave.Checked && !string.IsNullOrEmpty(textBoxRealTimeFile.Text))
+            if (checkBoxRealTimeSave.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeFile.Text))
             {
                 const int maxRetries = 3;
                 int attempt = 0;
@@ -549,13 +604,15 @@ namespace Project_Malware_Finder
                             if (!realtimeLogErrorShown)
                             {
                                 realtimeLogErrorShown = true;
-                                if (listBoxLog.InvokeRequired)
+                                if (listBoxLog.Dispatcher.CheckAccess())
                                 {
-                                    listBoxLog.Invoke(new Action(() => listBoxLog.Items.Add("Error saving realtime log: " + ex.Message)));
+                                    // We're on the UI thread
+                                    listBoxLog.Items.Add("Error saving realtime log: " + ex.Message);
                                 }
                                 else
                                 {
-                                    listBoxLog.Items.Add("Error saving realtime log: " + ex.Message);
+                                    // We're not on the UI thread, so we need to invoke on the UI thread
+                                    listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add("Error saving realtime log: " + ex.Message)));
                                 }
                             }
                         }
@@ -572,20 +629,22 @@ namespace Project_Malware_Finder
         // Thread-safe progress updater.
         private void UpdateProgress(int current, int total)
         {
-            if (progressBarScan.InvokeRequired)
+            if (progressBarScan.Dispatcher.CheckAccess())
             {
-                progressBarScan.Invoke(new Action(() =>
-                {
-                    progressBarScan.Maximum = total;
-                    progressBarScan.Value = current;
-                    labelProgress.Text = $"{current} / {total}";
-                }));
+               
+                progressBarScan.Maximum = total;
+                progressBarScan.Value = current;
+                labelProgress.Content = $"{current} / {total}";
             }
             else
             {
-                progressBarScan.Maximum = total;
-                progressBarScan.Value = current;
-                labelProgress.Text = $"{current} / {total}";
+                 
+                progressBarScan.Dispatcher.Invoke(new Action(() =>
+                {
+                    progressBarScan.Maximum = total;
+                    progressBarScan.Value = current;
+                    labelProgress.Content = $"{current} / {total}";
+                }));
             }
         }
 
@@ -595,7 +654,7 @@ namespace Project_Malware_Finder
         private void AppendBulkCsvLineToFile(string csvLine)
         {
             // Make sure checkBoxRealTimeCsvBulk and textBoxRealTimeCsvBulkFile exist on your form.
-            if (checkBoxRealTimeCsvBulk.Checked && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
+            if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
                 try
                 {
@@ -606,7 +665,7 @@ namespace Project_Malware_Finder
                     if (!realtimeBulkCsvErrorShown)
                     {
                         realtimeBulkCsvErrorShown = true;
-                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message, "Bulk CSV Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message, "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
@@ -617,7 +676,7 @@ namespace Project_Malware_Finder
 
         private void AppendWhitelistCsvLineToFile(string csvLine)
         {
-            if (checkBoxRealTimeCsvWhitelist.Checked && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
+            if (checkBoxRealTimeCsvWhitelist.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhitelistFile.Text))
             {
                 lock (whitelistCsvLock)
                 {
@@ -861,7 +920,7 @@ namespace Project_Malware_Finder
             public async Task StartScanAsync(CancellationToken token)
             {
                 // Process each whitelist file.
-                foreach (var file in whitelistFiles.Where(file => Path.GetExtension(file)
+                foreach (var file in whitelistFiles.Where(file => System.IO.Path.GetExtension(file)
                          .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     await ProcessWhitelistFileAsync(file, token);
@@ -900,7 +959,7 @@ namespace Project_Malware_Finder
                 var ipv4Regex = Ipv4Regex();
                 var ipv6Regex = Ipv6Regex();
 
-                foreach (var file in fileList.Where(file => Path.GetExtension(file)
+                foreach (var file in fileList.Where(file => System.IO.Path.GetExtension(file)
                              .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (token.IsCancellationRequested)
@@ -943,11 +1002,11 @@ namespace Project_Malware_Finder
                     logCallback($"Finished loading file: {file}");
                 }
             }
-        /// <summary>
-        /// Processes a regex match by checking if the IP is already whitelisted.
-        /// If yes, writes to the whitelist CSV; otherwise, enqueues a new seed for scanning.
-        /// </summary>
-        private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType)
+            /// <summary>
+            /// Processes a regex match by checking if the IP is already whitelisted.
+            /// If yes, writes to the whitelist CSV; otherwise, enqueues a new seed for scanning.
+            /// </summary>
+            private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType)
             {
                 string ip = match.Groups["ip"].Value;
                 int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
@@ -956,7 +1015,7 @@ namespace Project_Malware_Finder
                 if (!processedIPs.TryAdd(ip, true))
                     return;
 
-                string fileName = Path.GetFileName(file);
+                string fileName = System.IO.Path.GetFileName(file);
                 if (version.Equals("ipv4", StringComparison.OrdinalIgnoreCase))
                 {
                     lock (fileLock)
@@ -1061,11 +1120,12 @@ namespace Project_Malware_Finder
                         return;
 
                     logCallback("Visited: " + url);
-                    string category = seed.SourceType switch {
+                    string category = seed.SourceType switch
+                    {
                         "malicious" => categoryMalicious,
                         "phishing" => categoryPhishing,
-                        "ddos" => categoryDdos, 
-                        _=> ""
+                        "ddos" => categoryDdos,
+                        _ => ""
                     };
                     string reportDate = DateTime.UtcNow.ToString("o");
                     string comment = commentTemplate
@@ -1284,7 +1344,9 @@ namespace Project_Malware_Finder
                 Filter = "Text Files|*.txt"
             };
 
-            if (sfd.ShowDialog() == DialogResult.OK)
+            bool? result = sfd.ShowDialog();
+
+            if (result == true)
             {
                 File.WriteAllLines(sfd.FileName, fullLogList);
                 MessageBox.Show("Log saved successfully.");
@@ -1292,5 +1354,6 @@ namespace Project_Malware_Finder
         }
 
         #endregion
+    
     }
 }
