@@ -7,3 +7,5 @@
 ## Credicts
 - HydraDragonAntivirus (main developer, repo owner, Python developer, C# developer, designer)
 - Winball501 (main developer, C# developer, designer, converted Python to C# project)
+## TODO
+- Add pause scan
