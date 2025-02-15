@@ -1,12 +1,7 @@
 ﻿<Window x:Class="Hydra_Dragon_Antivirus_Search_Engine.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Hydra Dragon Antivirus Search Engine" 
-        Height="800" 
-        Width="1200"
-        WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource SystemControlBackgroundAltHighBrush}">
-
+        Title="Hydra Dragon Antivirus Search Engine" Height="900" Width="1400">
     <Grid>
         <TabControl>
             <!-- Settings Tab -->
@@ -17,10 +12,6 @@
                             BorderThickness="1" 
                             CornerRadius="4">
                         <Grid Margin="20">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="250"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
@@ -28,13 +19,7 @@
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
-                            <!-- General Settings Section -->
-                            <TextBlock Text="General Settings" 
-                                     Grid.ColumnSpan="2"
-                                     FontSize="20" 
-                                     FontWeight="SemiBold" 
-                                     Margin="0,0,0,20"/>
-
+                            <!-- Basic Settings Section -->
                             <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,30">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -55,41 +40,41 @@
                                            Grid.Row="0" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxMaxDepth" 
-                                            Grid.Row="0" Grid.Column="1" 
-                                            Margin="0,5,0,5" 
-                                            MaxLength="5"/>
+                                             Grid.Row="0" Grid.Column="1" 
+                                             Margin="0,5,0,5" 
+                                             MaxLength="5"/>
 
                                     <!-- Max Threads -->
                                     <Label Content="Max Threads:" 
                                            Grid.Row="1" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxMaxThreads" 
-                                            Grid.Row="1" Grid.Column="1" 
-                                            Margin="0,5,0,5" 
-                                            MaxLength="3"/>
+                                             Grid.Row="1" Grid.Column="1" 
+                                             Margin="0,5,0,5" 
+                                             MaxLength="3"/>
 
                                     <!-- CSV Max Lines -->
                                     <Label Content="CSV Max Lines:" 
                                            Grid.Row="2" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxCsvMaxLines" 
-                                            Grid.Row="2" Grid.Column="1" 
-                                            Margin="0,5,0,5"/>
+                                             Grid.Row="2" Grid.Column="1" 
+                                             Margin="0,5,0,5"/>
 
                                     <!-- CSV Max Size -->
                                     <Label Content="CSV Max Size (bytes):" 
                                            Grid.Row="3" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxCsvMaxSize" 
-                                            Grid.Row="3" Grid.Column="1" 
-                                            Margin="0,5,0,5"/>
+                                             Grid.Row="3" Grid.Column="1" 
+                                             Margin="0,5,0,5"/>
 
                                     <!-- Output File -->
                                     <Label Content="Output File:" 
                                            Grid.Row="4" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <DockPanel Grid.Row="4" Grid.Column="1" 
-                                             Margin="0,5,0,5">
+                                               Margin="0,5,0,5">
                                         <Button Content="Browse" 
                                                 DockPanel.Dock="Right" 
                                                 Width="80" 
@@ -97,28 +82,28 @@
                                         <TextBox x:Name="textBoxOutputFile"/>
                                     </DockPanel>
 
-                                    <!-- Whitelist Output File -->
-                                    <Label Content="Whitelist Output File:" 
+                                    <!-- WhiteList Output File -->
+                                    <Label Content="WhiteList Output File:" 
                                            Grid.Row="5" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <DockPanel Grid.Row="5" Grid.Column="1" 
-                                             Margin="0,5,0,5">
+                                               Margin="0,5,0,5">
                                         <Button Content="Browse" 
                                                 DockPanel.Dock="Right" 
                                                 Width="80" 
                                                 Margin="10,0,0,0"/>
-                                        <TextBox x:Name="textBoxWhitelistOutputFile"/>
+                                        <TextBox x:Name="textBoxWhiteListOutputFile"/>
                                     </DockPanel>
                                 </Grid>
                             </StackPanel>
 
                             <!-- Categories Section -->
                             <TextBlock Text="Categories" 
-                                     Grid.Row="2" 
-                                     Grid.ColumnSpan="2"
-                                     FontSize="20" 
-                                     FontWeight="SemiBold" 
-                                     Margin="0,0,0,20"/>
+                                       Grid.Row="2" 
+                                       Grid.ColumnSpan="2"
+                                       FontSize="20" 
+                                       FontWeight="SemiBold" 
+                                       Margin="0,0,0,20"/>
 
                             <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2">
                                 <Grid>
@@ -138,24 +123,24 @@
                                            Grid.Row="0" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxCategoryMalicious" 
-                                            Grid.Row="0" Grid.Column="1" 
-                                            Margin="0,5,0,5"/>
+                                             Grid.Row="0" Grid.Column="1" 
+                                             Margin="0,5,0,5"/>
 
                                     <!-- Phishing Category -->
                                     <Label Content="Phishing Category:" 
                                            Grid.Row="1" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxCategoryPhishing" 
-                                            Grid.Row="1" Grid.Column="1" 
-                                            Margin="0,5,0,5"/>
+                                             Grid.Row="1" Grid.Column="1" 
+                                             Margin="0,5,0,5"/>
 
                                     <!-- DDoS Category -->
                                     <Label Content="DDoS Category:" 
                                            Grid.Row="2" Grid.Column="0" 
                                            VerticalAlignment="Center"/>
                                     <TextBox x:Name="textBoxCategoryDDoS" 
-                                            Grid.Row="2" Grid.Column="1" 
-                                            Margin="0,5,0,5"/>
+                                             Grid.Row="2" Grid.Column="1" 
+                                             Margin="0,5,0,5"/>
 
                                     <!-- Comment Template -->
                                     <Label Content="Comment Template:" 
@@ -163,18 +148,18 @@
                                            VerticalAlignment="Top" 
                                            Margin="0,5,0,0"/>
                                     <TextBox x:Name="textBoxCommentTemplate" 
-                                            Grid.Row="3" Grid.Column="1" 
-                                            Height="100" 
-                                            Margin="0,5,0,5"
-                                            TextWrapping="Wrap" 
-                                            AcceptsReturn="True" 
-                                            VerticalScrollBarVisibility="Auto"/>
+                                             Grid.Row="3" Grid.Column="1" 
+                                             Height="100" 
+                                             Margin="0,5,0,5"
+                                             TextWrapping="Wrap" 
+                                             AcceptsReturn="True" 
+                                             VerticalScrollBarVisibility="Auto"/>
                                 </Grid>
 
                                 <!-- Settings Buttons -->
                                 <StackPanel Orientation="Horizontal" 
-                                          HorizontalAlignment="Right" 
-                                          Margin="0,20,0,0">
+                                            HorizontalAlignment="Right" 
+                                            Margin="0,20,0,0">
                                     <Button x:Name="BtnLoadSettings" 
                                             Content="Load Settings" 
                                             Width="120" 
@@ -211,17 +196,17 @@
                             <!-- CSV Bulk Options -->
                             <StackPanel Grid.Row="0" Margin="0,0,0,30">
                                 <TextBlock Text="Real-Time CSV Bulk Options" 
-                                         FontSize="20" 
-                                         FontWeight="SemiBold" 
-                                         Margin="0,0,0,15"/>
+                                           FontSize="20" 
+                                           FontWeight="SemiBold" 
+                                           Margin="0,0,0,15"/>
                                 <DockPanel Margin="20,0">
                                     <CheckBox x:Name="checkBoxRealTimeCsvBulk" 
-                                            Content="Enable Real-Time CSV Bulk" 
-                                            VerticalAlignment="Center"/>
+                                              Content="Enable Real-Time CSV Bulk" 
+                                              VerticalAlignment="Center"/>
                                     <DockPanel Margin="50,0,0,0">
                                         <TextBlock Text="Bulk CSV File:" 
-                                                 VerticalAlignment="Center" 
-                                                 Margin="0,0,10,0"/>
+                                                   VerticalAlignment="Center" 
+                                                   Margin="0,0,10,0"/>
                                         <Button Content="Browse" 
                                                 Width="80" 
                                                 DockPanel.Dock="Right" 
@@ -231,25 +216,25 @@
                                 </DockPanel>
                             </StackPanel>
 
-                            <!-- CSV Whitelist Options -->
+                            <!-- CSV WhiteList Options -->
                             <StackPanel Grid.Row="1" Margin="0,0,0,30">
-                                <TextBlock Text="Real-Time CSV Whitelist Options" 
-                                         FontSize="20" 
-                                         FontWeight="SemiBold" 
-                                         Margin="0,0,0,15"/>
+                                <TextBlock Text="Real-Time CSV WhiteList Options" 
+                                           FontSize="20" 
+                                           FontWeight="SemiBold" 
+                                           Margin="0,0,0,15"/>
                                 <DockPanel Margin="20,0">
-                                    <CheckBox x:Name="checkBoxRealTimeCsvWhitelist" 
-                                            Content="Enable Real-Time CSV Whitelist" 
-                                            VerticalAlignment="Center"/>
+                                    <CheckBox x:Name="checkBoxRealTimeCsvWhiteList" 
+                                              Content="Enable Real-Time CSV WhiteList" 
+                                              VerticalAlignment="Center"/>
                                     <DockPanel Margin="50,0,0,0">
-                                        <TextBlock Text="Whitelist CSV File:" 
-                                                 VerticalAlignment="Center" 
-                                                 Margin="0,0,10,0"/>
+                                        <TextBlock Text="WhiteList CSV File:" 
+                                                   VerticalAlignment="Center" 
+                                                   Margin="0,0,10,0"/>
                                         <Button Content="Browse" 
                                                 Width="80" 
                                                 DockPanel.Dock="Right" 
                                                 Margin="10,0,0,0"/>
-                                        <TextBox x:Name="textBoxRealTimeCsvWhitelistFile"/>
+                                        <TextBox x:Name="textBoxRealTimeCsvWhiteListFile"/>
                                     </DockPanel>
                                 </DockPanel>
                             </StackPanel>
@@ -257,17 +242,17 @@
                             <!-- Real-Time Log Options -->
                             <StackPanel Grid.Row="2" Margin="0,0,0,30">
                                 <TextBlock Text="Real-Time Log Options" 
-                                         FontSize="20" 
-                                         FontWeight="SemiBold" 
-                                         Margin="0,0,0,15"/>
+                                           FontSize="20" 
+                                           FontWeight="SemiBold" 
+                                           Margin="0,0,0,15"/>
                                 <DockPanel Margin="20,0">
                                     <CheckBox x:Name="checkBoxRealTimeSave" 
-                                            Content="Enable Real-Time Log Saving" 
-                                            VerticalAlignment="Center"/>
+                                              Content="Enable Real-Time Log Saving" 
+                                              VerticalAlignment="Center"/>
                                     <DockPanel Margin="50,0,0,0">
                                         <TextBlock Text="Real-Time Log File:" 
-                                                 VerticalAlignment="Center" 
-                                                 Margin="0,0,10,0"/>
+                                                   VerticalAlignment="Center" 
+                                                   Margin="0,0,10,0"/>
                                         <Button Content="Browse" 
                                                 Width="80" 
                                                 DockPanel.Dock="Right" 
@@ -280,15 +265,15 @@
                             <!-- Additional Options -->
                             <StackPanel Grid.Row="3" Margin="20,0">
                                 <TextBlock Text="Additional Options" 
-                                         FontSize="20" 
-                                         FontWeight="SemiBold" 
-                                         Margin="0,0,0,15"/>
+                                           FontSize="20" 
+                                           FontWeight="SemiBold" 
+                                           Margin="0,0,0,15"/>
                                 <CheckBox x:Name="checkBoxScanKnownActive" 
-                                        Content="Scan Active Known Malicious IPs (Not Recommended)" 
-                                        Margin="0,5,0,10"/>
+                                          Content="Scan Active Known Malicious IPs (Not Recommended)" 
+                                          Margin="0,5,0,10"/>
                                 <CheckBox x:Name="checkBoxAllowAutoVerdict" 
-                                        Content="Allow Auto Verdict (Recommended)" 
-                                        Margin="0,5"/>
+                                          Content="Allow Auto Verdict (Recommended)" 
+                                          Margin="0,5"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -310,20 +295,20 @@
 
                         <!-- Scan Controls -->
                         <StackPanel Grid.Row="0" 
-                                  HorizontalAlignment="Center" 
-                                  Margin="0,0,0,20">
+                                    HorizontalAlignment="Center" 
+                                    Margin="0,0,0,20">
                             <TextBlock Text="Scan Controls" 
-                                     FontSize="20" 
-                                     FontWeight="SemiBold" 
-                                     HorizontalAlignment="Center" 
-                                     Margin="0,0,0,20"/>
+                                       FontSize="20" 
+                                       FontWeight="SemiBold" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,0,0,20"/>
                             <StackPanel Orientation="Horizontal">
                                 <Button x:Name="BtnStartScan" 
                                         Content="Start Scan" 
                                         Width="150" 
                                         Height="40" 
                                         Margin="10,0"
-Style="{DynamicResource AccentButtonStyle}"/>
+                                        Style="{DynamicResource AccentButtonStyle}"/>
                                 <Button x:Name="BtnStopScan" 
                                         Content="Stop Scan" 
                                         Width="150" 
@@ -334,24 +319,24 @@ Style="{DynamicResource AccentButtonStyle}"/>
 
                         <!-- Progress Section -->
                         <StackPanel Grid.Row="1" 
-                                  HorizontalAlignment="Center" 
-                                  Margin="0,0,0,20">
+                                    HorizontalAlignment="Center" 
+                                    Margin="0,0,0,20">
                             <TextBlock Text="Scan Progress" 
-                                     FontWeight="Medium" 
-                                     HorizontalAlignment="Center" 
-                                     Margin="0,0,0,10"/>
+                                       FontWeight="Medium" 
+                                       HorizontalAlignment="Center" 
+                                       Margin="0,0,0,10"/>
                             <Grid Width="500">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <ProgressBar x:Name="progressBarScan" 
-                                           Height="20" 
-                                           Margin="0,0,10,0"/>
+                                             Height="20" 
+                                             Margin="0,0,10,0"/>
                                 <TextBlock x:Name="textBlockProgress" 
-                                         Grid.Column="1" 
-                                         Text="0 / 0" 
-                                         VerticalAlignment="Center"/>
+                                           Grid.Column="1" 
+                                           Text="0 / 0" 
+                                           VerticalAlignment="Center"/>
                             </Grid>
                         </StackPanel>
 
@@ -363,11 +348,11 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                 Margin="0,20,0,0">
                             <DockPanel Margin="10">
                                 <TextBlock Text="Scan Status" 
-                                         DockPanel.Dock="Top" 
-                                         FontWeight="Medium" 
-                                         Margin="0,0,0,10"/>
-                                <ListView x:Name="listViewScanStatus" 
-                                        BorderThickness="0">
+                                           DockPanel.Dock="Top" 
+                                           FontWeight="Medium" 
+                                           Margin="0,0,0,10"/>
+                                <ListView x:Name="listBoxScanStatus" 
+                                          BorderThickness="0">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="Time" Width="150"/>
@@ -415,15 +400,15 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                 </Grid.RowDefinitions>
 
                                 <TextBlock Text="Malware Files" 
-                                         FontWeight="SemiBold" 
-                                         FontSize="16" 
-                                         Margin="0,0,0,10"/>
+                                           FontWeight="SemiBold" 
+                                           FontSize="16" 
+                                           Margin="0,0,0,10"/>
 
-                                <ListView x:Name="listViewMalware" 
-                                        Grid.Row="1" 
-                                        Margin="0,0,0,10"
-                                        BorderThickness="1"
-                                        BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                <ListView x:Name="listBoxMalware" 
+                                          Grid.Row="1" 
+                                          Margin="0,0,0,10"
+                                          BorderThickness="1"
+                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
                                             <GridViewColumn Header="File Name" Width="200"/>
@@ -433,8 +418,8 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                 </ListView>
 
                                 <StackPanel Grid.Row="2" 
-                                          Orientation="Horizontal" 
-                                          HorizontalAlignment="Right">
+                                            Orientation="Horizontal" 
+                                            HorizontalAlignment="Right">
                                     <Button x:Name="BtnBrowseMalware" 
                                             Content="Browse" 
                                             Width="80" 
@@ -458,8 +443,49 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                 BorderThickness="1" 
                                 CornerRadius="4" 
                                 Margin="5">
-                            <!-- Same structure as Malware Files section -->
-                            <!-- Content omitted for brevity - follows same pattern -->
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="DDoS Files" 
+                                           FontWeight="SemiBold" 
+                                           FontSize="16" 
+                                           Margin="0,0,0,10"/>
+
+                                <ListView x:Name="listBoxDDoS" 
+                                          Grid.Row="1" 
+                                          Margin="0,0,0,10"
+                                          BorderThickness="1"
+                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="File Name" Width="200"/>
+                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+
+                                <StackPanel Grid.Row="2" 
+                                            Orientation="Horizontal" 
+                                            HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowseDDoS" 
+                                            Content="Browse" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                    <Button x:Name="BtnAddDDoS" 
+                                            Content="Add" 
+                                            Width="80" 
+                                            Margin="5,0"
+                                            Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeleteDDoS" 
+                                            Content="Remove" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
                         <!-- Phishing Files Section -->
@@ -468,18 +494,100 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                 BorderThickness="1" 
                                 CornerRadius="4" 
                                 Margin="5">
-                            <!-- Same structure as Malware Files section -->
-                            <!-- Content omitted for brevity - follows same pattern -->
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="Phishing Files" 
+                                           FontWeight="SemiBold" 
+                                           FontSize="16" 
+                                           Margin="0,0,0,10"/>
+
+                                <ListView x:Name="listBoxPhishing" 
+                                          Grid.Row="1" 
+                                          Margin="0,0,0,10"
+                                          BorderThickness="1"
+                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="File Name" Width="200"/>
+                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+
+                                <StackPanel Grid.Row="2" 
+                                            Orientation="Horizontal" 
+                                            HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowsePhishing" 
+                                            Content="Browse" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                    <Button x:Name="BtnAddPhishing" 
+                                            Content="Add" 
+                                            Width="80" 
+                                            Margin="5,0"
+                                            Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeletePhishing" 
+                                            Content="Remove" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                </StackPanel>
+                            </Grid>
                         </Border>
 
-                        <!-- Whitelist Files Section -->
+                        <!-- WhiteList Files Section -->
                         <Border Grid.Column="1" Grid.Row="1" 
                                 BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
                                 BorderThickness="1" 
                                 CornerRadius="4" 
                                 Margin="5">
-                            <!-- Same structure as Malware Files section -->
-                            <!-- Content omitted for brevity - follows same pattern -->
+                            <Grid Margin="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="WhiteList Files" 
+                                           FontWeight="SemiBold" 
+                                           FontSize="16" 
+                                           Margin="0,0,0,10"/>
+
+                                <ListView x:Name="listBoxWhiteList" 
+                                          Grid.Row="1" 
+                                          Margin="0,0,0,10"
+                                          BorderThickness="1"
+                                          BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
+                                    <ListView.View>
+                                        <GridView>
+                                            <GridViewColumn Header="File Name" Width="200"/>
+                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                        </GridView>
+                                    </ListView.View>
+                                </ListView>
+
+                                <StackPanel Grid.Row="2" 
+                                            Orientation="Horizontal" 
+                                            HorizontalAlignment="Right">
+                                    <Button x:Name="BtnBrowseWhiteList" 
+                                            Content="Browse" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                    <Button x:Name="BtnAddWhiteList" 
+                                            Content="Add" 
+                                            Width="80" 
+                                            Margin="5,0"
+                                            Style="{DynamicResource AccentButtonStyle}"/>
+                                    <Button x:Name="BtnDeleteWhiteList" 
+                                            Content="Remove" 
+                                            Width="80" 
+                                            Margin="5,0"/>
+                                </StackPanel>
+                            </Grid>
                         </Border>
                     </Grid>
 
@@ -500,10 +608,10 @@ Style="{DynamicResource AccentButtonStyle}"/>
                             </Grid.ColumnDefinitions>
 
                             <TextBlock Text="Discovered IPs" 
-                                     Grid.ColumnSpan="2"
-                                     FontWeight="SemiBold" 
-                                     FontSize="16" 
-                                     Margin="0,0,0,10"/>
+                                       Grid.ColumnSpan="2"
+                                       FontWeight="SemiBold" 
+                                       FontSize="16" 
+                                       Margin="0,0,0,10"/>
 
                             <!-- IPv4 List -->
                             <Border Grid.Column="0" Grid.Row="1" 
@@ -513,12 +621,12 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                     Margin="5">
                                 <DockPanel Margin="5">
                                     <TextBlock Text="IPv4" 
-                                             DockPanel.Dock="Top" 
-                                             FontWeight="Medium" 
-                                             Margin="0,0,0,5"/>
-                                    <ListView x:Name="listViewIPv4" 
-                                            Height="150"
-                                            BorderThickness="0">
+                                               DockPanel.Dock="Top" 
+                                               FontWeight="Medium" 
+                                               Margin="0,0,0,5"/>
+                                    <ListView x:Name="listBoxIPv4" 
+                                              Height="150"
+                                              BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
                                                 <GridViewColumn Header="IP Address" Width="150"/>
@@ -538,12 +646,12 @@ Style="{DynamicResource AccentButtonStyle}"/>
                                     Margin="5">
                                 <DockPanel Margin="5">
                                     <TextBlock Text="IPv6" 
-                                             DockPanel.Dock="Top" 
-                                             FontWeight="Medium" 
-                                             Margin="0,0,0,5"/>
-                                    <ListView x:Name="listViewIPv6" 
-                                            Height="150"
-                                            BorderThickness="0">
+                                               DockPanel.Dock="Top" 
+                                               FontWeight="Medium" 
+                                               Margin="0,0,0,5"/>
+                                    <ListView x:Name="listBoxIPv6" 
+                                              Height="150"
+                                              BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
                                                 <GridViewColumn Header="IP Address" Width="250"/>
@@ -569,14 +677,14 @@ Style="{DynamicResource AccentButtonStyle}"/>
 
                     <!-- Log Controls -->
                     <StackPanel Orientation="Horizontal" 
-                              HorizontalAlignment="Right" 
-                              Margin="0,0,0,10">
+                                HorizontalAlignment="Right" 
+                                Margin="0,0,0,10">
                         <TextBlock Text="Search:" 
-                                 VerticalAlignment="Center" 
-                                 Margin="0,0,10,0"/>
+                                   VerticalAlignment="Center" 
+                                   Margin="0,0,10,0"/>
                         <TextBox x:Name="TextBoxSearch" 
-                                Width="200" 
-                                Margin="0,0,10,0"/>
+                                 Width="200" 
+                                 Margin="0,0,10,0"/>
                         <Button x:Name="BtnClearLog" 
                                 Content="Clear Log" 
                                 Width="100" 
@@ -591,8 +699,8 @@ Style="{DynamicResource AccentButtonStyle}"/>
                             BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}" 
                             BorderThickness="1" 
                             CornerRadius="4">
-                        <ListView x:Name="listViewLog" 
-                                BorderThickness="0">
+                        <ListView x:Name="listBoxLog" 
+                                  BorderThickness="0">
                             <ListView.View>
                                 <GridView>
                                     <GridViewColumn Header="Time" Width="150"/>

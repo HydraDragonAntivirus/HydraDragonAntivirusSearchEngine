@@ -28,11 +28,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             InitializeComponent();
              
         }
-        // File lists for scanning and whitelist.
+        // File lists for scanning and WhiteList.
         private readonly List<string> malwareFiles = new();
-        private readonly List<string> ddosFiles = new();
+        private readonly List<string> DDoSFiles = new();
         private readonly List<string> phishingFiles = new();
-        private readonly List<string> whitelistFiles = new();
+        private readonly List<string> WhiteListFiles = new();
         private string lastPath = "";
 
         // Scanner instance – created when the user clicks Start Scan.
@@ -91,9 +91,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 // Save file lists
                 MalwareFiles = malwareFiles,
-                DDoSFiles = ddosFiles,
+                DDoSFiles = DDoSFiles,
                 PhishingFiles = phishingFiles,
-                WhiteListFiles = whitelistFiles,
+                WhiteListFiles = WhiteListFiles,
 
                 // Save last selected folder
                 LastFolderPath = lastPath
@@ -135,12 +135,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     // Restore file lists
                     malwareFiles.Clear();
                     malwareFiles.AddRange(settings.MalwareFiles);
-                    ddosFiles.Clear();
-                    ddosFiles.AddRange(settings.DDoSFiles);
+                    DDoSFiles.Clear();
+                    DDoSFiles.AddRange(settings.DDoSFiles);
                     phishingFiles.Clear();
                     phishingFiles.AddRange(settings.PhishingFiles);
-                    whitelistFiles.Clear();
-                    whitelistFiles.AddRange(settings.WhiteListFiles);
+                    WhiteListFiles.Clear();
+                    WhiteListFiles.AddRange(settings.WhiteListFiles);
 
                     listBoxMalware.Items.Clear();
                     foreach (var item in settings.MalwareFiles)
@@ -219,7 +219,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 csvMaxSize = 2097152;
 
             string outputFileName = textBoxOutputFile.Text;
-            string whitelistOutputFileName = textBoxWhiteListOutputFile.Text;
+            string WhiteListOutputFileName = textBoxWhiteListOutputFile.Text;
             string categoryMalicious = textBoxCategoryMalicious.Text;
             string categoryPhishing = textBoxCategoryPhishing.Text;
             string categoryDDoS = textBoxCategoryDDoS.Text;
@@ -242,11 +242,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
             bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
             scanner = new Scanner(
-                malwareFiles, ddosFiles, phishingFiles, whitelistFiles,
+                malwareFiles, DDoSFiles, phishingFiles, WhiteListFiles,
                 maxDepth, maxThreads,
                 categoryMalicious, categoryPhishing, categoryDDoS,
                 csvMaxLines, csvMaxSize,
-                outputFileName, whitelistOutputFileName,
+                outputFileName, WhiteListOutputFileName,
                 UpdateLog, UpdateProgress,
                 AppendBulkCsvLineToFile, AppendWhiteListCsvLineToFile,
                 commentTemplate,
@@ -273,7 +273,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 // Write both CSV outputs.
                 File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                File.WriteAllLines(whitelistOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
+                File.WriteAllLines(WhiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
                 MessageBox.Show("Scan completed and CSV files generated successfully.");
             }
         }
@@ -402,7 +402,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 string filePath = ofd.FileName;
                 lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                ddosFiles.Add(filePath);
+                DDoSFiles.Add(filePath);
                 listBoxDDoS.Items.Add(filePath);
             }
         }
@@ -415,7 +415,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (textBoxDDoSInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
                     listBoxDDoS.Items.Add(textBoxDDoSInput.Text);
-                    ddosFiles.Add(textBoxDDoSInput.Text);
+                    DDoSFiles.Add(textBoxDDoSInput.Text);
                     textBoxDDoSInput.Clear();
                 }
                 else
@@ -435,7 +435,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             if (listBoxDDoS.SelectedIndex >= 0)
             {
                 int index = listBoxDDoS.SelectedIndex;
-                ddosFiles.RemoveAt(index);
+                DDoSFiles.RemoveAt(index);
                 listBoxDDoS.Items.RemoveAt(index);
             }
         }
@@ -501,7 +501,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region WhiteList List Handlers
 
-        // "Select" whitelist file.
+        // "Select" WhiteList file.
         private void BtnSelectWhiteList_Click(object sender, EventArgs e)
         {
             OpenFileDialog ofd = new()
@@ -518,12 +518,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string filePath = ofd.FileName;
                 lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
 
-                whitelistFiles.Add(filePath);   
+                WhiteListFiles.Add(filePath);   
                 listBoxWhiteList.Items.Add(filePath);  
             }
         }
 
-        // "Add" whitelist file (via text input).
+        // "Add" WhiteList file (via text input).
         private void BtnAddWhiteList_Click(object sender, EventArgs e)
         {
             if (File.Exists(textBoxWhiteListInput.Text))
@@ -531,7 +531,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (textBoxWhiteListInput.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
                 {
                     listBoxWhiteList.Items.Add(textBoxWhiteListInput.Text);
-                    whitelistFiles.Add(textBoxWhiteListInput.Text);
+                    WhiteListFiles.Add(textBoxWhiteListInput.Text);
                     textBoxWhiteListInput.Clear();
                 }
                 else
@@ -551,7 +551,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             if (listBoxWhiteList.SelectedIndex >= 0)
             {
                 int index = listBoxWhiteList.SelectedIndex;
-                whitelistFiles.RemoveAt(index);
+                WhiteListFiles.RemoveAt(index);
                 listBoxWhiteList.Items.RemoveAt(index);
             }
         }
@@ -672,13 +672,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Updated AppendWhiteListCsvLineToFile method in Form1 with a locking mechanism:
-        private readonly object whitelistCsvLock = new();
+        private readonly object WhiteListCsvLock = new();
 
         private void AppendWhiteListCsvLineToFile(string csvLine)
         {
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
-                lock (whitelistCsvLock)
+                lock (WhiteListCsvLock)
                 {
                     File.AppendAllText(textBoxRealTimeCsvWhiteListFile.Text, csvLine + Environment.NewLine);
                 }
@@ -723,14 +723,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         /// <summary>
         /// Scanner class:
         /// Loads seeds from files (from three lists), performs HTTP scans concurrently, recursively discovers IPs,
-        /// and builds two CSV reports (one for bulk results and one for whitelisted IPs).
+        /// and builds two CSV reports (one for bulk results and one for WhiteListed IPs).
         /// </summary>
         public partial class Scanner
         {
             private readonly List<string> malwareFiles;
-            private readonly List<string> ddosFiles;
+            private readonly List<string> DDoSFiles;
             private readonly List<string> phishingFiles;
-            private readonly List<string> whitelistFiles;
+            private readonly List<string> WhiteListFiles;
             private readonly int maxDepth;
             private readonly int maxThreads;
             private readonly string categoryMalicious;
@@ -739,7 +739,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly int csvMaxLines;
             private readonly int csvMaxSize;
             private readonly string outputFileName;
-            private readonly string whitelistOutputFileName;
+            private readonly string WhiteListOutputFileName;
             private readonly string commentTemplate;
 
             private readonly Action<string> logCallback;
@@ -752,8 +752,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly ConcurrentQueue<Seed> seedQueue = new();
             private readonly ConcurrentDictionary<string, bool> processedIPs = new();
 
-            // HashSet to store whitelisted IPs loaded from whitelist and blacklist files
-            private readonly HashSet<string> whitelistedIPs = new(StringComparer.OrdinalIgnoreCase);
+            // HashSet to store WhiteListed IPs loaded from WhiteList and blacklist files
+            private readonly HashSet<string> WhiteListedIPs = new(StringComparer.OrdinalIgnoreCase);
             private readonly HashSet<string> blacklistIPs = new(StringComparer.OrdinalIgnoreCase);
 
             int totalSeeds = 0;
@@ -772,9 +772,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             public Scanner(
                 List<string> malwareFiles,
-                List<string> ddosFiles,
+                List<string> DDoSFiles,
                 List<string> phishingFiles,
-                List<string> whitelistFiles,
+                List<string> WhiteListFiles,
                 int maxDepth,
                 int maxThreads,
                 string categoryMalicious,
@@ -783,7 +783,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 int csvMaxLines,
                 int csvMaxSize,
                 string outputFileName,
-                string whitelistOutputFileName,
+                string WhiteListOutputFileName,
                 Action<string> logCallback,
                 Action<int, int> progressCallback,
                 Action<string> realTimeBulkCsvCallback,
@@ -795,9 +795,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 bool allowAutoVerdict = false)
             {
                 this.malwareFiles = malwareFiles;
-                this.ddosFiles = ddosFiles;
+                this.DDoSFiles = DDoSFiles;
                 this.phishingFiles = phishingFiles;
-                this.whitelistFiles = whitelistFiles;
+                this.WhiteListFiles = WhiteListFiles;
                 this.maxDepth = maxDepth;
                 this.maxThreads = maxThreads;
                 this.categoryMalicious = categoryMalicious;
@@ -806,7 +806,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.csvMaxLines = csvMaxLines;
                 this.csvMaxSize = csvMaxSize;
                 this.outputFileName = outputFileName;
-                this.whitelistOutputFileName = whitelistOutputFileName;
+                this.WhiteListOutputFileName = WhiteListOutputFileName;
                 this.logCallback = logCallback;
                 this.progressCallback = progressCallback;
                 this.realTimeBulkCsvCallback = realTimeBulkCsvCallback;
@@ -820,7 +820,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private async Task ProcessWhiteListFileAsync(string file, CancellationToken token)
             {
-                List<string> whitelistSites = new();
+                List<string> WhiteListSites = new();
 
                 // Read the file once.
                 using (var reader = new StreamReader(file))
@@ -836,15 +836,15 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         // If the line is a valid IP, add it directly.
                         if (IPAddress.TryParse(trimmed, out _))
                         {
-                            lock (whitelistedIPs)
+                            lock (WhiteListedIPs)
                             {
-                                whitelistedIPs.Add(trimmed);
+                                WhiteListedIPs.Add(trimmed);
                             }
                         }
                         else
                         {
                             // Otherwise, treat it as a URL.
-                            whitelistSites.Add(trimmed);
+                            WhiteListSites.Add(trimmed);
                         }
                     }
                 }
@@ -853,7 +853,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 var tasks = new List<Task>();
                 using var semaphore = new SemaphoreSlim(maxThreads); // automatically disposes
 
-                foreach (var url in whitelistSites)
+                foreach (var url in WhiteListSites)
                 {
                     token.ThrowIfCancellationRequested();
                     // Ensure the URL is absolute.
@@ -876,16 +876,16 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                                     // Check if the IP is in the blacklist.
                                     if (blacklistIPs.Contains(ip))
                                     {
-                                        logCallback($"IP {ip} from whitelist site {actualUrl} is in the blacklist; skipping.");
+                                        logCallback($"IP {ip} from WhiteList site {actualUrl} is in the blacklist; skipping.");
                                         continue;
                                     }
-                                    lock (whitelistedIPs)
+                                    lock (WhiteListedIPs)
                                     {
-                                        if (whitelistedIPs.Add(ip))
+                                        if (WhiteListedIPs.Add(ip))
                                         {
                                             string reportDate = DateTime.UtcNow.ToString("o");
                                             string comment = $"WhiteList site visited: {actualUrl}";
-                                            string csvLine = $"{ip},\"whitelist (visited)\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                                            string csvLine = $"{ip},\"WhiteList (visited)\",{reportDate},\"{EscapeCsvField(comment)}\"";
 
                                             lock (WhiteListCsvLines)
                                             {
@@ -901,12 +901,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             }
                             else
                             {
-                                logCallback($"Failed to visit whitelist site: {actualUrl} Status: {response.StatusCode}");
+                                logCallback($"Failed to visit WhiteList site: {actualUrl} Status: {response.StatusCode}");
                             }
                         }
                         catch (Exception ex)
                         {
-                            logCallback($"Error visiting whitelist site: {actualUrl} Exception: {ex.Message}");
+                            logCallback($"Error visiting WhiteList site: {actualUrl} Exception: {ex.Message}");
                         }
                         finally
                         {
@@ -919,8 +919,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             public async Task StartScanAsync(CancellationToken token)
             {
-                // Process each whitelist file.
-                foreach (var file in whitelistFiles.Where(file => System.IO.Path.GetExtension(file)
+                // Process each WhiteList file.
+                foreach (var file in WhiteListFiles.Where(file => System.IO.Path.GetExtension(file)
                          .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     await ProcessWhiteListFileAsync(file, token);
@@ -928,7 +928,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 // Load seeds from blacklist files. This will also populate blacklistIPs.
                 await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
-                await LoadSeedsFromFileListAsync(ddosFiles, "ddos", token);
+                await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
                 await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
 
                 totalSeeds = seedQueue.Count;
@@ -945,7 +945,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             /// <summary>
             /// Loads seeds from each file in the provided list.
-            /// If an IP is already whitelisted, it is recorded in the whitelist CSV.
+            /// If an IP is already WhiteListed, it is recorded in the WhiteList CSV.
             /// Otherwise, a new seed is enqueued for scanning.
             /// </summary>
             [GeneratedRegex(@"^(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?", RegexOptions.Compiled)]
@@ -1003,8 +1003,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
             /// <summary>
-            /// Processes a regex match by checking if the IP is already whitelisted.
-            /// If yes, writes to the whitelist CSV; otherwise, enqueues a new seed for scanning.
+            /// Processes a regex match by checking if the IP is already WhiteListed.
+            /// If yes, writes to the WhiteList CSV; otherwise, enqueues a new seed for scanning.
             /// </summary>
             private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType)
             {
@@ -1033,12 +1033,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
-                bool isWhiteListed = whitelistedIPs.Contains(ip);
+                bool isWhiteListed = WhiteListedIPs.Contains(ip);
                 if (isWhiteListed)
                 {
                     string reportDate = DateTime.UtcNow.ToString("o");
                     string comment = $"WhiteListed from file: {file}";
-                    string csvLine = $"{ip},\"whitelist\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
                     lock (WhiteListCsvLines)
                     {
                         if (WhiteListCsvLines.Count < csvMaxLines + 1)
@@ -1056,9 +1056,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         discoveredUrl = trimmed + "_discovered";
                         while (malwareFiles.Contains(discoveredUrl) ||
-                               ddosFiles.Contains(discoveredUrl) ||
+                               DDoSFiles.Contains(discoveredUrl) ||
                                phishingFiles.Contains(discoveredUrl) ||
-                               whitelistFiles.Contains(discoveredUrl))
+                               WhiteListFiles.Contains(discoveredUrl))
                         {
                             discoveredUrl += "_x";
                         }
@@ -1124,7 +1124,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         "malicious" => categoryMalicious,
                         "phishing" => categoryPhishing,
-                        "ddos" => categoryDDoS,
+                        "DDoS" => categoryDDoS,
                         _ => ""
                     };
                     string reportDate = DateTime.UtcNow.ToString("o");
@@ -1167,18 +1167,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             /// <summary>
             /// Processes newly discovered IPs on the scanned page.
             /// If scanKnownActive is enabled, checks if the IP is active.
-            /// If the check fails, marks it as "benign (auto verdict)", writes to whitelist CSV, and stores it in memory.
+            /// If the check fails, marks it as "benign (auto verdict)", writes to WhiteList CSV, and stores it in memory.
             /// </summary>
             private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
 
-                // If scanKnownActive is not checked and the seed is from a malicious, phishing, or ddos source,
+                // If scanKnownActive is not checked and the seed is from a malicious, phishing, or DDoS source,
                 // skip processing further discovered IPs.
                 if (!scanKnownActive &&
                     (seed.SourceType.Equals("malicious", StringComparison.OrdinalIgnoreCase) ||
                      seed.SourceType.Equals("phishing", StringComparison.OrdinalIgnoreCase) ||
-                     seed.SourceType.Equals("ddos", StringComparison.OrdinalIgnoreCase)))
+                     seed.SourceType.Equals("DDoS", StringComparison.OrdinalIgnoreCase)))
                 {
                     return;
                 }
@@ -1200,8 +1200,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         {
                             newSourceType = "benign (auto verdict)";
                             string reportDate = DateTime.UtcNow.ToString("o");
-                            string comment = $"Auto-whitelisted benign IP from {seed.OriginalSourceUrl}";
-                            string csvLine = $"{ip},\"whitelist\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                            string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
+                            string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
                             lock (WhiteListCsvLines)
                             {
                                 if (WhiteListCsvLines.Count < csvMaxLines + 1)
@@ -1212,7 +1212,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             realTimeWhiteListCsvCallback?.Invoke(csvLine);
                             return;
                         }
-                        // If auto verdicts are disabled, continue scanning without auto-whitelisting.
+                        // If auto verdicts are disabled, continue scanning without auto-WhiteListing.
                     }
                 }
 
