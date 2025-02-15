@@ -631,19 +631,17 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         {
             if (progressBarScan.Dispatcher.CheckAccess())
             {
-               
                 progressBarScan.Maximum = total;
                 progressBarScan.Value = current;
-                labelProgress.Content = $"{current} / {total}";
+                textBlockProgress.Text = $"{current} / {total}";
             }
             else
             {
-                 
                 progressBarScan.Dispatcher.Invoke(new Action(() =>
                 {
                     progressBarScan.Maximum = total;
                     progressBarScan.Value = current;
-                    labelProgress.Content = $"{current} / {total}";
+                    textBlockProgress.Text = $"{current} / {total}";
                 }));
             }
         }
