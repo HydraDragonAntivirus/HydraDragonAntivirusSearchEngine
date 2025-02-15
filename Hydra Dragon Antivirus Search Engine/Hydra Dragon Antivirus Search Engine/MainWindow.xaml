@@ -11,6 +11,7 @@
             <TabItem Header="Main Window">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                     <Grid Background="#FFE5E5E5">
+                        <!-- Define enough rows for all controls -->
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
@@ -18,6 +19,11 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <!-- Row for scan control buttons -->
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
@@ -33,9 +39,14 @@
                         <Label Content="CSV Max Size" Grid.Row="6" Margin="10"/>
                         <TextBox x:Name="textBoxCsvMaxSize" Grid.Row="7" Margin="10"/>
 
-                        <!-- TextBoxSearch -->
                         <Label Content="Search" Grid.Row="8" Margin="10"/>
                         <TextBox x:Name="TextBoxSearch" Grid.Row="9" Margin="10"/>
+
+                        <!-- Scan Control Buttons -->
+                        <StackPanel Orientation="Horizontal" Grid.Row="10" Margin="10">
+                            <Button x:Name="BtnStartScan" Content="Start Scan" Margin="5" Click="BtnStartScan_Click"/>
+                            <Button x:Name="BtnStopScan" Content="Stop Scan" Margin="5" Click="BtnStopScan_Click"/>
+                        </StackPanel>
                     </Grid>
                 </ScrollViewer>
             </TabItem>
@@ -44,11 +55,20 @@
             <TabItem Header="Settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                     <Grid Background="#FFE5E5E5">
+                        <!-- Increase the row count to accommodate all controls -->
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <!-- Row for Save/Load Settings buttons -->
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
 
@@ -63,13 +83,17 @@
 
                         <CheckBox x:Name="checkBoxAllowAutoVerdict" Content="Allow Auto Verdict" Grid.Row="6" Margin="10"/>
 
-                        <!-- Max Timeout -->
                         <Label Content="Max Timeout" Grid.Row="7" Margin="10"/>
                         <TextBox x:Name="textBoxMaxTimeout" Grid.Row="8" Margin="10"/>
 
-                        <!-- Whitelist Input -->
                         <Label Content="Whitelist Input" Grid.Row="9" Margin="10"/>
                         <TextBox x:Name="textBoxWhitelistInput" Grid.Row="10" Margin="10"/>
+
+                        <!-- Save and Load Settings Buttons -->
+                        <StackPanel Orientation="Horizontal" Grid.Row="11" Margin="10">
+                            <Button x:Name="BtnSaveSettings" Content="Save Settings" Margin="5" Click="BtnSaveSettings_Click"/>
+                            <Button x:Name="BtnLoadSettings" Content="Load Settings" Margin="5" Click="BtnLoadSettings_Click"/>
+                        </StackPanel>
                     </Grid>
                 </ScrollViewer>
             </TabItem>
@@ -77,88 +101,106 @@
             <!-- Advanced Tab -->
             <TabItem Header="Advanced">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                    <Grid Background="#FFE5E5E5">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="3*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <!-- Adding missing listBoxes -->
-                        <ListBox x:Name="listBoxMalware" Grid.Row="0" Height="100" Margin="10" Grid.ColumnSpan="2" />
-                        <ListBox x:Name="listBoxDdos" Grid.Row="1" Height="100" Margin="10" Grid.ColumnSpan="2"/>
-                        <ListBox x:Name="listBoxPhishing" Grid.Row="2" Height="100" Margin="10" Grid.ColumnSpan="2"/>
-                        <ListBox x:Name="listBoxWhitelist" Grid.Row="3" Height="100" Margin="10" Grid.ColumnSpan="2"/>
-
-                        <Label Content="Malicious Category" Grid.Row="0" Margin="10" Grid.RowSpan="2" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxCategoryMalicious" Grid.Row="1" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-
-                        <Label Content="Phishing Category" Grid.Row="2" Margin="10" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxCategoryPhishing" Grid.Row="3" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-
-                        <Label Content="DDoS Category" Grid.Row="4" Margin="10" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxCategoryDdos" Grid.Row="5" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-
-                        <Label Content="Comment Template" Grid.Row="6" Margin="10" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxCommentTemplate" Grid.Row="7" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-
-                        <!-- Alert Threshold -->
-                        <Label Content="Alert Threshold" Grid.Row="8" Margin="10" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxAlertThreshold" Grid.Row="9" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-
-                        <!-- Phishing Input -->
-                        <Label Content="Phishing Input" Grid.Row="10" Margin="10" Grid.ColumnSpan="2"/>
-                        <TextBox x:Name="textBoxPhishingInput" Grid.Row="11" Margin="10,10,10,10" Grid.ColumnSpan="2"/>
-                    </Grid>
+                    <StackPanel Margin="10">
+                        <!-- File Lists Management -->
+                        <GroupBox Header="Malware Files" Margin="5">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="5">
+                                    <Button x:Name="BtnSelectMalware" Content="Select Malware File" Margin="5" Click="BtnSelectMalware_Click"/>
+                                    <Button x:Name="BtnAddMalware" Content="Add Malware File" Margin="5" Click="BtnAddMalware_Click"/>
+                                    <Button x:Name="BtnDeleteMalware" Content="Delete Selected Malware" Margin="5" Click="BtnDeleteMalware_Click"/>
+                                </StackPanel>
+                                <ListBox x:Name="listBoxMalware" Height="100" Margin="5"/>
+                            </StackPanel>
+                        </GroupBox>
+                        <GroupBox Header="DDoS Files" Margin="5">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="5">
+                                    <Button x:Name="BtnSelectDdosFile" Content="Select DDoS File" Margin="5" Click="BtnSelectDdosFile_Click"/>
+                                    <Button x:Name="BtnAddDdosFile" Content="Add DDoS File" Margin="5" Click="BtnAddDdosFile_Click"/>
+                                    <Button x:Name="BtnDeleteDdosFile" Content="Delete Selected DDoS" Margin="5" Click="BtnDeleteDdosFile_Click"/>
+                                </StackPanel>
+                                <TextBox x:Name="textBoxDdosInput" Margin="5"/>
+                                <ListBox x:Name="listBoxDdos" Height="100" Margin="5"/>
+                            </StackPanel>
+                        </GroupBox>
+                        <GroupBox Header="Phishing Files" Margin="5">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="5">
+                                    <Button x:Name="BtnSelectPhishingFile" Content="Select Phishing File" Margin="5" Click="BtnSelectPhishingFile_Click"/>
+                                    <Button x:Name="BtnAddPhishingFile" Content="Add Phishing File" Margin="5" Click="BtnAddPhishingFile_Click"/>
+                                    <Button x:Name="BtnDeletePhishingFile" Content="Delete Selected Phishing" Margin="5" Click="BtnDeletePhishingFile_Click"/>
+                                </StackPanel>
+                                <TextBox x:Name="textBoxPhishingInput" Margin="5"/>
+                                <ListBox x:Name="listBoxPhishing" Height="100" Margin="5"/>
+                            </StackPanel>
+                        </GroupBox>
+                        <GroupBox Header="Whitelist Files" Margin="5">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="5">
+                                    <Button x:Name="BtnSelectWhitelist" Content="Select Whitelist File" Margin="5" Click="BtnSelectWhitelist_Click"/>
+                                    <Button x:Name="BtnAddWhitelist" Content="Add Whitelist File" Margin="5" Click="BtnAddWhitelist_Click"/>
+                                    <Button x:Name="ButtonDeleteWhitelist" Content="Delete Selected Whitelist" Margin="5" Click="ButtonDeleteWhitelist_Click"/>
+                                </StackPanel>
+                                <ListBox x:Name="listBoxWhitelist" Height="100" Margin="5"/>
+                            </StackPanel>
+                        </GroupBox>
+                        <!-- Categories and Templates -->
+                        <GroupBox Header="Categories and Templates" Margin="5">
+                            <Grid Margin="5">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Label Content="Malicious Category:" Grid.Row="0" Grid.Column="0" Margin="5"/>
+                                <TextBox x:Name="textBoxCategoryMalicious" Grid.Row="0" Grid.Column="1" Margin="5"/>
+                                <Label Content="Phishing Category:" Grid.Row="1" Grid.Column="0" Margin="5"/>
+                                <TextBox x:Name="textBoxCategoryPhishing" Grid.Row="1" Grid.Column="1" Margin="5"/>
+                                <Label Content="DDoS Category:" Grid.Row="2" Grid.Column="0" Margin="5"/>
+                                <TextBox x:Name="textBoxCategoryDdos" Grid.Row="2" Grid.Column="1" Margin="5"/>
+                                <Label Content="Comment Template:" Grid.Row="3" Grid.Column="0" Margin="5"/>
+                                <TextBox x:Name="textBoxCommentTemplate" Grid.Row="3" Grid.Column="1" Margin="5" Height="60" TextWrapping="Wrap" AcceptsReturn="True"/>
+                                <Label Content="Alert Threshold:" Grid.Row="4" Grid.Column="0" Margin="5"/>
+                                <TextBox x:Name="textBoxAlertThreshold" Grid.Row="4" Grid.Column="1" Margin="5"/>
+                            </Grid>
+                        </GroupBox>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
             <!-- Logs And Status Tab -->
             <TabItem Header="Logs And Status">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                    <Grid Background="#FFE5E5E5">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <Label Content="Log Information" Grid.Row="0" Margin="10"/>
-                        <ListBox x:Name="listBoxLog" Grid.Row="1" HorizontalAlignment="Stretch" Height="100" Margin="10"/>
-
-                        <CheckBox x:Name="checkBoxRealTimeCsvBulk" Content="Enable Real-Time CSV Bulk" Grid.Row="2" Margin="10"/>
-                        <CheckBox x:Name="checkBoxRealTimeCsvWhitelist" Content="Enable Real-Time CSV Whitelist" Grid.Row="3" Margin="10"/>
-                        <CheckBox x:Name="checkBoxRealTimeSave" Content="Enable Real-Time Save" Grid.Row="4" Margin="10"/>
-                        <CheckBox x:Name="checkBoxScanKnownActive" Content="Scan Known Active" Grid.Row="5" Margin="10"/>
-
-                        <Label Content="IPv4 Logs" Grid.Row="6" Margin="10"/>
-                        <ListBox x:Name="listBoxIPv4" Grid.Row="7" HorizontalAlignment="Stretch" Height="100" Margin="10"/>
-
-                        <Label Content="IPv6 Logs" Grid.Row="8" Margin="10"/>
-                        <ListBox x:Name="listBoxIPv6" Grid.Row="9" HorizontalAlignment="Stretch" Height="100" Margin="10"/>
-
-                        <Label Content="Scan Progress" Grid.Row="10" Margin="10"/>
-                        <ProgressBar x:Name="progressBarScan" Grid.Row="11" HorizontalAlignment="Stretch" Height="30" Margin="10" Value="0" Maximum="100"/>
-
-                        <Label x:Name="labelProgress" Content="Progress: 0%" Grid.Row="12" Margin="10"/>
-
-                        <!-- Last Scan Time -->
-                        <Label Content="Last Scan Time" Grid.Row="13" Margin="10"/>
-                        <TextBox x:Name="textBoxLastScanTime" Grid.Row="14" Margin="10"/>
-                    </Grid>
+                    <StackPanel Background="#FFE5E5E5" Margin="10">
+                        <StackPanel Orientation="Horizontal" Margin="10">
+                            <Button x:Name="BtnClearLog" Content="Clear Log" Margin="5" Click="BtnClearLog_Click"/>
+                            <Button x:Name="BtnSaveLog" Content="Save Log" Margin="5" Click="BtnSaveLog_Click"/>
+                        </StackPanel>
+                        <Label Content="Log Information" Margin="10"/>
+                        <ListBox x:Name="listBoxLog" Height="100" Margin="10"/>
+                        <StackPanel Orientation="Horizontal" Margin="10">
+                            <CheckBox x:Name="checkBoxRealTimeCsvBulk" Content="Enable Real-Time CSV Bulk" Margin="5"/>
+                            <CheckBox x:Name="checkBoxRealTimeCsvWhitelist" Content="Enable Real-Time CSV Whitelist" Margin="5"/>
+                            <CheckBox x:Name="checkBoxRealTimeSave" Content="Enable Real-Time Save" Margin="5"/>
+                            <CheckBox x:Name="checkBoxScanKnownActive" Content="Scan Known Active" Margin="5"/>
+                        </StackPanel>
+                        <Label Content="IPv4 Logs" Margin="10"/>
+                        <ListBox x:Name="listBoxIPv4" Height="100" Margin="10"/>
+                        <Label Content="IPv6 Logs" Margin="10"/>
+                        <ListBox x:Name="listBoxIPv6" Height="100" Margin="10"/>
+                        <Label Content="Scan Progress" Margin="10"/>
+                        <ProgressBar x:Name="progressBarScan" Height="30" Margin="10" Value="0" Maximum="100"/>
+                        <Label x:Name="labelProgress" Content="Progress: 0%" Margin="10"/>
+                        <Label Content="Last Scan Time" Margin="10"/>
+                        <TextBox x:Name="textBoxLastScanTime" Margin="10"/>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
 
@@ -172,22 +214,18 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-
                         <Label Content="Real-Time File" Grid.Row="0" Margin="10"/>
                         <TextBox x:Name="textBoxRealTimeFile" Grid.Row="1" Margin="10"/>
-
                         <Label Content="Real-Time CSV Bulk File" Grid.Row="2" Margin="10"/>
                         <TextBox x:Name="textBoxRealTimeCsvBulkFile" Grid.Row="3" Margin="10"/>
-
                         <Label Content="Real-Time CSV Whitelist File" Grid.Row="4" Margin="10"/>
                         <TextBox x:Name="textBoxRealTimeCsvWhitelistFile" Grid.Row="5" Margin="10"/>
-
-                        <!-- Real-Time Logs Interval -->
                         <Label Content="Real-Time Logs Interval" Grid.Row="6" Margin="10"/>
                         <TextBox x:Name="textBoxRealTimeLogsInterval" Grid.Row="7" Margin="10"/>
-                        <TextBox x:Name="textBoxDdosInput" Grid.Row="1" Margin="10,10,10,10" Grid.ColumnSpan="2" />
-
                     </Grid>
                 </ScrollViewer>
             </TabItem>
