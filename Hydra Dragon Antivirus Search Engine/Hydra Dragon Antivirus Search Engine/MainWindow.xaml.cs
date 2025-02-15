@@ -44,7 +44,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
        
 
-        private void Form1_Load(object sender, EventArgs e)
+        private void Form1_Load(object sender, RoutedEventArgs e)
         {
             // Set default settings – these values are user-configurable in the UI.
             textBoxMaxDepth.Text = "10";
@@ -173,7 +173,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Event handler for the "Save Settings" button.
-        private void BtnSaveSettings_Click(object sender, EventArgs e)
+        private void BtnSaveSettings_Click(object sender, RoutedEventArgs e)
         {
             SaveFileDialog sfd = new()
             {
@@ -189,7 +189,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Event handler for the "Load Settings" button.
-        private void BtnLoadSettings_Click(object sender, EventArgs e)
+        private void BtnLoadSettings_Click(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -206,7 +206,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Start Scan button clicked.
-        private async void BtnStartScan_Click(object sender, EventArgs e)
+        private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
             // Read settings from UI controls.
             if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
@@ -279,7 +279,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Stop Scan button clicked.
-        private void BtnStopScan_Click(object sender, EventArgs e)
+        private void BtnStopScan_Click(object sender, RoutedEventArgs e)
         {
             if (cts != null)
             {
@@ -321,7 +321,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Clear Log button clicked.
-        private void BtnClearLog_Click(object sender, EventArgs e)
+        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
             listBoxLog.Items.Clear();
         }
@@ -329,7 +329,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Malware List Handlers
 
         // "Select" malware file.
-        private void BtnSelectMalware_Click(object sender, EventArgs e)
+        private void BtnSelectMalware_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
@@ -351,7 +351,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Add" malware file (via text input).
-        private void BtnAddMalware_Click(object sender, EventArgs e)
+        private void BtnAddMalware_Click(object sender, RoutedEventArgs e)
         {
             if (File.Exists(textBoxMalwareInput.Text))
             {
@@ -373,7 +373,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From Malware List" button.
-        private void BtnDeleteMalware_Click(object sender, EventArgs e)
+        private void BtnDeleteMalware_Click(object sender, RoutedEventArgs e)
         {
             if (listBoxMalware.SelectedIndex >= 0)
             {
@@ -388,7 +388,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region DDoS List Handlers
 
         // "Select" DDoS file.
-        private void BtnSelectDDoSFile_Click(object sender, EventArgs e)
+        private void BtnSelectDDoSFile_Click(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -408,7 +408,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Add" DDoS file (via text input).
-        private void BtnAddDDoSFile_Click(object sender, EventArgs e)
+        private void BtnAddDDoSFile_Click(object sender, RoutedEventArgs e)
         {
             if (File.Exists(textBoxDDoSInput.Text))
             {
@@ -430,7 +430,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From DDoS List" button.
-        private void BtnDeleteDDoSFile_Click(object sender, EventArgs e)
+        private void BtnDeleteDDoSFile_Click(object sender, RoutedEventArgs e)
         {
             if (listBoxDDoS.SelectedIndex >= 0)
             {
@@ -445,7 +445,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Phishing List Handlers
 
         // "Select" Phishing file.
-        private void BtnSelectPhishingFile_Click(object sender, EventArgs e)
+        private void BtnSelectPhishingFile_Click(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -465,7 +465,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Add" Phishing file (via text input).
-        private void BtnAddPhishingFile_Click(object sender, EventArgs e)
+        private void BtnAddPhishingFile_Click(object sender, RoutedEventArgs e)
         {
             if (File.Exists(textBoxPhishingInput.Text))
             {
@@ -487,7 +487,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From Phishing List" button.
-        private void BtnDeletePhishingFile_Click(object sender, EventArgs e)
+        private void BtnDeletePhishingFile_Click(object sender, RoutedEventArgs e)
         {
             if (listBoxPhishing.SelectedIndex >= 0)
             {
@@ -502,7 +502,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region WhiteList List Handlers
 
         // "Select" WhiteList file.
-        private void BtnSelectWhiteList_Click(object sender, EventArgs e)
+        private void BtnSelectWhiteList_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
@@ -524,7 +524,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Add" WhiteList file (via text input).
-        private void BtnAddWhiteList_Click(object sender, EventArgs e)
+        private void BtnAddWhiteList_Click(object sender, RoutedEventArgs e)
         {
             if (File.Exists(textBoxWhiteListInput.Text))
             {
@@ -546,7 +546,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From WhiteList" button.
-        private void ButtonDeleteWhiteList_Click(object sender, EventArgs e)
+        private void ButtonDeleteWhiteList_Click(object sender, RoutedEventArgs e)
         {
             if (listBoxWhiteList.SelectedIndex >= 0)
             {
@@ -1320,7 +1320,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // Filters the log listbox based on the search term entered.
-        private void TextBoxSearch_TextChanged(object sender, EventArgs e)
+        private void TextBoxSearch_TextChanged(object sender, RoutedEventArgs e)
         {
             string filter = TextBoxSearch.Text;
             listBoxLog.Items.Clear();
@@ -1335,7 +1335,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
 
         // Event handler for BtnnSaveLog Click
-        private void BtnSaveLog_Click(object sender, EventArgs e)
+        private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
         {
             var sfd = new SaveFileDialog
             {
