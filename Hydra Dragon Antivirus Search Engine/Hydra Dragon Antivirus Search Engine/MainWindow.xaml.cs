@@ -691,66 +691,54 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private async void UpdateLog(string message)
         {
             string logEntry = $"{DateTime.Now}: {message}";
-            fullLogList.Add(logEntry);  // Add the log entry to the fullLogList
+            fullLogList.Add(logEntry);  // Store the log entry
 
-          
-            if (listBoxLog.Dispatcher.CheckAccess())
-            {
-            
-                listBoxLog.Items.Add(logEntry);
-            }
-            else
-            {
-                
-                listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add(logEntry)));
-            }
+            // Update the UI safely
+            listBoxLog.Dispatcher.Invoke(() => listBoxLog.Items.Add(logEntry));
 
-            // Append the log entry to the realtime log file if enabled.
-            this.Dispatcher.Invoke(new Action(async() =>
+            bool isRealTimeSaveEnabled = false;
+            string realTimeFilePath = "";
+
+            // Access UI elements within the Dispatcher to avoid cross-thread errors
+            await listBoxLog.Dispatcher.InvokeAsync(() =>
             {
-                if (checkBoxRealTimeSave.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeFile.Text))
+                isRealTimeSaveEnabled = checkBoxRealTimeSave.IsChecked == true;
+                realTimeFilePath = textBoxRealTimeFile.Text;
+            });
+
+            // Append to real-time log file if enabled
+            if (isRealTimeSaveEnabled && !string.IsNullOrEmpty(realTimeFilePath))
+            {
+                const int maxRetries = 3;
+                int attempt = 0;
+                bool success = false;
+
+                while (attempt < maxRetries && !success)
                 {
-                    const int maxRetries = 3;
-                    int attempt = 0;
-                    bool success = false;
-
-                    while (attempt < maxRetries && !success)
+                    try
                     {
-                        try
+                        await File.AppendAllTextAsync(realTimeFilePath, logEntry + Environment.NewLine);
+                        success = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        attempt++;
+                        if (attempt >= maxRetries)
                         {
-                            await File.AppendAllTextAsync(textBoxRealTimeFile.Text, logEntry + Environment.NewLine);
-                            success = true;
+                            if (!realtimeLogErrorShown)
+                            {
+                                realtimeLogErrorShown = true;
+                                listBoxLog.Dispatcher.Invoke(() =>
+                                    listBoxLog.Items.Add("Error saving realtime log: " + ex.Message));
+                            }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            attempt++;
-                            if (attempt >= maxRetries)
-                            {
-                                if (!realtimeLogErrorShown)
-                                {
-                                    realtimeLogErrorShown = true;
-                                    if (listBoxLog.Dispatcher.CheckAccess())
-                                    {
-                                        // We're on the UI thread
-                                        listBoxLog.Items.Add("Error saving realtime log: " + ex.Message);
-                                    }
-                                    else
-                                    {
-                                        // We're not on the UI thread, so we need to invoke on the UI thread
-                                        listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add("Error saving realtime log: " + ex.Message)));
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // Wait a short time before trying again.
-                                await Task.Delay(100);
-                            }
+                            await Task.Delay(100); // Wait before retrying
                         }
                     }
                 }
-            }));
-        
+            }
         }
 
         // Thread-safe progress updater.
