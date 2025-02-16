@@ -782,9 +782,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public List<string> PhishingFiles { get; set; } = new();
             public List<string> WhiteListFiles { get; set; } = new();
 
-            // Save the last selected folder (common for all file types)
-            public string LastFolderPath { get; set; } = string.Empty;
-
             // New: Additional folder paths for each file type
             public string MalwarePath { get; set; } = string.Empty;
             public string DDoSPath { get; set; } = string.Empty;

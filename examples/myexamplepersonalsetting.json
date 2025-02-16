@@ -20,14 +20,14 @@
     "..\\..\\..\\..\\..\\website\\IPv4Malware.txt",
     "..\\..\\..\\..\\..\\website\\IPv6Malware.txt"
   ],
-  "DdosFiles": [
+  "DDoSFiles": [
     "..\\..\\..\\..\\..\\website\\IPv4DDoS.txt"
   ],
   "PhishingFiles": [
     "..\\..\\..\\..\\..\\website\\IPv4PhishingActive.txt",
     "..\\..\\..\\..\\..\\website\\IPv4PhishingInActive.txt"
   ],
-  "WhitelistFiles": [
+  "WhiteListFiles": [
     "..\\..\\..\\..\\..\\website\\IPv4WhiteList.txt",
     "..\\..\\..\\..\\..\\website\\IPv6WhiteList.txt"
   ],
