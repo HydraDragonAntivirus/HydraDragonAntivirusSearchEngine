@@ -511,12 +511,12 @@
                                 Width="80"
                                 Margin="5,0"
                                 Style="{DynamicResource AccentButtonStyle}"
-                                Click="BtnAddDDoS_Click"/>
+                                Click="BtnAddDDoSFile_Click"/>
                                     <Button x:Name="BtnDeleteDDoS"
                                 Content="Remove"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnDeleteDDoS_Click"/>
+                                Click="BtnDeleteDDoSFile_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -579,7 +579,7 @@
                                 Content="Remove"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnDeletePhishing_Click"/>
+                                Click="BtnDeletePhishingFile_Click"/>
                                 </StackPanel>
                             </Grid>
                         </Border>
