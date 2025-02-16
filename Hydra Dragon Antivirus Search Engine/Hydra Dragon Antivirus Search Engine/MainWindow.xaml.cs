@@ -172,6 +172,71 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
+        private void BtnBrowseRealTimeLog_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog()
+            {
+                Filter = "Text Files|*.txt|All Files|*.*",
+                Title = "Select Real-Time Log File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                textBoxRealTimeFile.Text = sfd.FileName;
+            }
+        }
+
+        private void BtnBrowseOutputFile_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog()
+            {
+                Filter = "CSV Files|*.csv|All Files|*.*",
+                Title = "Select Output File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                textBoxOutputFile.Text = sfd.FileName;
+            }
+        }
+
+        private void BtnBrowseWhiteListOutputFile_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog()
+            {
+                Filter = "CSV Files|*.csv|All Files|*.*",
+                Title = "Select WhiteList Output File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                textBoxWhiteListOutputFile.Text = sfd.FileName;
+            }
+        }
+
+        private void BtnBrowseBulkCsv_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog()
+            {
+                Filter = "CSV Files|*.csv|All Files|*.*",
+                Title = "Select Real-Time Bulk CSV File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                textBoxRealTimeCsvBulkFile.Text = sfd.FileName;
+            }
+        }
+
+        private void BtnBrowseWhiteListCsv_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog()
+            {
+                Filter = "CSV Files|*.csv|All Files|*.*",
+                Title = "Select Real-Time WhiteList CSV File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                textBoxRealTimeCsvWhiteListFile.Text = sfd.FileName;
+            }
+        }
+
         // Event handler for the "Save Settings" button.
         private void BtnSaveSettings_Click(object sender, RoutedEventArgs e)
         {
