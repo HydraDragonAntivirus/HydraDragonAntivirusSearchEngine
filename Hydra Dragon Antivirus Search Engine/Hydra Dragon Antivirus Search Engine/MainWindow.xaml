@@ -683,7 +683,7 @@
                                   BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
-                                                <GridViewColumn Header="IP Address" Width="Auto"/>
+                                                <GridViewColumn Header="Filename" Width="Auto"/>
                                             </GridView>
                                         </ListView.View>
                                     </ListView>
@@ -706,7 +706,7 @@
                                   BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
-                                                <GridViewColumn Header="IP Address" Width="Auto"/>
+                                                <GridViewColumn Header="Filename" Width="Auto"/>
                                             </GridView>
                                         </ListView.View>
                                     </ListView>
