@@ -1457,7 +1457,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-
         // Event handler for BtnnSaveLog Click
         private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
         {
