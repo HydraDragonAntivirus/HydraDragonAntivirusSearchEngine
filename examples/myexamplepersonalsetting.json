@@ -12,29 +12,41 @@
   "RealTimeCsvBulk": true,
   "RealTimeCsvBulkFile": "..\\..\\..\\..\\..\\website\\BulkReportRealtime.csv",
   "RealTimeCsvBulkPath": "..\\..\\..\\..\\..\\website",
-  "RealTimeCsvWhitelist": true,
-  "RealTimeCsvWhitelistFile": "..\\..\\..\\..\\..\\website\\WhitelistRealtime.csv",
+  "RealTimeCsvWhiteList": true,
+  "RealTimeCsvWhiteListFile": "..\\..\\..\\..\\..\\website\\WhitelistRealtime.csv",
   "RealTimeCsvWhiteListPath": "..\\..\\..\\..\\..\\website",
   "RealTimeSave": true,
   "RealTimeFile": "..\\..\\..\\..\\..\\website\\log.txt",
   "ScanKnownActive": false,
-  "MalwareFiles": [
-    "..\\..\\..\\..\\..\\website\\IPv4Malware.txt",
+  "MalwareFiles": [],
+  "DDoSFiles": [],
+  "PhishingFiles": [],
+  "WhiteListFiles": [],
+  "MalwarePath": "..\\..\\..\\..\\..\\website\\malware",
+  "DDoSPath": "..\\..\\..\\..\\..\\website\\ddos",
+  "PhishingPath": "..\\..\\..\\..\\..\\website\\phishing",
+  "WhiteListPath": "..\\..\\..\\..\\..\\website\\whitelist",
+  "IPv4Files": [],
+  "IPv6Files": [],
+  "MalwareFilesIPv4": [
+    "..\\..\\..\\..\\..\\website\\IPv4Malware.txt"
+  ],
+  "MalwareFilesIPv6": [
     "..\\..\\..\\..\\..\\website\\IPv6Malware.txt"
   ],
-  "DDoSFiles": [
+  "DDoSFilesIPv4": [
     "..\\..\\..\\..\\..\\website\\IPv4DDoS.txt"
   ],
-  "PhishingFiles": [
+  "DDoSFilesIPv6": [],
+  "PhishingFilesIPv4": [
     "..\\..\\..\\..\\..\\website\\IPv4PhishingActive.txt",
     "..\\..\\..\\..\\..\\website\\IPv4PhishingInActive.txt"
   ],
-  "WhiteListFiles": [
-    "..\\..\\..\\..\\..\\website\\IPv4WhiteList.txt",
-    "..\\..\\..\\..\\..\\website\\IPv6WhiteList.txt"
+  "PhishingFilesIPv6": [],
+  "WhiteListFilesIPv4": [
+    "..\\..\\..\\..\\..\\website\\IPv4WhiteList.txt"
   ],
-  "MalwarePath": "..\\..\\..\\..\\..\\website\\malware",
-  "DdosPath": "..\\..\\..\\..\\..\\website\\ddos",
-  "PhishingPath": "..\\..\\..\\..\\..\\website\\phishing",
-  "WhiteListPath": "..\\..\\..\\..\\..\\website\\whitelist"
+  "WhiteListFilesIPv6": [
+    "..\\..\\..\\..\\..\\website\\IPv6WhiteList.txt"
+  ]
 }
