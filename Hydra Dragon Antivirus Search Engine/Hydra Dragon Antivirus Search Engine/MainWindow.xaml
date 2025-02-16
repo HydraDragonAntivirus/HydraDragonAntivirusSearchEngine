@@ -329,11 +329,11 @@
 
                         <!-- Progress Section -->
                         <TextBlock x:Name="textBlockCurrentFile" 
-                                        Text="Current Loaded Definition File: None" 
-                                        FontSize="14" 
-                                        Foreground="Blue" 
-                                       HorizontalAlignment="Center"
-                                       Margin="0,28,0,48" Grid.RowSpan="2"/>
+                             Text="Current Loaded Definition File: None" 
+                             FontSize="14" 
+                             Foreground="Blue" 
+                             HorizontalAlignment="Center"
+                             Margin="0,28,0,48" Grid.RowSpan="2"/>
                         <StackPanel Grid.Row="1" 
                         HorizontalAlignment="Center" 
                         Margin="0,0,0,20">
