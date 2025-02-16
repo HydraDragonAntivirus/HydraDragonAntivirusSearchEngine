@@ -4,7 +4,7 @@
   "CsvMaxLines": 10000,
   "CsvMaxSize": 2097152,
   "OutputFile": "..\\..\\..\\..\\..\\website\\BulkReport.csv",
-  "WhitelistOutputFile": "..\\..\\..\\..\\..\\website\\WhitelistReport.csv",
+  "WhiteListOutputFile": "..\\..\\..\\..\\..\\website\\WhitelistReport.csv",
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
   "CategoryDDoS": "18",
@@ -34,5 +34,5 @@
   "MalwarePath": "..\\..\\..\\..\\..\\website\\malware",
   "DdosPath": "..\\..\\..\\..\\..\\website\\ddos",
   "PhishingPath": "..\\..\\..\\..\\..\\website\\phishing",
-  "WhitelistPath": "..\\..\\..\\..\\..\\website\\whitelist"
+  "WhiteListPath": "..\\..\\..\\..\\..\\website\\whitelist"
 }
