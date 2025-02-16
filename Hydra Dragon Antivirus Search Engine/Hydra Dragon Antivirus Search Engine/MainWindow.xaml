@@ -425,7 +425,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="440"/>
+                                            <GridViewColumn Header="File Name" Width="Auto"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -487,7 +487,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="440"/>
+                                            <GridViewColumn Header="File Name" Width="Auto"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -549,7 +549,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="440"/>
+                                            <GridViewColumn Header="File Name" Width="Auto"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -611,7 +611,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="440"/>
+                                            <GridViewColumn Header="File Name" Width="Auto"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
