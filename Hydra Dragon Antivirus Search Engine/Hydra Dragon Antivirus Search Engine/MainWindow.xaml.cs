@@ -328,8 +328,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region Malware List Handlers
 
-        // "Select" malware file.
-        private void BtnSelectMalware_Click(object sender, RoutedEventArgs e)
+        // "Browse" malware file.
+        private void BtnBrowseMalware_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
@@ -387,8 +387,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region DDoS List Handlers
 
-        // "Select" DDoS file.
-        private void BtnSelectDDoSFile_Click(object sender, RoutedEventArgs e)
+        // "Browse" DDoS file.
+        private void BtnBrowseDDoSFile_Click(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -444,8 +444,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region Phishing List Handlers
 
-        // "Select" Phishing file.
-        private void BtnSelectPhishingFile_Click(object sender, RoutedEventArgs e)
+        // "Browse" Phishing file.
+        private void BtnBrowsePhishingFile_Click(object sender, RoutedEventArgs e)
         {
             var ofd = new OpenFileDialog
             {
@@ -501,8 +501,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region WhiteList List Handlers
 
-        // "Select" WhiteList file.
-        private void BtnSelectWhiteList_Click(object sender, RoutedEventArgs e)
+        // "Browse" WhiteList file.
+        private void BtnBrowseWhiteList_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
