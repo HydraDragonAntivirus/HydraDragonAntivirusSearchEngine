@@ -127,7 +127,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(json);
                 if (settings != null)
                 {
-                    // Convert relative paths to absolute paths.
+                    // Convert relative paths to absolute paths for individual settings.
                     settings.OutputFile = ConvertToAbsolutePath(settings.OutputFile);
                     settings.WhiteListOutputFile = ConvertToAbsolutePath(settings.WhiteListOutputFile);
                     settings.RealTimeCsvBulkFile = ConvertToAbsolutePath(settings.RealTimeCsvBulkFile);
@@ -158,36 +158,46 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     textBoxRealTimeFile.Text = settings.RealTimeFile;
                     checkBoxScanKnownActive.IsChecked = settings.ScanKnownActive;
 
-                    // Restore file lists.
+                    // Convert each file list item from a relative path to an absolute path.
                     malwareFiles.Clear();
-                    malwareFiles.AddRange(settings.MalwareFiles);
+                    foreach (var file in settings.MalwareFiles)
+                    {
+                        malwareFiles.Add(ConvertToAbsolutePath(file));
+                    }
                     DDoSFiles.Clear();
-                    DDoSFiles.AddRange(settings.DDoSFiles);
+                    foreach (var file in settings.DDoSFiles)
+                    {
+                        DDoSFiles.Add(ConvertToAbsolutePath(file));
+                    }
                     phishingFiles.Clear();
-                    phishingFiles.AddRange(settings.PhishingFiles);
+                    foreach (var file in settings.PhishingFiles)
+                    {
+                        phishingFiles.Add(ConvertToAbsolutePath(file));
+                    }
                     WhiteListFiles.Clear();
-                    WhiteListFiles.AddRange(settings.WhiteListFiles);
+                    foreach (var file in settings.WhiteListFiles)
+                    {
+                        WhiteListFiles.Add(ConvertToAbsolutePath(file));
+                    }
 
+                    // Update the listbox UI controls.
                     listBoxMalware.Items.Clear();
-                    foreach (var item in settings.MalwareFiles)
+                    foreach (var item in malwareFiles)
                     {
                         listBoxMalware.Items.Add(item);
                     }
-
                     listBoxDDoS.Items.Clear();
-                    foreach (var item in settings.DDoSFiles)
+                    foreach (var item in DDoSFiles)
                     {
                         listBoxDDoS.Items.Add(item);
                     }
-
                     listBoxPhishing.Items.Clear();
-                    foreach (var item in settings.PhishingFiles)
+                    foreach (var item in phishingFiles)
                     {
                         listBoxPhishing.Items.Add(item);
                     }
-
                     listBoxWhiteList.Items.Clear();
-                    foreach (var item in settings.WhiteListFiles)
+                    foreach (var item in WhiteListFiles)
                     {
                         listBoxWhiteList.Items.Add(item);
                     }
