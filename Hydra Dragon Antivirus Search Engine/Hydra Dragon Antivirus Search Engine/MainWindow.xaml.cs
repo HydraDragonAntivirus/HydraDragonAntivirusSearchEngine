@@ -37,9 +37,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // A full log list to support search and saving.
         private readonly List<string> fullLogList = new();
 
-       
-
-        private void Form1_Load(object sender, RoutedEventArgs e)
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             // Set default settings – these values are user-configurable in the UI.
             textBoxMaxDepth.Text = "10";
@@ -47,7 +45,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCsvMaxLines.Text = "10000"; // Maximum lines (including header)
             textBoxCsvMaxSize.Text = "2097152"; // 2 MB in bytes
             textBoxOutputFile.Text = "BulkReport.csv";
-            textBoxWhiteListOutputFile.Text = "WhiteListReport.csv";
+            textBoxWhiteListOutputFile.Text = "WhformiteListReport.csv";
 
             textBoxCategoryMalicious.Text = "20";
             textBoxCategoryPhishing.Text = "7";
@@ -754,7 +752,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Updated AppendWhiteListCsvLineToFile method in Form1 with a locking mechanism:
+        // Updated AppendWhiteListCsvLineToFile method in MainWindow with a locking mechanism:
         private readonly object WhiteListCsvLock = new();
 
         private void AppendWhiteListCsvLineToFile(string csvLine)
