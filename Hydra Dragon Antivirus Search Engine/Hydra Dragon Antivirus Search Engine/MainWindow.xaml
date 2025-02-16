@@ -645,7 +645,7 @@
                         </Border>
                     </Grid>
 
-                    <!-- Discovered IPs Section -->
+                    <!-- Detected IP Types Section -->
                     <Border Grid.Row="1"
                 BorderBrush="{DynamicResource SystemControlHighlightBaseMediumLowBrush}"
                 BorderThickness="1"
@@ -661,7 +661,7 @@
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="Discovered IPs"
+                            <TextBlock Text="Detected IP Types"
                            Grid.ColumnSpan="2"
                            FontWeight="SemiBold"
                            FontSize="16"
@@ -683,9 +683,7 @@
                                   BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
-                                                <GridViewColumn Header="IP Address" Width="150"/>
-                                                <GridViewColumn Header="Last Seen" Width="120"/>
-                                                <GridViewColumn Header="Status" Width="100"/>
+                                                <GridViewColumn Header="IP Address" Width="Auto"/>
                                             </GridView>
                                         </ListView.View>
                                     </ListView>
@@ -708,9 +706,7 @@
                                   BorderThickness="0">
                                         <ListView.View>
                                             <GridView>
-                                                <GridViewColumn Header="IP Address" Width="250"/>
-                                                <GridViewColumn Header="Last Seen" Width="120"/>
-                                                <GridViewColumn Header="Status" Width="100"/>
+                                                <GridViewColumn Header="IP Address" Width="Auto"/>
                                             </GridView>
                                         </ListView.View>
                                     </ListView>
