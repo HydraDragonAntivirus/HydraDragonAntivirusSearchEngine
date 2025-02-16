@@ -29,6 +29,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private string ddosPath = string.Empty;
         private string phishingPath = string.Empty;
         private string whiteListPath = string.Empty;
+        // Declare the CSV folder path variables at the class level:
+        private string realTimeBulkPath = string.Empty;
+        private string realTimeWhiteListPath = string.Empty;
 
         // Scanner instance – created when the user clicks Start Scan.
         private Scanner? scanner;
@@ -82,17 +85,21 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 RealTimeFile = textBoxRealTimeFile.Text,
                 ScanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault(),
 
-                // Save file lists
+                // File lists:
                 MalwareFiles = malwareFiles,
                 DDoSFiles = DDoSFiles,
                 PhishingFiles = phishingFiles,
                 WhiteListFiles = WhiteListFiles,
 
-                // Save last selected folder and additional folder paths
+                // Last selected folder paths:
                 MalwarePath = malwarePath,
                 DDoSPath = ddosPath,
                 PhishingPath = phishingPath,
-                WhiteListPath = whiteListPath
+                WhiteListPath = whiteListPath,
+
+                // CSV files last folder paths:
+                RealTimeCsvBulkPath = realTimeBulkPath,
+                RealTimeCsvWhiteListPath = realTimeWhiteListPath
             };
 
             string json = JsonSerializer.Serialize(settings, jsonOptions);
@@ -110,7 +117,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             string baseDir = AppDomain.CurrentDomain.BaseDirectory;
             return IOPath.GetFullPath(IOPath.Combine(baseDir, path));
         }
-
 
         // Call this method to load settings from a JSON file and update the UI.
         private void LoadSettings(string filePath)
@@ -191,6 +197,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     ddosPath = settings.DDoSPath;
                     phishingPath = settings.PhishingPath;
                     whiteListPath = settings.WhiteListPath;
+
+                    // Set the CSV files last folder paths.
+                    realTimeBulkPath = !string.IsNullOrEmpty(settings.RealTimeCsvBulkPath)
+                        ? settings.RealTimeCsvBulkPath
+                        : (System.IO.Path.GetDirectoryName(settings.RealTimeCsvBulkFile) ?? Environment.CurrentDirectory);
+                    realTimeWhiteListPath = !string.IsNullOrEmpty(settings.RealTimeCsvWhiteListPath)
+                        ? settings.RealTimeCsvWhiteListPath
+                        : (System.IO.Path.GetDirectoryName(settings.RealTimeCsvWhiteListFile) ?? Environment.CurrentDirectory);
                 }
             }
         }
@@ -770,7 +784,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region Scanner and Helper Classes
 
-        // Define a simple settings class.
+        // Updated AppSettings class with CSV folder paths:
         public class AppSettings
         {
             public int MaxDepth { get; set; }
@@ -791,17 +805,21 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public string RealTimeFile { get; set; } = string.Empty;
             public bool ScanKnownActive { get; set; }
 
-            // File lists for scanning
+            // File lists for scanning:
             public List<string> MalwareFiles { get; set; } = new();
             public List<string> DDoSFiles { get; set; } = new();
             public List<string> PhishingFiles { get; set; } = new();
             public List<string> WhiteListFiles { get; set; } = new();
 
-            // New: Additional folder paths for each file type
+            // Last selected folder paths for the file lists:
             public string MalwarePath { get; set; } = string.Empty;
             public string DDoSPath { get; set; } = string.Empty;
             public string PhishingPath { get; set; } = string.Empty;
             public string WhiteListPath { get; set; } = string.Empty;
+
+            // NEW: Last used folder paths for CSV files:
+            public string RealTimeCsvBulkPath { get; set; } = string.Empty;
+            public string RealTimeCsvWhiteListPath { get; set; } = string.Empty;
         }
 
         /// <summary>
