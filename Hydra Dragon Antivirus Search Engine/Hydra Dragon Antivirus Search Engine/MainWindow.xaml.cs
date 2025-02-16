@@ -106,6 +106,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             File.WriteAllText(filePath, json);
         }
 
+        private void UpdateScanProgressMessage(string message)
+        {
+            if (textBlockProgress.Dispatcher.CheckAccess())
+            {
+                textBlockProgress.Text = message;
+            }
+            else
+            {
+                textBlockProgress.Dispatcher.Invoke(() => textBlockProgress.Text = message);
+            }
+        }
+
         private string ConvertToAbsolutePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
@@ -352,17 +364,29 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             // Initialize scanner
             scanner = new Scanner(
-                malwareFiles, DDoSFiles, phishingFiles, WhiteListFiles,
-                maxDepth, maxThreads,
-                categoryMalicious, categoryPhishing, categoryDDoS,
-                csvMaxLines, csvMaxSize,
-                outputFileName, whiteListOutputFileName,
-                UpdateLog, UpdateProgress,
-                AppendBulkCsvLineToFile, AppendWhiteListCsvLineToFile,
-                commentTemplate,
-                AddIPv4ToListBox,
-                AddIPv6ToListBox,
-                allowAutoVerdict);
+               malwareFiles,
+               DDoSFiles,
+               phishingFiles,
+               WhiteListFiles,
+               maxDepth,
+               maxThreads,
+               categoryMalicious,
+               categoryPhishing,
+               categoryDDoS,
+               csvMaxLines,
+               csvMaxSize,
+               outputFileName,
+               whiteListOutputFileName,
+               UpdateLog,          // logCallback
+               UpdateProgress,     // progressCallback
+               AppendBulkCsvLineToFile,
+               AppendWhiteListCsvLineToFile,
+               commentTemplate,
+               AddIPv4ToListBox,
+               AddIPv6ToListBox,
+               UpdateScanProgressMessage, // scanProgressCallback
+               scanKnownActive,
+               allowAutoVerdict);
 
             // Run the scan in the background to avoid blocking the UI thread
             try
@@ -864,6 +888,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private readonly Action<string> logCallback;
             private readonly Action<int, int> progressCallback;
+            private readonly Action<string> scanProgressCallback;
 
             public List<string> BulkCsvLines { get; private set; } = new List<string>();
             public List<string> WhiteListCsvLines { get; private set; } = new List<string>();
@@ -911,6 +936,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string commentTemplate,
                 Action<string> updateIPv4Callback,
                 Action<string> updateIPv6Callback,
+                Action<string> scanProgressCallback, // Moved here as a required parameter
                 bool scanKnownActive = false,
                 bool allowAutoVerdict = false)
             {
@@ -934,6 +960,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.commentTemplate = commentTemplate ?? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})";
                 this.updateIPv4Callback = updateIPv4Callback;
                 this.updateIPv6Callback = updateIPv6Callback;
+                this.scanProgressCallback = scanProgressCallback;
                 this.scanKnownActive = scanKnownActive;
                 this.allowAutoVerdict = allowAutoVerdict;
             }
