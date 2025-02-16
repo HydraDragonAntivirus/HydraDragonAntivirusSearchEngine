@@ -14,8 +14,4 @@
     <Content Include="Images\HydraDragonAV.ico" />
   </ItemGroup>
 
-  <ItemGroup>
-    <PackageReference Include="log4net" Version="3.0.3" />
-  </ItemGroup>
-
 </Project>
