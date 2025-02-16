@@ -441,36 +441,48 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Update IPv4 list box with the .txt file name.
+        // Update IPv4 list box with the .txt file name (only if not already added).
         private void AddIPv4ToListBox(string fileName)
         {
             if (listBoxIPv4.Dispatcher.CheckAccess())
             {
-               
-                listBoxIPv4.Items.Add(fileName);
+                if (!listBoxIPv4.Items.Contains(fileName)) // Check if the file is already in the list
+                {
+                    listBoxIPv4.Items.Add(fileName);
+                }
             }
             else
             {
-                
-                listBoxIPv4.Dispatcher.Invoke(new Action(() => listBoxIPv4.Items.Add(fileName)));
+                listBoxIPv4.Dispatcher.Invoke(() =>
+                {
+                    if (!listBoxIPv4.Items.Contains(fileName)) // Check before adding
+                    {
+                        listBoxIPv4.Items.Add(fileName);
+                    }
+                });
             }
-
         }
 
-        // Update IPv6 list box with the .txt file name.
+        // Update IPv6 list box with the .txt file name (only if not already added).
         private void AddIPv6ToListBox(string fileName)
         {
             if (listBoxIPv6.Dispatcher.CheckAccess())
             {
-
-                listBoxIPv6.Items.Add(fileName);
+                if (!listBoxIPv6.Items.Contains(fileName)) // Check if the file is already in the list
+                {
+                    listBoxIPv6.Items.Add(fileName);
+                }
             }
             else
             {
-
-                listBoxIPv6.Dispatcher.Invoke(new Action(() => listBoxIPv6.Items.Add(fileName)));
+                listBoxIPv6.Dispatcher.Invoke(() =>
+                {
+                    if (!listBoxIPv6.Items.Contains(fileName)) // Check before adding
+                    {
+                        listBoxIPv6.Items.Add(fileName);
+                    }
+                });
             }
-          
         }
 
         // Clear Log button clicked.
