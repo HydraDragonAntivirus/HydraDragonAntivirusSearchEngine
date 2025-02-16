@@ -1,10 +1,8 @@
 # Website
 website/IPv4Malware.txt
-# Output
-NewDiscoveredIPs_benign_auto_verdict.csv
-NewDiscoveredIPs_phishing.csv
-NewDiscoveredIPs_benign.csv
-NewDiscoveredIPs_malicious.csv
+# Website Output
+website/BulkReportRealtime.csv
+website/log.txt
 # Log
 /log
 ## Ignore Visual Studio temporary files, build results, and
