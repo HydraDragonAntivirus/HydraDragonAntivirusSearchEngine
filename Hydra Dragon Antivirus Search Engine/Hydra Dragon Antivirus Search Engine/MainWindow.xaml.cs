@@ -1135,7 +1135,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (token.IsCancellationRequested)
                         return;
 
+                    // Update the UI with the current file being processed.
+                    scanProgressCallback($"Current Loaded Definition File: {file}");
                     logCallback($"Loading file: {file}");
+
                     using (var sr = new StreamReader(file))
                     {
                         string? line;
