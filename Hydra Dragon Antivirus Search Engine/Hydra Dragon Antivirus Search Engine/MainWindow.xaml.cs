@@ -320,32 +320,28 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Start Scan button clicked.
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
-            // Read settings from UI controls.
-            if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
-                maxDepth = 10;
-            if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads))
-                maxThreads = 100;
-            if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines))
-                csvMaxLines = 10000;
-            if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize))
-                csvMaxSize = 2097152;
+            // Set up cancellation token
+            cts = new CancellationTokenSource();
+
+            // Read settings from UI controls (values for scan settings)
+            if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth)) maxDepth = 10;
+            if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads)) maxThreads = 100;
+            if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines)) csvMaxLines = 10000;
+            if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize)) csvMaxSize = 2097152;
 
             string outputFileName = textBoxOutputFile.Text;
-            string WhiteListOutputFileName = textBoxWhiteListOutputFile.Text;
+            string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
             string categoryMalicious = textBoxCategoryMalicious.Text;
             string categoryPhishing = textBoxCategoryPhishing.Text;
             string categoryDDoS = textBoxCategoryDDoS.Text;
 
-            cts = new CancellationTokenSource();
-
             string commentTemplate = textBoxCommentTemplate.Text;
 
-            // Initialize real‑time Bulk CSV file with header if enabled.
+            // Initialize real-time CSV files if enabled
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
                 File.WriteAllText(textBoxRealTimeCsvBulkFile.Text, "IP,Categories,ReportDate,Comment" + Environment.NewLine);
             }
-            // Initialize real‑time WhiteList CSV file with header if enabled.
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
                 File.WriteAllText(textBoxRealTimeCsvWhiteListFile.Text, "IP,Source,ReportDate,Comment" + Environment.NewLine);
@@ -353,12 +349,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
             bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
+
+            // Initialize scanner
             scanner = new Scanner(
                 malwareFiles, DDoSFiles, phishingFiles, WhiteListFiles,
                 maxDepth, maxThreads,
                 categoryMalicious, categoryPhishing, categoryDDoS,
                 csvMaxLines, csvMaxSize,
-                outputFileName, WhiteListOutputFileName,
+                outputFileName, whiteListOutputFileName,
                 UpdateLog, UpdateProgress,
                 AppendBulkCsvLineToFile, AppendWhiteListCsvLineToFile,
                 commentTemplate,
@@ -366,27 +364,45 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AddIPv6ToListBox,
                 allowAutoVerdict);
 
-            await scanner.StartScanAsync(cts.Token);
+            // Run the scan in the background to avoid blocking the UI thread
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    await scanner.StartScanAsync(cts.Token);
+                });
 
-            // Validate main CSV limits.
-            int totalLines = scanner.BulkCsvLines.Count;
-            string csvContent = string.Join("\n", scanner.BulkCsvLines);
-            int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
+                // Handle after-scan logic like validating and saving results (this can happen after the scan completes)
+                int totalLines = scanner.BulkCsvLines.Count;
+                string csvContent = string.Join("\n", scanner.BulkCsvLines);
+                int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
 
-            if (totalLines > csvMaxLines + 1) // +1 for header
-            {
-                MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
+                // Validate CSV output limits
+                if (totalLines > csvMaxLines + 1) // +1 for header
+                {
+                    MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
+                }
+                else if (csvSizeInBytes > csvMaxSize)
+                {
+                    MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
+                }
+                else
+                {
+                    // Save CSV files if the scan completed successfully
+                    File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
+                    File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
+                    MessageBox.Show("Scan completed and CSV files generated successfully.");
+                }
             }
-            else if (csvSizeInBytes > csvMaxSize)
+            catch (OperationCanceledException)
             {
-                MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
+                // Handle cancellation logic here
+                MessageBox.Show("Scan was cancelled.");
             }
-            else
+            catch (Exception ex)
             {
-                // Write both CSV outputs.
-                File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                File.WriteAllLines(WhiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
-                MessageBox.Show("Scan completed and CSV files generated successfully.");
+                // Handle any exceptions that may occur during the scan
+                MessageBox.Show($"An error occurred: {ex.Message}");
             }
         }
 
