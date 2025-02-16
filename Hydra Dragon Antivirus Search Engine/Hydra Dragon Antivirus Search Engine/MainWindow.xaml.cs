@@ -16,6 +16,7 @@ using System.Windows.Navigation;
 using System.Windows.Shapes;
 using Microsoft.Win32;
 using log4net;
+using IOPath = System.IO.Path;
 namespace Hydra_Dragon_Antivirus_Search_Engine
 {
     /// <summary>
@@ -109,6 +110,19 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             File.WriteAllText(filePath, json);
         }
 
+        private string ConvertToAbsolutePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+            // If the path is already absolute, return the normalized version.
+            if (IOPath.IsPathRooted(path))
+                return IOPath.GetFullPath(path);
+            // Otherwise, combine it with the application's base directory.
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            return IOPath.GetFullPath(IOPath.Combine(baseDir, path));
+        }
+
+
         // Call this method to load settings from a JSON file and update the UI.
         private void LoadSettings(string filePath)
         {
@@ -118,6 +132,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AppSettings? settings = JsonSerializer.Deserialize<AppSettings>(json);
                 if (settings != null)
                 {
+                    // Convert relative paths to absolute paths.
+                    settings.OutputFile = ConvertToAbsolutePath(settings.OutputFile);
+                    settings.WhiteListOutputFile = ConvertToAbsolutePath(settings.WhiteListOutputFile);
+                    settings.RealTimeCsvBulkFile = ConvertToAbsolutePath(settings.RealTimeCsvBulkFile);
+                    settings.RealTimeCsvWhiteListFile = ConvertToAbsolutePath(settings.RealTimeCsvWhiteListFile);
+                    settings.RealTimeFile = ConvertToAbsolutePath(settings.RealTimeFile);
+                    settings.MalwarePath = ConvertToAbsolutePath(settings.MalwarePath);
+                    settings.DDoSPath = ConvertToAbsolutePath(settings.DDoSPath);
+                    settings.PhishingPath = ConvertToAbsolutePath(settings.PhishingPath);
+                    settings.WhiteListPath = ConvertToAbsolutePath(settings.WhiteListPath);
+
+                    // Update UI controls with the loaded settings.
                     textBoxMaxDepth.Text = settings.MaxDepth.ToString();
                     textBoxMaxThreads.Text = settings.MaxThreads.ToString();
                     textBoxCsvMaxLines.Text = settings.CsvMaxLines.ToString();
@@ -137,7 +163,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     textBoxRealTimeFile.Text = settings.RealTimeFile;
                     checkBoxScanKnownActive.IsChecked = settings.ScanKnownActive;
 
-                    // Restore file lists
+                    // Restore file lists.
                     malwareFiles.Clear();
                     malwareFiles.AddRange(settings.MalwareFiles);
                     DDoSFiles.Clear();
@@ -171,7 +197,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         listBoxWhiteList.Items.Add(item);
                     }
 
-                    // Restore the last selected folder and additional folder paths
+                    // Update the additional folder paths.
                     malwarePath = settings.MalwarePath;
                     ddosPath = settings.DDoSPath;
                     phishingPath = settings.PhishingPath;
