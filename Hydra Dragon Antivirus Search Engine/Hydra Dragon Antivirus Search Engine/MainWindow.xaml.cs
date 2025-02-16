@@ -33,7 +33,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private readonly List<string> DDoSFiles = new();
         private readonly List<string> phishingFiles = new();
         private readonly List<string> WhiteListFiles = new();
-        private string lastPath = "";
+        private string malwarePath = string.Empty;
+        private string ddosPath = string.Empty;
+        private string phishingPath = string.Empty;
+        private string whiteListPath = string.Empty;
 
         // Scanner instance – created when the user clicks Start Scan.
         private Scanner? scanner;
@@ -95,11 +98,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 PhishingFiles = phishingFiles,
                 WhiteListFiles = WhiteListFiles,
 
-                // Save last selected folder
-                LastFolderPath = lastPath
+                // Save last selected folder and additional folder paths
+                MalwarePath = malwarePath,
+                DDoSPath = ddosPath,
+                PhishingPath = phishingPath,
+                WhiteListPath = whiteListPath
             };
 
-            // Use the simplified JsonSerializerOptions instance
             string json = JsonSerializer.Serialize(settings, jsonOptions);
             File.WriteAllText(filePath, json);
         }
@@ -166,8 +171,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         listBoxWhiteList.Items.Add(item);
                     }
 
-                    // Restore the last selected folder
-                    lastPath = settings.LastFolderPath;
+                    // Restore the last selected folder and additional folder paths
+                    malwarePath = settings.MalwarePath;
+                    ddosPath = settings.DDoSPath;
+                    phishingPath = settings.PhishingPath;
+                    whiteListPath = settings.WhiteListPath;
                 }
             }
         }
@@ -394,24 +402,21 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Malware List Handlers
 
         // "Browse" malware file.
-        private void BtnBrowseMalware_Click(object sender, RoutedEventArgs e)
+        private void BtnBrowseMalwareFile_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
+                InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
             };
 
-          
             bool? result = ofd.ShowDialog();
-
-            if (result == true) 
+            if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-
-                malwareFiles.Add(filePath); 
-                listBoxMalware.Items.Add(filePath);   
+                malwarePath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                malwareFiles.Add(filePath);
+                listBoxMalware.Items.Add(filePath);
             }
         }
 
@@ -455,10 +460,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // "Browse" DDoS file.
         private void BtnBrowseDDoSFile_Click(object sender, RoutedEventArgs e)
         {
-            var ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
+                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
             };
 
             bool? result = ofd.ShowDialog();
@@ -466,7 +471,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                ddosPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
                 DDoSFiles.Add(filePath);
                 listBoxDDoS.Items.Add(filePath);
             }
@@ -515,7 +520,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             var ofd = new OpenFileDialog
             {
                 Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
+                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
             };
 
             bool? result = ofd.ShowDialog();
@@ -523,7 +528,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                phishingPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
                 phishingFiles.Add(filePath);
                 listBoxPhishing.Items.Add(filePath);
             }
@@ -567,24 +572,22 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region WhiteList List Handlers
 
         // "Browse" WhiteList file.
-        private void BtnBrowseWhiteList_Click(object sender, RoutedEventArgs e)
+        private void BtnBrowseWhiteListFile_Click(object sender, RoutedEventArgs e)
         {
             OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(lastPath) ? Environment.CurrentDirectory : lastPath
+                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
             };
 
-             
             bool? result = ofd.ShowDialog();
 
-            if (result == true) 
+            if (result == true)
             {
                 string filePath = ofd.FileName;
-                lastPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-
-                WhiteListFiles.Add(filePath);   
-                listBoxWhiteList.Items.Add(filePath);  
+                whiteListPath = System.IO.Path.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                WhiteListFiles.Add(filePath);
+                listBoxWhiteList.Items.Add(filePath);
             }
         }
 
@@ -779,8 +782,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public List<string> PhishingFiles { get; set; } = new();
             public List<string> WhiteListFiles { get; set; } = new();
 
-            // Save the last selected folder
+            // Save the last selected folder (common for all file types)
             public string LastFolderPath { get; set; } = string.Empty;
+
+            // New: Additional folder paths for each file type
+            public string MalwarePath { get; set; } = string.Empty;
+            public string DDoSPath { get; set; } = string.Empty;
+            public string PhishingPath { get; set; } = string.Empty;
+            public string WhiteListPath { get; set; } = string.Empty;
         }
 
         /// <summary>

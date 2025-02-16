@@ -442,7 +442,7 @@
                                 Content="Browse"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnBrowseMalware_Click"/>
+                                Click="BtnBrowseMalwareFile_Click"/>
                                     <Button x:Name="BtnAddMalware"
                                 Content="Add"
                                 Width="80"
@@ -631,7 +631,7 @@
                                 Content="Browse"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnBrowseWhiteList_Click"/>
+                                Click="BtnBrowseWhiteListFile_Click"/>
                                     <Button x:Name="BtnAddWhiteList"
                                 Content="Add"
                                 Width="80"

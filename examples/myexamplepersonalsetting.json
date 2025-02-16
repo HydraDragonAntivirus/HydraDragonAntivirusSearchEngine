@@ -3,18 +3,18 @@
   "MaxThreads": 20,
   "CsvMaxLines": 10000,
   "CsvMaxSize": 2097152,
-  "OutputFile": "BulkReport.csv",
-  "WhitelistOutputFile": "WhitelistReport.csv",
+  "OutputFile": "..\\..\\..\\..\\..\\website\\BulkReport.csv",
+  "WhitelistOutputFile": "..\\..\\..\\..\\..\\website\\WhitelistReport.csv",
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
   "CategoryDdos": "18",
   "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
   "RealTimeCsvBulk": true,
-  "RealTimeCsvBulkFile": "BulkReportRealtime.csv",
+  "RealTimeCsvBulkFile": "..\\..\\..\\..\\..\\website\\BulkReportRealtime.csv",
   "RealTimeCsvWhitelist": true,
-  "RealTimeCsvWhitelistFile": "WhitelistRealtime.csv",
+  "RealTimeCsvWhitelistFile": "..\\..\\..\\..\\..\\website\\WhitelistRealtime.csv",
   "RealTimeSave": true,
-  "RealTimeFile": "log.txt",
+  "RealTimeFile": "..\\..\\..\\..\\..\\website\\log.txt",
   "ScanKnownActive": false,
   "MalwareFiles": [
     "..\\..\\..\\..\\..\\website\\IPv4Malware.txt",
@@ -31,5 +31,8 @@
     "..\\..\\..\\..\\..\\website\\IPv4WhiteList.txt",
     "..\\..\\..\\..\\..\\website\\IPv6WhiteList.txt"
   ],
-  "LastFolderPath": "..\\..\\..\\..\\..\\website"
+  "MalwarePath": "..\\..\\..\\..\\..\\website\\malware",
+  "DdosPath": "..\\..\\..\\..\\..\\website\\ddos",
+  "PhishingPath": "..\\..\\..\\..\\..\\website\\phishing",
+  "WhitelistPath": "..\\..\\..\\..\\..\\website\\whitelist"
 }
