@@ -106,15 +106,16 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             File.WriteAllText(filePath, json);
         }
 
-        private void UpdateScanProgressMessage(string message)
+        // This method updates the dedicated UI element for the current file loading status.
+        private void UpdateCurrentFileMessage(string message)
         {
-            if (textBlockProgress.Dispatcher.CheckAccess())
+            if (textBlockCurrentFile.Dispatcher.CheckAccess())
             {
-                textBlockProgress.Text = message;
+                textBlockCurrentFile.Text = message;
             }
             else
             {
-                textBlockProgress.Dispatcher.Invoke(() => textBlockProgress.Text = message);
+                textBlockCurrentFile.Dispatcher.Invoke(() => textBlockCurrentFile.Text = message);
             }
         }
 
@@ -384,7 +385,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                commentTemplate,
                AddIPv4ToListBox,
                AddIPv6ToListBox,
-               UpdateScanProgressMessage, // scanProgressCallback
+               UpdateCurrentFileMessage, // scanProgressCallback
                scanKnownActive,
                allowAutoVerdict);
 
@@ -1159,6 +1160,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     logCallback($"Finished loading file: {file}");
                 }
             }
+
             /// <summary>
             /// Processes a regex match by checking if the IP is already WhiteListed.
             /// If yes, writes to the WhiteList CSV; otherwise, enqueues a new seed for scanning.
