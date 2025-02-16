@@ -546,7 +546,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         // "Delete Selected From WhiteList" button.
-        private void ButtonDeleteWhiteList_Click(object sender, RoutedEventArgs e)
+        private void BtnDeleteWhiteList_Click(object sender, RoutedEventArgs e)
         {
             if (listBoxWhiteList.SelectedIndex >= 0)
             {
