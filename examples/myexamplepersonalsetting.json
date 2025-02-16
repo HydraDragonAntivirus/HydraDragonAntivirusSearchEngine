@@ -7,7 +7,7 @@
   "WhitelistOutputFile": "..\\..\\..\\..\\..\\website\\WhitelistReport.csv",
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
-  "CategoryDdos": "18",
+  "CategoryDDoS": "18",
   "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
   "RealTimeCsvBulk": true,
   "RealTimeCsvBulkFile": "..\\..\\..\\..\\..\\website\\BulkReportRealtime.csv",
