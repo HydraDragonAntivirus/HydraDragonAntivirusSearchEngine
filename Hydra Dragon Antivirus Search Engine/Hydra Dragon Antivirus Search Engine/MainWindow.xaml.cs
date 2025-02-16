@@ -982,28 +982,35 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             public async Task StartScanAsync(CancellationToken token)
             {
-                // Process each WhiteList file.
-                foreach (var file in WhiteListFiles.Where(file => System.IO.Path.GetExtension(file)
-                         .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                try
                 {
-                    await ProcessWhiteListFileAsync(file, token);
+                    // Process each WhiteList file.
+                    foreach (var file in WhiteListFiles.Where(file => System.IO.Path.GetExtension(file)
+                                 .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        await ProcessWhiteListFileAsync(file, token);
+                    }
+
+                    // Load seeds from blacklist files.
+                    await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
+                    await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
+                    await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
+
+                    totalSeeds = seedQueue.Count;
+                    progressCallback(processedCount, totalSeeds);
+
+                    List<Task> workers = new();
+                    for (int i = 0; i < maxThreads; i++)
+                    {
+                        workers.Add(Task.Run(() => WorkerAsync(token), token));
+                    }
+                    await Task.WhenAll(workers);
+                    logCallback("Scanning completed. Processed " + processedCount + " seeds.");
                 }
-
-                // Load seeds from blacklist files. This will also populate blacklistIPs.
-                await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
-                await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
-                await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
-
-                totalSeeds = seedQueue.Count;
-                progressCallback(processedCount, totalSeeds);
-
-                List<Task> workers = new();
-                for (int i = 0; i < maxThreads; i++)
+                catch (OperationCanceledException)
                 {
-                    workers.Add(Task.Run(() => WorkerAsync(token), token));
+                    logCallback("Scan canceled by the user.");
                 }
-                await Task.WhenAll(workers);
-                logCallback("Scanning completed. Processed " + processedCount + " seeds.");
             }
 
             /// <summary>
