@@ -45,7 +45,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCsvMaxLines.Text = "10000"; // Maximum lines (including header)
             textBoxCsvMaxSize.Text = "2097152"; // 2 MB in bytes
             textBoxOutputFile.Text = "BulkReport.csv";
-            textBoxWhiteListOutputFile.Text = "WhformiteListReport.csv";
+            textBoxWhiteListOutputFile.Text = "WhiteListReport.csv";
 
             textBoxCategoryMalicious.Text = "20";
             textBoxCategoryPhishing.Text = "7";
