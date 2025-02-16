@@ -8,7 +8,6 @@
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
   "CategoryDdos": "18",
-  "CategoryBenign": "",
   "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
   "RealTimeCsvBulk": true,
   "RealTimeCsvBulkFile": "BulkReportRealtime.csv",
