@@ -1012,10 +1012,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         await ProcessWhiteListFileAsync(file, token);
                     }
 
-                    // Load seeds from blacklist files.
-                    await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
-                    await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
+                    // Now load seeds in priority order:
+                    // 1. Phishing
+                    // 2. DDoS
+                    // 3. Malicious
                     await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
+                    await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
+                    await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
 
                     totalSeeds = seedQueue.Count;
                     progressCallback(processedCount, totalSeeds);
