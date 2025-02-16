@@ -36,7 +36,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Scanner instance – created when the user clicks Start Scan.
         private Scanner? scanner;
         // Cancellation token source to allow stopping the scan.
-        CancellationTokenSource? cts;
+        private CancellationTokenSource cts = new CancellationTokenSource();
         // A full log list to support search and saving.
         private readonly List<string> fullLogList = new();
 
@@ -333,10 +333,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Start Scan button clicked.
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
-            // Set up cancellation token
-            cts = new CancellationTokenSource();
-
-            // Read settings from UI controls (values for scan settings)
+            // Reading current settings:
             if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth)) maxDepth = 10;
             if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads)) maxThreads = 100;
             if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines)) csvMaxLines = 10000;
@@ -347,23 +344,17 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             string categoryMalicious = textBoxCategoryMalicious.Text;
             string categoryPhishing = textBoxCategoryPhishing.Text;
             string categoryDDoS = textBoxCategoryDDoS.Text;
-
             string commentTemplate = textBoxCommentTemplate.Text;
 
-            // Initialize real-time CSV files if enabled
-            if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
-            {
-                File.WriteAllText(textBoxRealTimeCsvBulkFile.Text, "IP,Categories,ReportDate,Comment" + Environment.NewLine);
-            }
-            if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
-            {
-                File.WriteAllText(textBoxRealTimeCsvWhiteListFile.Text, "IP,Source,ReportDate,Comment" + Environment.NewLine);
-            }
+            // Real-time CSV file initialization procedures...
 
             bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
             bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
 
-            // Initialize scanner
+            // Get the user's selection for IP type (e.g., using radio buttons)
+            string selectedIPType = (radioButtonIPv4.IsChecked == true) ? "ipv4" : "ipv6";
+
+            // Instantiate the Scanner with the selected IP type parameter.
             scanner = new Scanner(
                malwareFiles,
                DDoSFiles,
@@ -378,32 +369,31 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                csvMaxSize,
                outputFileName,
                whiteListOutputFileName,
-               UpdateLog,          // logCallback
-               UpdateProgress,     // progressCallback
+               UpdateLog,
+               UpdateProgress,
                AppendBulkCsvLineToFile,
                AppendWhiteListCsvLineToFile,
                commentTemplate,
                AddIPv4ToListBox,
                AddIPv6ToListBox,
-               UpdateCurrentFileMessage, // scanProgressCallback
+               UpdateCurrentFileMessage,
                scanKnownActive,
-               allowAutoVerdict);
+               allowAutoVerdict,
+               selectedIPType);
 
-            // Run the scan in the background to avoid blocking the UI thread
+            // Start the scanning process in the background...
             try
             {
                 await Task.Run(async () =>
                 {
-                    await scanner.StartScanAsync(cts.Token);
+                    await scanner.StartScanAsync(cts!.Token);
                 });
 
-                // Handle after-scan logic like validating and saving results (this can happen after the scan completes)
                 int totalLines = scanner.BulkCsvLines.Count;
                 string csvContent = string.Join("\n", scanner.BulkCsvLines);
                 int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
 
-                // Validate CSV output limits
-                if (totalLines > csvMaxLines + 1) // +1 for header
+                if (totalLines > csvMaxLines + 1)
                 {
                     MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
                 }
@@ -413,7 +403,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
                 else
                 {
-                    // Save CSV files if the scan completed successfully
                     File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
                     File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
                     MessageBox.Show("Scan completed and CSV files generated successfully.");
@@ -421,12 +410,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
             catch (OperationCanceledException)
             {
-                // Handle cancellation logic here
                 MessageBox.Show("Scan was cancelled.");
             }
             catch (Exception ex)
             {
-                // Handle any exceptions that may occur during the scan
                 MessageBox.Show($"An error occurred: {ex.Message} {ex.StackTrace}");
             }
         }
@@ -884,6 +871,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         /// </summary>
         public partial class Scanner
         {
+            public string SelectedIPType { get; set; }
             private readonly List<string> malwareFiles;
             private readonly List<string> DDoSFiles;
             private readonly List<string> phishingFiles;
@@ -951,7 +939,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 Action<string> updateIPv6Callback,
                 Action<string> scanProgressCallback, // Moved here as a required parameter
                 bool scanKnownActive = false,
-                bool allowAutoVerdict = false)
+                bool allowAutoVerdict = false,
+                string selectedIPType = "ipv4")
             {
                 this.malwareFiles = malwareFiles;
                 this.DDoSFiles = DDoSFiles;
@@ -976,6 +965,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.scanProgressCallback = scanProgressCallback;
                 this.scanKnownActive = scanKnownActive;
                 this.allowAutoVerdict = allowAutoVerdict;
+                // Set the selected IP type
+                this.SelectedIPType = selectedIPType;
             }
 
             private async Task ProcessWhiteListFileAsync(string file, CancellationToken token)
@@ -1113,29 +1104,80 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
+            private async Task ProcessIPLine(string ip, int? port, string version, string file, string trimmed, string defaultSourceType)
+            {
+                if (!processedIPs.TryAdd(ip, true))
+                    return;
+
+                string fileName = System.IO.Path.GetFileName(file);
+                if (version.Equals("ipv4", StringComparison.OrdinalIgnoreCase))
+                {
+                    lock (fileLock)
+                    {
+                        filesWithIPv4.Add(fileName);
+                        updateIPv4Callback?.Invoke(fileName);
+                    }
+                }
+                else if (version.Equals("ipv6", StringComparison.OrdinalIgnoreCase))
+                {
+                    lock (fileLock)
+                    {
+                        filesWithIPv6.Add(fileName);
+                        updateIPv6Callback?.Invoke(fileName);
+                    }
+                }
+
+                bool isWhiteListed = WhiteListedIPs.Contains(ip);
+                if (isWhiteListed)
+                {
+                    string reportDate = DateTime.UtcNow.ToString("o");
+                    string comment = $"WhiteList from file: {file}";
+                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                    lock (WhiteListCsvLines)
+                    {
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                        {
+                            WhiteListCsvLines.Add(csvLine);
+                        }
+                    }
+                    realTimeWhiteListCsvCallback?.Invoke(csvLine);
+                }
+                else
+                {
+                    string discoveredUrl;
+                    if (!scanKnownActive)
+                    {
+                        discoveredUrl = trimmed + "_discovered";
+                        while (malwareFiles.Contains(discoveredUrl) ||
+                               DDoSFiles.Contains(discoveredUrl) ||
+                               phishingFiles.Contains(discoveredUrl) ||
+                               WhiteListFiles.Contains(discoveredUrl))
+                        {
+                            discoveredUrl += "_x";
+                        }
+                    }
+                    else
+                    {
+                        discoveredUrl = trimmed;
+                    }
+                    seedQueue.Enqueue(new Seed(ip, defaultSourceType, version, port, 1, trimmed, discoveredUrl));
+                }
+                await Task.CompletedTask;
+            }
+
             /// <summary>
             /// Loads seeds from each file in the provided list.
             /// If an IP is already WhiteListed, it is recorded in the WhiteList CSV.
             /// Otherwise, a new seed is enqueued for scanning.
             /// </summary>
-            [GeneratedRegex(@"^(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?", RegexOptions.Compiled)]
-            private static partial Regex Ipv4Regex();
-
-            [GeneratedRegex(@"^(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?", RegexOptions.Compiled)]
-            private static partial Regex Ipv6Regex();
-
             private async Task LoadSeedsFromFileListAsync(List<string> fileList, string defaultSourceType, CancellationToken token)
             {
-                var ipv4Regex = Ipv4Regex();
-                var ipv6Regex = Ipv6Regex();
-
                 foreach (var file in fileList.Where(file => System.IO.Path.GetExtension(file)
                              .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (token.IsCancellationRequested)
                         return;
 
-                    // Update the UI with the current file being processed.
                     scanProgressCallback($"Current Loaded Definition File: {file}");
                     logCallback($"Loading file: {file}");
 
@@ -1151,24 +1193,43 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             if (string.IsNullOrEmpty(trimmed))
                                 continue;
 
-                            // Process each line immediately.
-                            Match ipv4Match = ipv4Regex.Match(trimmed);
-                            if (ipv4Match.Success)
+                            // Process based on the IP type selected in the UI:
+                            string ipType = SelectedIPType.ToLower();
+                            if (ipType == "ipv4")
                             {
-                                string ip = ipv4Match.Groups["ip"].Value;
-                                // Add to the global blacklist set.
-                                blacklistIPs.Add(ip);
-                                await ProcessMatch(ipv4Match, "ipv4", file, trimmed, defaultSourceType);
-                            }
-                            else
-                            {
-                                Match ipv6Match = ipv6Regex.Match(trimmed);
-                                if (ipv6Match.Success)
+                                string ip;
+                                int? port = null;
+                                // For IPv4, split using ':' to separate the port if present.
+                                var parts = trimmed.Split(':');
+                                if (parts.Length > 1 && int.TryParse(parts[1], out int parsedPort))
                                 {
-                                    string ip = ipv6Match.Groups["ip"].Value;
-                                    blacklistIPs.Add(ip);
-                                    await ProcessMatch(ipv6Match, "ipv6", file, trimmed, defaultSourceType);
+                                    ip = parts[0];
+                                    port = parsedPort;
                                 }
+                                else
+                                {
+                                    ip = trimmed;
+                                }
+                                // Simple validation: ensure the address is a valid IPv4 address.
+                                if (!IPAddress.TryParse(ip, out _) || ip.Contains(":"))
+                                {
+                                    logCallback($"Invalid IPv4 address: {ip} in file {file}");
+                                    continue;
+                                }
+                                await ProcessIPLine(ip, port, "ipv4", file, trimmed, defaultSourceType);
+                            }
+                            else if (ipType == "ipv6")
+                            {
+                                // For IPv6, treat the entire line as the IP (no port parsing)
+                                string ip = trimmed;
+                                int? port = null;
+                                // Simple validation: ensure the address is a valid IPv6 address.
+                                if (!IPAddress.TryParse(ip, out _) || ip.Contains("."))
+                                {
+                                    logCallback($"Invalid IPv6 address: {ip} in file {file}");
+                                    continue;
+                                }
+                                await ProcessIPLine(ip, port, "ipv6", file, trimmed, defaultSourceType);
                             }
                         }
                     }
