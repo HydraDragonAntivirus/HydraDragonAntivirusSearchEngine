@@ -568,7 +568,7 @@
                                 Content="Browse"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnBrowsePhishing_Click"/>
+                                Click="BtnBrowsePhishingFile_Click"/>
                                     <Button x:Name="BtnAddPhishing"
                                 Content="Add"
                                 Width="80"
