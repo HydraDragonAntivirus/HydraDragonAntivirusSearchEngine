@@ -402,7 +402,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             catch (Exception ex)
             {
                 // Handle any exceptions that may occur during the scan
-                MessageBox.Show($"An error occurred: {ex.Message}");
+                MessageBox.Show($"An error occurred: {ex.Message} {ex.StackTrace}");
             }
         }
 
@@ -706,47 +706,51 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
 
             // Append the log entry to the realtime log file if enabled.
-            if (checkBoxRealTimeSave.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeFile.Text))
+            this.Dispatcher.Invoke(new Action(async() =>
             {
-                const int maxRetries = 3;
-                int attempt = 0;
-                bool success = false;
-
-                while (attempt < maxRetries && !success)
+                if (checkBoxRealTimeSave.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeFile.Text))
                 {
-                    try
+                    const int maxRetries = 3;
+                    int attempt = 0;
+                    bool success = false;
+
+                    while (attempt < maxRetries && !success)
                     {
-                        await File.AppendAllTextAsync(textBoxRealTimeFile.Text, logEntry + Environment.NewLine);
-                        success = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        attempt++;
-                        if (attempt >= maxRetries)
+                        try
                         {
-                            if (!realtimeLogErrorShown)
+                            await File.AppendAllTextAsync(textBoxRealTimeFile.Text, logEntry + Environment.NewLine);
+                            success = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            attempt++;
+                            if (attempt >= maxRetries)
                             {
-                                realtimeLogErrorShown = true;
-                                if (listBoxLog.Dispatcher.CheckAccess())
+                                if (!realtimeLogErrorShown)
                                 {
-                                    // We're on the UI thread
-                                    listBoxLog.Items.Add("Error saving realtime log: " + ex.Message);
-                                }
-                                else
-                                {
-                                    // We're not on the UI thread, so we need to invoke on the UI thread
-                                    listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add("Error saving realtime log: " + ex.Message)));
+                                    realtimeLogErrorShown = true;
+                                    if (listBoxLog.Dispatcher.CheckAccess())
+                                    {
+                                        // We're on the UI thread
+                                        listBoxLog.Items.Add("Error saving realtime log: " + ex.Message);
+                                    }
+                                    else
+                                    {
+                                        // We're not on the UI thread, so we need to invoke on the UI thread
+                                        listBoxLog.Dispatcher.Invoke(new Action(() => listBoxLog.Items.Add("Error saving realtime log: " + ex.Message)));
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            // Wait a short time before trying again.
-                            await Task.Delay(100);
+                            else
+                            {
+                                // Wait a short time before trying again.
+                                await Task.Delay(100);
+                            }
                         }
                     }
                 }
-            }
+            }));
+        
         }
 
         // Thread-safe progress updater.
@@ -786,7 +790,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (!realtimeBulkCsvErrorShown)
                     {
                         realtimeBulkCsvErrorShown = true;
-                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message, "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace, "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
