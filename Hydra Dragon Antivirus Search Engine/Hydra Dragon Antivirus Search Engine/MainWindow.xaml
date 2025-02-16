@@ -759,9 +759,7 @@
                       BorderThickness="0">
                             <ListView.View>
                                 <GridView>
-                                    <GridViewColumn Header="Time" Width="150"/>
-                                    <GridViewColumn Header="Level" Width="100"/>
-                                    <GridViewColumn Header="Message" Width="600"/>
+                                    <GridViewColumn Header="Message" Width="Auto"/>
                                 </GridView>
                             </ListView.View>
                         </ListView>
