@@ -574,7 +574,7 @@
                                 Width="80"
                                 Margin="5,0"
                                 Style="{DynamicResource AccentButtonStyle}"
-                                Click="BtnAddPhishing_Click"/>
+                                Click="BtnAddPhishingFile_Click"/>
                                     <Button x:Name="BtnDeletePhishing"
                                 Content="Remove"
                                 Width="80"
