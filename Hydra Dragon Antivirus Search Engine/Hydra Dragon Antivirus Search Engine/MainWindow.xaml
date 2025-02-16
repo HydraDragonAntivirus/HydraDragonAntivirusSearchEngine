@@ -505,7 +505,7 @@
                                 Content="Browse"
                                 Width="80"
                                 Margin="5,0"
-                                Click="BtnBrowseDDoS_Click"/>
+                                Click="BtnBrowseDDoSFile_Click"/>
                                     <Button x:Name="BtnAddDDoS"
                                 Content="Add"
                                 Width="80"
