@@ -366,11 +366,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AddIPv6ToListBox,
                 allowAutoVerdict);
 
-            // Start the scan asynchronously without blocking the UI thread
-            await Task.Run(async () =>
-            {
-                await scanner.StartScanAsync(cts.Token);
-            });
+            await scanner.StartScanAsync(cts.Token);
 
             // Validate main CSV limits.
             int totalLines = scanner.BulkCsvLines.Count;
