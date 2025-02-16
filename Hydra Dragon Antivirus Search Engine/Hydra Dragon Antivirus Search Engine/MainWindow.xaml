@@ -425,8 +425,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="200"/>
-                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                            <GridViewColumn Header="File Name" Width="440"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -488,8 +487,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="200"/>
-                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                            <GridViewColumn Header="File Name" Width="440"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -551,8 +549,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="200"/>
-                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                            <GridViewColumn Header="File Name" Width="440"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
@@ -614,8 +611,7 @@
                               BorderBrush="{DynamicResource SystemControlHighlightBaseLowBrush}">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="File Name" Width="200"/>
-                                            <GridViewColumn Header="Date Added" Width="120"/>
+                                            <GridViewColumn Header="File Name" Width="440"/>
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
