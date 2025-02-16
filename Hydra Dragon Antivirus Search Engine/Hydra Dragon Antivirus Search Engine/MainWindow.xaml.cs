@@ -1181,32 +1181,29 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     scanProgressCallback($"Current Loaded Definition File: {file}");
                     logCallback($"Loading file: {file}");
 
-                    using (var sr = new StreamReader(file))
+                    // Load all lines at once
+                    string[] lines = await File.ReadAllLinesAsync(file, token);
+                    foreach (var line in lines)
                     {
-                        string? line;
-                        while ((line = await sr.ReadLineAsync(token)) is not null)
+                        if (token.IsCancellationRequested)
+                            break;
+
+                        string trimmed = line.Trim();
+                        if (string.IsNullOrEmpty(trimmed))
+                            continue;
+
+                        string ip = trimmed;
+                        int? port = null;
+                        if (SelectedIPType.Equals("ipv4", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (token.IsCancellationRequested)
-                                break;
-
-                            string trimmed = line.Trim();
-                            if (string.IsNullOrEmpty(trimmed))
-                                continue;
-
-                            // For IPv4 files, split port if present; for IPv6, do not.
-                            string ip = trimmed;
-                            int? port = null;
-                            if (SelectedIPType.Equals("ipv4", StringComparison.OrdinalIgnoreCase))
+                            var parts = trimmed.Split(':');
+                            if (parts.Length > 1 && int.TryParse(parts[1], out int parsedPort))
                             {
-                                var parts = trimmed.Split(':');
-                                if (parts.Length > 1 && int.TryParse(parts[1], out int parsedPort))
-                                {
-                                    ip = parts[0];
-                                    port = parsedPort;
-                                }
+                                ip = parts[0];
+                                port = parsedPort;
                             }
-                            await ProcessIPLine(ip, port, SelectedIPType.ToLower(), file, trimmed, defaultSourceType);
                         }
+                        await ProcessIPLine(ip, port, SelectedIPType.ToLower(), file, trimmed, defaultSourceType);
                     }
                     logCallback($"Finished loading file: {file}");
                 }
