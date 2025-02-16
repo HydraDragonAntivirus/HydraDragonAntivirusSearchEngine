@@ -2,8 +2,8 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Net.Http;
 using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -35,7 +35,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private readonly List<string> WhiteListFilesIPv4 = new();
         private readonly List<string> WhiteListFilesIPv6 = new();
 
-        // Folder paths (we assume a common folder per category)
+        // Folder paths
         private string malwarePath = string.Empty;
         private string ddosPath = string.Empty;
         private string phishingPath = string.Empty;
@@ -197,7 +197,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     foreach (var file in settings.WhiteListFilesIPv6)
                         WhiteListFilesIPv6.Add(ConvertToAbsolutePath(file));
 
-                    // Update UI listboxes – assume your XAML now defines separate listboxes for each category.
+                    // Update UI listboxes – assume your XAML now defines separate listboxes.
                     listBoxMalwareIPv4.Items.Clear();
                     foreach (var item in malwareFilesIPv4)
                         listBoxMalwareIPv4.Items.Add(item);
@@ -353,7 +353,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AppendBulkCsvLineToFile,
                 AppendWhiteListCsvLineToFile,
                 commentTemplate,
-                UpdateCurrentFileMessage,  // scan progress callback now takes a string.
+                UpdateCurrentFileMessage,  // scan progress callback
                 scanKnownActive,
                 allowAutoVerdict,
                 "ipv4");
@@ -379,7 +379,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 AppendBulkCsvLineToFile,
                 AppendWhiteListCsvLineToFile,
                 commentTemplate,
-                UpdateCurrentFileMessage,  // scan progress callback now takes a string.
+                UpdateCurrentFileMessage,  // scan progress callback
                 scanKnownActive,
                 allowAutoVerdict,
                 "ipv6");
@@ -497,7 +497,263 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
         #endregion
 
-        // Similar regions should be created for DDoS, Phishing, and WhiteList IPv4/IPv6 handlers.
+        #region DDoS IPv4 List Handlers
+        private void BtnBrowseDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                DDoSFilesIPv4.Add(filePath);
+                listBoxDDoSIPv4.Items.Add(filePath);
+            }
+        }
+        private void BtnAddDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxDDoSIPv4Input.Text))
+            {
+                if (textBoxDDoSIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxDDoSIPv4.Items.Add(textBoxDDoSIPv4Input.Text);
+                    DDoSFilesIPv4.Add(textBoxDDoSIPv4Input.Text);
+                    textBoxDDoSIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeleteDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxDDoSIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxDDoSIPv4.SelectedIndex;
+                DDoSFilesIPv4.RemoveAt(index);
+                listBoxDDoSIPv4.Items.RemoveAt(index);
+            }
+        }
+        #endregion
+
+        #region DDoS IPv6 List Handlers
+        private void BtnBrowseDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                DDoSFilesIPv6.Add(filePath);
+                listBoxDDoSIPv6.Items.Add(filePath);
+            }
+        }
+        private void BtnAddDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxDDoSIPv6Input.Text))
+            {
+                if (textBoxDDoSIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxDDoSIPv6.Items.Add(textBoxDDoSIPv6Input.Text);
+                    DDoSFilesIPv6.Add(textBoxDDoSIPv6Input.Text);
+                    textBoxDDoSIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeleteDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxDDoSIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxDDoSIPv6.SelectedIndex;
+                DDoSFilesIPv6.RemoveAt(index);
+                listBoxDDoSIPv6.Items.RemoveAt(index);
+            }
+        }
+        #endregion
+
+        #region Phishing IPv4 List Handlers
+        private void BtnBrowsePhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                phishingFilesIPv4.Add(filePath);
+                listBoxPhishingIPv4.Items.Add(filePath);
+            }
+        }
+        private void BtnAddPhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxPhishingIPv4Input.Text))
+            {
+                if (textBoxPhishingIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxPhishingIPv4.Items.Add(textBoxPhishingIPv4Input.Text);
+                    phishingFilesIPv4.Add(textBoxPhishingIPv4Input.Text);
+                    textBoxPhishingIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeletePhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxPhishingIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxPhishingIPv4.SelectedIndex;
+                phishingFilesIPv4.RemoveAt(index);
+                listBoxPhishingIPv4.Items.RemoveAt(index);
+            }
+        }
+        #endregion
+
+        #region Phishing IPv6 List Handlers
+        private void BtnBrowsePhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                phishingFilesIPv6.Add(filePath);
+                listBoxPhishingIPv6.Items.Add(filePath);
+            }
+        }
+        private void BtnAddPhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxPhishingIPv6Input.Text))
+            {
+                if (textBoxPhishingIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxPhishingIPv6.Items.Add(textBoxPhishingIPv6Input.Text);
+                    phishingFilesIPv6.Add(textBoxPhishingIPv6Input.Text);
+                    textBoxPhishingIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeletePhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxPhishingIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxPhishingIPv6.SelectedIndex;
+                phishingFilesIPv6.RemoveAt(index);
+                listBoxPhishingIPv6.Items.RemoveAt(index);
+            }
+        }
+        #endregion
+
+        #region WhiteList IPv4 List Handlers
+        private void BtnBrowseWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                WhiteListFilesIPv4.Add(filePath);
+                listBoxWhiteListIPv4.Items.Add(filePath);
+            }
+        }
+        private void BtnAddWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxWhiteListIPv4Input.Text))
+            {
+                if (textBoxWhiteListIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxWhiteListIPv4.Items.Add(textBoxWhiteListIPv4Input.Text);
+                    WhiteListFilesIPv4.Add(textBoxWhiteListIPv4Input.Text);
+                    textBoxWhiteListIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeleteWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxWhiteListIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxWhiteListIPv4.SelectedIndex;
+                WhiteListFilesIPv4.RemoveAt(index);
+                listBoxWhiteListIPv4.Items.RemoveAt(index);
+            }
+        }
+        #endregion
+
+        #region WhiteList IPv6 List Handlers
+        private void BtnBrowseWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                WhiteListFilesIPv6.Add(filePath);
+                listBoxWhiteListIPv6.Items.Add(filePath);
+            }
+        }
+        private void BtnAddWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxWhiteListIPv6Input.Text))
+            {
+                if (textBoxWhiteListIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxWhiteListIPv6.Items.Add(textBoxWhiteListIPv6Input.Text);
+                    WhiteListFilesIPv6.Add(textBoxWhiteListIPv6Input.Text);
+                    textBoxWhiteListIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("File is not a txt file.");
+            }
+            else
+                MessageBox.Show("File does not exist.");
+        }
+        private void BtnDeleteWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxWhiteListIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxWhiteListIPv6.SelectedIndex;
+                WhiteListFilesIPv6.RemoveAt(index);
+                listBoxWhiteListIPv6.Items.RemoveAt(index);
+            }
+        }
+        #endregion
 
         #region UI Helper Methods
         private bool realtimeLogErrorShown = false;
@@ -1216,6 +1472,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     listBoxLog.Items.Add(entry);
                 }
             }
+        }
+
+        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            listBoxLog.Items.Clear();
         }
 
         // Event handler for BtnSaveLog Click
