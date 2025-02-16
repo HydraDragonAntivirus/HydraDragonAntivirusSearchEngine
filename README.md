@@ -10,3 +10,5 @@
 - Winball501 (main developer, C# developer, designer, converted Python to C# project)
 ## TODO
 - Add pause scan
+## Important Notice
+- You will need to look at the Logs tab to see the latest results.
