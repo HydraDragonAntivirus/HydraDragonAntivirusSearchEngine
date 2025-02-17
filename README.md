@@ -15,7 +15,7 @@ If you detect malware with your original IP, it's highly recommended to remove i
   
 ### **What this Tool Does**:
 - **Malicious IP Finder**: It helps identify potentially malicious or unknown IPs (both IPv4 and IPv6).
-- **Comodo Community Integration**: Specifically targets Comodo's firewall and website filtering, filling in gaps where unknown C2 servers might be missed.
+- **AbuseIPDB Integration**: Specifically targets AbuseIPDB's database to identify and report malicious IP addresses, filling in gaps where unknown C2 servers might be missed.
 - **Zero-Day Detection**: Searches for zero-day malicious IPs that may have slipped under the radar of traditional antivirus software.
   
 ### **What this Tool Does Not Do**:
@@ -93,6 +93,17 @@ Hydra Dragon Antivirus Search Engine uses **Benign Auto Verdicts** to classify I
 - **Real-time CSV generation**: Enable real-time logging of both **bulk** and **whitelist** entries to separate CSV files.
 - **Log Search**: Use the search functionality in the **Logs Tab** to filter through log entries.
 
+## Deep Recursive Scanning for Malicious IP Detection
+
+Hydra Dragon Antivirus Search Engine is built to perform **extensive deep scanning** in order to detect unknown **zero-day malicious IPs**. Unlike traditional antivirus tools, it doesn't simply scan static IP lists but dives deeper into the web by following links and analyzing **related websites**. The tool performs **recursive searches** with the ability to go multiple levels deep, systematically exploring websites linked to known sources to uncover hidden malicious IP addresses.
+
+- **Very Super Advanced Deep Depth Scanning**: The system utilizes a **depth-first search** strategy, exploring links on discovered websites to uncover more IPs at each level. For example, if a malicious IP is discovered on a website, the tool will follow links on that website to uncover even more IPs, continuing this process to an arbitrary level (the **max depth** can be configured).
+- **Increased Coverage**: This approach helps to detect **C2 (Command and Control) servers** and other malicious entities that might not be immediately visible but are **linked through multiple levels** of related websites.
+- **Recursive Discovery**: At each level of depth, the tool extracts new URLs, processes them, and uncovers new IP addresses, creating a **comprehensive relationship map** of potentially harmful IPs that may evade traditional detection methods.
+- **Depth Control**: You can configure how deep the scan goes, ensuring that the system can explore as many levels as required, offering a **thorough investigation of the internet's IP landscape**.
+
+The system ensures that even the most **obscure and hidden malicious IPs** are identified by traversing complex webs of related websites, providing **a deep dive into the internet's dark corners** where malicious activity might be taking place undetected.
+
 ---
 
 ## Credits
@@ -102,6 +113,7 @@ Hydra Dragon Antivirus Search Engine uses **Benign Auto Verdicts** to classify I
 
 ## TODO
 - Add the ability to **pause the scan** for more control during long-running processes.
+- Scan from different locations to collect more data
 
 ## License
 

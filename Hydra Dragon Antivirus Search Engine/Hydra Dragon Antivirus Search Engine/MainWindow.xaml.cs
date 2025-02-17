@@ -71,7 +71,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCategoryMalicious.Text = "20";
             textBoxCategoryPhishing.Text = "7";
             textBoxCategoryDDoS.Text = "18";
-            textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})";
+            textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})";
         }
 
         #region Event Handlers
@@ -1256,6 +1256,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 string newSourceType = seed.SourceType;
 
+                // Log the current depth level
+                logCallback($"Processing IP: {ip} at Depth: {seed.Depth} from URL: {discoveredUrl}");
+
                 // Check if allowAutoVerdict is true
                 if (allowAutoVerdict)
                 {
@@ -1331,8 +1334,65 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     await realTimeBulkCsvCallback(csvLine);
                 }
 
+                // Discover new IPs from the HTML content of the discovered URL
+                try
+                {
+                    var content = await DownloadHtmlContentAsync(discoveredUrl, token);
+
+                    // Extract IPv4 and IPv6 IPs from the content
+                    var newIPs = ExtractIPsFromHtml(content);
+                    foreach (var newIp in newIPs)
+                    {
+                        // Enqueue each new discovered IP for processing
+                        EnqueueSeed(new Seed(newIp, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logCallback($"Error fetching content from {discoveredUrl}: {ex.Message}");
+                }
+
                 // Enqueue the seed for further processing if not auto-whitelisted
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+            }
+
+            private async Task<string> DownloadHtmlContentAsync(string url, CancellationToken token)
+            {
+                using (var client = new HttpClient())
+                {
+                    client.Timeout = TimeSpan.FromSeconds(10);
+                    var response = await client.GetAsync(url, token);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw new Exception($"Failed to fetch content from {url}");
+                    }
+                    return await response.Content.ReadAsStringAsync();
+                }
+            }
+
+            private List<string> ExtractIPsFromHtml(string htmlContent)
+            {
+                var ips = new List<string>();
+
+                // Regex patterns for IPv4 and IPv6
+                string ipv4Pattern = @"\b(?:\d{1,3}\.){3}\d{1,3}\b";
+                string ipv6Pattern = @"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b";
+
+                // Find all IPs in the HTML content
+                var ipv4Matches = Regex.Matches(htmlContent, ipv4Pattern);
+                var ipv6Matches = Regex.Matches(htmlContent, ipv6Pattern);
+
+                // Add matched IPs to the list
+                foreach (Match match in ipv4Matches)
+                {
+                    ips.Add(match.Value);
+                }
+                foreach (Match match in ipv6Matches)
+                {
+                    ips.Add(match.Value);
+                }
+
+                return ips;
             }
 
             private void EnqueueSeed(Seed seed)
