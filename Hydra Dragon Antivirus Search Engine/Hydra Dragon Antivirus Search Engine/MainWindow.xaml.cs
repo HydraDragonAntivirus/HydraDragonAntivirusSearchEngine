@@ -312,12 +312,42 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
+        private void InitializeRealtimeCsvFiles()
+        {
+            // Initialize Bulk CSV file if enabled.
+            if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
+            {
+                string? bulkDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text);
+                if (!string.IsNullOrEmpty(bulkDirectory) && !Directory.Exists(bulkDirectory))
+                {
+                    Directory.CreateDirectory(bulkDirectory);
+                }
+                // Create or clear the file (optionally, add header information)
+                File.WriteAllText(textBoxRealTimeCsvBulkFile.Text, string.Empty);
+            }
+
+            // Initialize WhiteList CSV file if enabled.
+            if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
+            {
+                string? whiteListDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text);
+                if (!string.IsNullOrEmpty(whiteListDirectory) && !Directory.Exists(whiteListDirectory))
+                {
+                    Directory.CreateDirectory(whiteListDirectory);
+                }
+                File.WriteAllText(textBoxRealTimeCsvWhiteListFile.Text, string.Empty);
+            }
+        }
+
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
-            if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth)) maxDepth = 10;
-            if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads)) maxThreads = 100;
-            if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines)) csvMaxLines = 10000;
-            if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize)) csvMaxSize = 2097152;
+            if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
+                maxDepth = 10;
+            if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads))
+                maxThreads = 100;
+            if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines))
+                csvMaxLines = 10000;
+            if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize))
+                csvMaxSize = 2097152;
 
             string outputFileName = textBoxOutputFile.Text;
             string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
@@ -328,6 +358,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
             bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
+
+            // Initialize realtime CSV files (create/clear them) if enabled.
+            InitializeRealtimeCsvFiles();
+            cts = new CancellationTokenSource();
 
             // Scan IPv4:
             scanner = new Scanner(
@@ -353,7 +387,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 scanKnownActive,
                 allowAutoVerdict,
                 "ipv4");
-            await Task.Run(async () => { await scanner.StartScanAsync(cts!.Token); });
+            await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); });
 
             // Scan IPv6:
             scanner = new Scanner(
@@ -379,9 +413,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 scanKnownActive,
                 allowAutoVerdict,
                 "ipv6");
-            await Task.Run(async () => { await scanner.StartScanAsync(cts!.Token); });
+            await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); }); int totalLines = scanner.BulkCsvLines.Count;
 
-            int totalLines = scanner.BulkCsvLines.Count;
             string csvContent = string.Join("\n", scanner.BulkCsvLines);
             int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
 
@@ -399,12 +432,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnStopScan_Click(object sender, RoutedEventArgs e)
         {
-            if (cts != null)
+            if (cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
                 UpdateLog("Scan cancellation requested.");
             }
         }
+
         #endregion
 
         #region Malware IPv4 List Handlers
@@ -757,15 +791,31 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         {
             string logEntry = $"{DateTime.Now}: {message}";
             fullLogList.Add(logEntry);
-            listBoxLog.Dispatcher.Invoke(() => listBoxLog.Items.Add(logEntry));
+
+            // Update the UI only if the dispatcher hasn't begun shutting down.
+            try
+            {
+                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                {
+                    await listBoxLog.Dispatcher.InvokeAsync(() => listBoxLog.Items.Add(logEntry));
+                }
+            }
+            catch { /* Ignore exceptions if shutting down */ }
 
             bool isRealTimeSaveEnabled = false;
             string realTimeFilePath = "";
-            await listBoxLog.Dispatcher.InvokeAsync(() =>
+            try
             {
-                isRealTimeSaveEnabled = checkBoxRealTimeSave.IsChecked == true;
-                realTimeFilePath = textBoxRealTimeFile.Text;
-            });
+                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                {
+                    await listBoxLog.Dispatcher.InvokeAsync(() =>
+                    {
+                        isRealTimeSaveEnabled = checkBoxRealTimeSave.IsChecked == true;
+                        realTimeFilePath = textBoxRealTimeFile.Text;
+                    });
+                }
+            }
+            catch { }
 
             if (isRealTimeSaveEnabled && !string.IsNullOrEmpty(realTimeFilePath))
             {
@@ -779,52 +829,63 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         await File.AppendAllTextAsync(realTimeFilePath, logEntry + Environment.NewLine);
                         success = true;
                     }
+                    catch (TaskCanceledException)
+                    {
+                        try
+                        {
+                            if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                            {
+                                await listBoxLog.Dispatcher.InvokeAsync(() =>
+                                    listBoxLog.Items.Add("Realtime logging operation canceled."));
+                            }
+                        }
+                        catch { }
+                        break;
+                    }
                     catch (Exception ex)
                     {
                         attempt++;
                         if (attempt >= maxRetries)
                         {
-                            if (!realtimeLogErrorShown)
+                            try
                             {
-                                realtimeLogErrorShown = true;
-                                listBoxLog.Dispatcher.Invoke(() =>
-                                    listBoxLog.Items.Add("Error saving realtime log: " + ex.Message));
+                                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                                {
+                                    await listBoxLog.Dispatcher.InvokeAsync(() =>
+                                        listBoxLog.Items.Add("Error saving realtime log: " + ex.Message));
+                                }
                             }
+                            catch { }
                         }
                         else
                         {
-                            await Task.Delay(100); // Wait before retrying
+                            await Task.Delay(100);
                         }
                     }
                 }
             }
         }
 
-        private void UpdateProgress(int current, int total)
+        private async void UpdateProgress(int current, int total)
         {
-            if (progressBarScan.Dispatcher.CheckAccess())
+            await progressBarScan.Dispatcher.InvokeAsync(() =>
             {
                 progressBarScan.Maximum = total;
                 progressBarScan.Value = current;
                 textBlockProgress.Text = $"{current} / {total}";
-            }
-            else
-            {
-                progressBarScan.Dispatcher.Invoke(new Action(() =>
-                {
-                    progressBarScan.Maximum = total;
-                    progressBarScan.Value = current;
-                    textBlockProgress.Text = $"{current} / {total}";
-                }));
-            }
+            });
         }
 
         private bool realtimeBulkCsvErrorShown = false;
         private void AppendBulkCsvLineToFile(string csvLine)
         {
-            // Make sure checkBoxRealTimeCsvBulk and textBoxRealTimeCsvBulkFile exist on your form.
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
+                string? directory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
                 try
                 {
                     File.AppendAllText(textBoxRealTimeCsvBulkFile.Text, csvLine + Environment.NewLine);
@@ -834,7 +895,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (!realtimeBulkCsvErrorShown)
                     {
                         realtimeBulkCsvErrorShown = true;
-                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace, "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace,
+                            "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
                 }
             }
@@ -845,12 +907,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         {
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
+                string? directory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text);
+                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
                 lock (WhiteListCsvLock)
                 {
                     File.AppendAllText(textBoxRealTimeCsvWhiteListFile.Text, csvLine + Environment.NewLine);
                 }
             }
         }
+
         #endregion
 
         #region Scanner and Helper Classes
@@ -1289,21 +1357,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 token.ThrowIfCancellationRequested();
 
-                if (!scanKnownActive &&
-                    (seed.SourceType.Equals("malicious", StringComparison.OrdinalIgnoreCase) ||
-                     seed.SourceType.Equals("phishing", StringComparison.OrdinalIgnoreCase) ||
-                     seed.SourceType.Equals("DDoS", StringComparison.OrdinalIgnoreCase)))
-                {
-                    return;
-                }
-
                 if (processedIPs.ContainsKey(ip))
                     return;
 
                 string newSourceType = seed.SourceType;
                 if (scanKnownActive)
                 {
-                    bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0);
+                    bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     if (!active)
                     {
                         if (allowAutoVerdict)
@@ -1322,6 +1382,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         }
                     }
                 }
+                // Always enqueue the discovered IP for further processing.
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
@@ -1368,13 +1429,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 return results;
             }
 
-            public static async Task<bool> IsActiveAndStaticAsync(string ip, int? port)
+            public static async Task<bool> IsActiveAndStaticAsync(string ip, int? port, CancellationToken token)
             {
                 string url = $"http://{ip}" + (port.HasValue ? $":{port.Value}" : "");
                 try
                 {
                     using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                    HttpResponseMessage response = await httpClient.GetAsync(url);
+                    HttpResponseMessage response = await httpClient.GetAsync(url, token);
                     if (!response.IsSuccessStatusCode)
                         return false;
                     Uri? finalUri = response.RequestMessage?.RequestUri;
@@ -1392,15 +1453,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                     return false;
                 }
+                catch (OperationCanceledException)
+                {
+                    throw; // propagate cancellation
+                }
                 catch (Exception ex)
                 {
                     Console.Error.WriteLine($"Active/static check failed for {url}: {ex.Message}");
                     return false;
                 }
             }
-        }
-
-        public record Seed(
+         }
+            public record Seed(
             string IP,
             string SourceType,
             string Version,
