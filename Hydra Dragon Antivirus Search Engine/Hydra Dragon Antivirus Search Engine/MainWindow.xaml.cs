@@ -1250,84 +1250,152 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth, file, trimmed), ip, port, version, trimmed, token);
             }
 
+            // Helper method to convert a URL into an absolute URL with scheme.
+            private static string ConvertToUrl(string url, string baseUrl = "")
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                    return string.Empty;
+
+                // If the URL already has "http://" or "https://", return it.
+                if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                    url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+                {
+                    return url;
+                }
+
+                // Handle protocol-relative URLs (e.g. //example.com)
+                if (url.StartsWith("//"))
+                {
+                    return "http:" + url;
+                }
+
+                // If a base URL is provided, try to combine the relative URL with it.
+                if (!string.IsNullOrEmpty(baseUrl) && Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? baseUri))
+                {
+                    if (Uri.TryCreate(baseUri, url, out Uri? combinedUri))
+                    {
+                        return combinedUri.ToString();
+                    }
+                }
+
+                // Fallback: prepend "http://"
+                return "http://" + url;
+            }
+
+            // Helper method to extract and normalize URLs from HTML content.
+            private static List<string> ExtractURLsFromHtml(string htmlContent, string baseUrl = "")
+            {
+                var urls = new List<string>();
+                if (string.IsNullOrEmpty(htmlContent))
+                    return urls;
+
+                // Use a regex to extract href values from anchor tags.
+                var regex = new Regex(@"href\s*=\s*[""'](?<url>[^""']+)[""']", RegexOptions.IgnoreCase);
+                var matches = regex.Matches(htmlContent);
+                foreach (Match match in matches)
+                {
+                    string extractedUrl = match.Groups["url"].Value.Trim();
+                    if (string.IsNullOrEmpty(extractedUrl))
+                        continue;
+
+                    // Convert to an absolute URL (adding scheme or combining with baseUrl as needed)
+                    extractedUrl = ConvertToUrl(extractedUrl, baseUrl);
+
+                    // Validate that the URL is well-formed.
+                    if (Uri.TryCreate(extractedUrl, UriKind.Absolute, out Uri? validatedUri))
+                    {
+                        urls.Add(validatedUri.ToString());
+                    }
+                }
+                return urls;
+            }
+
+            // Updated ProcessIPAsync method that uses the above helper methods.
             private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
-                if (processedIPs.ContainsKey(ip))
+
+                // Convert discoveredUrl into a proper absolute URL using the original source URL as base.
+                discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
+
+                // Prevent duplicate processing.
+                if (processedIPs.ContainsKey(discoveredUrl))
                     return;
 
                 string newSourceType = seed.SourceType;
 
-                // Log the current depth level
-                logCallback($"Processing IP: {ip} at Depth: {seed.Depth} from URL: {discoveredUrl}");
+                logCallback($"Processing URL: {discoveredUrl} (IP: {ip}) at Depth: {seed.Depth} from Source URL: {seed.OriginalSourceUrl}");
 
-                // Check if allowAutoVerdict is true
+                // If the source URL is whitelisted and the discovered URL is the same, do not save it.
+                if (newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) && discoveredUrl == seed.OriginalSourceUrl)
+                {
+                    logCallback($"Skipping {discoveredUrl} - Already Whitelisted.");
+                    return;
+                }
+
+                // Check if auto-verdict logic applies.
                 if (allowAutoVerdict)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     if (!active)
                     {
-                        // Benign Auto Verdict 3: Dead IP (inactive or non-static)
+                        // Benign Auto Verdict 3: Dead URL (inactive or non-static)
                         newSourceType = "benign (auto verdict 3)";
-                        string reportDate = DateTime.UtcNow.ToString("o");
-                        string comment = $"Auto-WhiteListed dead IP from {seed.OriginalSourceUrl}";
-                        string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                        string csvLine = $"{discoveredUrl},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed dead URL from {seed.OriginalSourceUrl}\"";
 
                         lock (WhiteListCsvLines)
                         {
-                            // Add the line to the whitelist CSV if within size limits
                             if (WhiteListCsvLines.Count < csvMaxLines + 1)
                                 WhiteListCsvLines.Add(csvLine);
                         }
 
                         await realTimeWhiteListCsvCallback(csvLine);
-                        return; // Skip adding this IP to the bulk CSV as it's whitelisted
+                        return;
                     }
                     else
                     {
-                        // Benign Auto Verdict 2: Active and Static IP (related to a benign URL)
+                        // Benign Auto Verdict 2: Active and Static URL.
                         newSourceType = "benign (auto verdict 2)";
-                        string reportDate = DateTime.UtcNow.ToString("o");
-                        string comment = $"Active and static IP from {seed.OriginalSourceUrl} marked as benign";
-                        string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                        string csvLine = $"{discoveredUrl},\"WhiteList\",{DateTime.UtcNow:O},\"Active and static URL from {seed.OriginalSourceUrl} marked as benign\"";
 
                         lock (WhiteListCsvLines)
                         {
-                            // Add the line to the whitelist CSV if within size limits
                             if (WhiteListCsvLines.Count < csvMaxLines + 1)
                                 WhiteListCsvLines.Add(csvLine);
                         }
 
                         await realTimeWhiteListCsvCallback(csvLine);
-                        return; // Skip adding this IP to the bulk CSV as it's whitelisted
+                        return;
                     }
                 }
 
-                // Benign Auto Verdict 1: For malicious IPs that are no longer active/static
+                // Benign Auto Verdict 1: For malicious URLs that are no longer active/static.
                 if (seed.SourceType == "malicious" || seed.SourceType == "phishing" || seed.SourceType == "DDoS")
                 {
                     newSourceType = "benign (auto verdict 1)";
-                    string reportDate = DateTime.UtcNow.ToString("o");
-                    string comment = $"Malicious IP {ip} is no longer active/static, marked as benign";
-                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                    string csvLine = $"{discoveredUrl},\"WhiteList\",{DateTime.UtcNow:O},\"Malicious URL {discoveredUrl} is no longer active/static, marked as benign\"";
 
                     lock (WhiteListCsvLines)
                     {
-                        // Add the line to the whitelist CSV if within size limits
                         if (WhiteListCsvLines.Count < csvMaxLines + 1)
                             WhiteListCsvLines.Add(csvLine);
                     }
 
                     await realTimeWhiteListCsvCallback(csvLine);
-                    return; // Skip adding this IP to the bulk CSV as it's whitelisted
+                    return;
                 }
 
-                // Only add to the Bulk CSV if it's not in the whitelist
-                if (newSourceType != "whiteList")
+                // If scanKnownActive is disabled and discovered URL matches the source, do not save.
+                if (!scanKnownActive && discoveredUrl == seed.OriginalSourceUrl)
                 {
-                    string reportDate = DateTime.UtcNow.ToString("o");
-                    string comment = $"IP processed from {seed.OriginalSourceUrl}";
-                    string csvLine = $"{ip},\"{newSourceType}\",{reportDate},\"{EscapeCsvField(comment)}\"";
+                    logCallback($"Skipping {discoveredUrl} - scanKnownActive disabled and same as source.");
+                    return;
+                }
+
+                // Only add to the Bulk CSV if it's not whitelisted.
+                if (!newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
+                {
+                    string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"URL processed from {seed.OriginalSourceUrl}\"";
 
                     lock (bulkCsvLock)
                     {
@@ -1336,17 +1404,23 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     await realTimeBulkCsvCallback(csvLine);
                 }
 
-                // Discover new IPs from the HTML content of the discovered URL
+                // Discover new URLs from the HTML content of the discovered URL.
                 try
                 {
                     var content = await DownloadHtmlContentAsync(discoveredUrl, token);
+                    // Pass discoveredUrl as the base URL for relative links.
+                    var newURLs = ExtractURLsFromHtml(content, discoveredUrl);
 
-                    // Extract IPv4 and IPv6 IPs from the content
-                    var newIPs = ExtractIPsFromHtml(content);
-                    foreach (var newIp in newIPs)
+                    foreach (var newUrl in newURLs)
                     {
-                        // Enqueue each new discovered IP for processing
-                        EnqueueSeed(new Seed(newIp, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+                        // Ensure the new URL does not match the source unless scanKnownActive is enabled.
+                        if (!scanKnownActive && newUrl == seed.OriginalSourceUrl)
+                        {
+                            logCallback($"Skipping discovered URL {newUrl} - Matches source and scanKnownActive is disabled.");
+                            continue;
+                        }
+
+                        EnqueueSeed(new Seed(ip, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl));
                     }
                 }
                 catch (Exception ex)
@@ -1354,7 +1428,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     logCallback($"Error fetching content from {discoveredUrl}: {ex.Message}");
                 }
 
-                // Enqueue the seed for further processing if not auto-whitelisted
+                // Enqueue the seed for further processing if not auto-whitelisted.
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
@@ -1393,6 +1467,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 return ips;
             }
+
             private void EnqueueSeed(Seed seed)
             {
                 if (processedIPs.TryAdd(seed.IP, true))
