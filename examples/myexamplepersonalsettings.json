@@ -18,6 +18,7 @@
   "RealTimeSave": true,
   "RealTimeFile": "..\\..\\..\\..\\..\\output\\log.txt",
   "ScanKnownActive": false,
+  "AllowAutoVerdict": true,
   "MalwareFiles": [],
   "DDoSFiles": [],
   "PhishingFiles": [],
@@ -26,8 +27,6 @@
   "DDoSPath": "..\\..\\..\\..\\..\\website",
   "PhishingPath": "..\\..\\..\\..\\..\\website",
   "WhiteListPath": "..\\..\\..\\..\\..\\website",
-  "IPv4Files": [],
-  "IPv6Files": [],
   "MalwareFilesIPv4": [
     "..\\..\\..\\..\\..\\website\\IPv4Malware.txt"
   ],

@@ -932,12 +932,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region Scanner and Helper Classes
 
-        public class IpFileSetting
-        {
-            public string FileName { get; set; } = string.Empty;
-            public bool IsChecked { get; set; }
-        }
-
         public class AppSettings
         {
             public int MaxDepth { get; set; }
@@ -967,8 +961,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public string WhiteListPath { get; set; } = string.Empty;
             public string RealTimeCsvBulkPath { get; set; } = string.Empty;
             public string RealTimeCsvWhiteListPath { get; set; } = string.Empty;
-            public List<IpFileSetting> IPv4Files { get; set; } = new();
-            public List<IpFileSetting> IPv6Files { get; set; } = new();
+
             public List<string> MalwareFilesIPv4 { get; set; } = new();
             public List<string> MalwareFilesIPv6 { get; set; } = new();
             public List<string> DDoSFilesIPv4 { get; set; } = new();
@@ -1040,7 +1033,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string commentTemplate,
                 Action<string> scanProgressCallback,
                 bool scanKnownActive = false,
-                bool allowAutoVerdict = false,
+                bool allowAutoVerdict = true,
                 string selectedIPType = "ipv4")
             {
                 this.malwareFiles = malwareFiles;
