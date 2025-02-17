@@ -1191,7 +1191,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         .Replace("{ip}", seed.IP)
                         .Replace("{source_url}", seed.OriginalSourceUrl)
                         .Replace("{discovered_url}", seed.DiscoveredUrl)
-                        .Replace("{verdict}", seed.SourceType);
+                        .Replace("{verdict}", seed.SourceType)
+                        .Replace("{depth}", seed.Depth.ToString());
 
                     if (comment.Length > 1024)
                         comment = comment[..1024];
@@ -1527,7 +1528,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     Directory.CreateDirectory(directory);
                 }
 
-                await fileLock.WaitAsync(); // Ensure only one thread writes at a time
+                await fileLock.WaitAsync();
 
                 try
                 {
