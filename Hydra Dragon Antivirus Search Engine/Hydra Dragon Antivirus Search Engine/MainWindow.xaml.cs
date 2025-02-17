@@ -1357,21 +1357,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
-            private async Task<string> DownloadHtmlContentAsync(string url, CancellationToken token)
+            private static async Task<string> DownloadHtmlContentAsync(string url, CancellationToken token)
             {
-                using (var client = new HttpClient())
-                {
-                    client.Timeout = TimeSpan.FromSeconds(10);
-                    var response = await client.GetAsync(url, token);
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        throw new Exception($"Failed to fetch content from {url}");
-                    }
-                    return await response.Content.ReadAsStringAsync();
-                }
+                using var client = new HttpClient();
+                client.Timeout = TimeSpan.FromSeconds(10);
+
+                var response = await client.GetAsync(url, token);
+                response.EnsureSuccessStatusCode(); // Throws if status is not success
+
+                return await response.Content.ReadAsStringAsync(CancellationToken.None);
             }
 
-            private List<string> ExtractIPsFromHtml(string htmlContent)
+            private static List<string> ExtractIPsFromHtml(string htmlContent)
             {
                 var ips = new List<string>();
 
@@ -1395,7 +1392,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 return ips;
             }
-
             private void EnqueueSeed(Seed seed)
             {
                 if (processedIPs.TryAdd(seed.IP, true))
@@ -1535,11 +1531,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 try
                 {
-                    using (var stream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.Read))
-                    using (var writer = new StreamWriter(stream, Encoding.UTF8))
-                    {
-                        await writer.WriteLineAsync(csvLine);
-                    }
+                    await File.AppendAllTextAsync(fileName, csvLine + Environment.NewLine, Encoding.UTF8);
                 }
                 catch (IOException ex)
                 {
