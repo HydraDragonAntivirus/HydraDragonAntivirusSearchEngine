@@ -1125,47 +1125,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            private async Task ProcessIPLine(string ip, int? port, string version, string file, string trimmed, string defaultSourceType)
-            {
-                if (!processedIPs.TryAdd(ip, true))
-                    return;
-
-                bool isWhiteListed = WhiteListedIPs.Contains(ip);
-                if (isWhiteListed)
-                {
-                    string reportDate = DateTime.UtcNow.ToString("o");
-                    string comment = $"WhiteList from file: {file}";
-                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    lock (WhiteListCsvLines)
-                    {
-                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                            WhiteListCsvLines.Add(csvLine);
-                    }
-                    realTimeWhiteListCsvCallback?.Invoke(csvLine);
-                }
-                else
-                {
-                    string discoveredUrl;
-                    if (!scanKnownActive)
-                    {
-                        discoveredUrl = trimmed + "_discovered";
-                        while (malwareFiles.Contains(discoveredUrl) ||
-                               DDoSFiles.Contains(discoveredUrl) ||
-                               phishingFiles.Contains(discoveredUrl) ||
-                               WhiteListFiles.Contains(discoveredUrl))
-                        {
-                            discoveredUrl += "_x";
-                        }
-                    }
-                    else
-                    {
-                        discoveredUrl = trimmed;
-                    }
-                    seedQueue.Enqueue(new Seed(ip, defaultSourceType, version, port, 1, trimmed, discoveredUrl));
-                }
-                await Task.CompletedTask;
-            }
-
             private async Task LoadSeedsFromFileListAsync(List<string> fileList, string defaultSourceType, CancellationToken token)
             {
                 foreach (var file in fileList.Where(file => IOPath.GetExtension(file)
@@ -1199,7 +1158,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                                 port = parsedPort;
                             }
                         }
-                        await ProcessIPLine(ip, port, SelectedIPType.ToLower(), file, trimmed, defaultSourceType);
+                        // Directly enqueue the seed without processing checks
+                        seedQueue.Enqueue(new Seed(ip, defaultSourceType, SelectedIPType.ToLower(), port, 1, trimmed, trimmed));
                     }
                     logCallback($"Finished loading file: {file}");
                 }
