@@ -47,8 +47,23 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // A full log list to support search and saving.
         private readonly List<string> fullLogList = new();
 
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            // Cancel any ongoing scan operations.
+            if (cts != null && !cts.IsCancellationRequested)
+            {
+                cts.Cancel();
+            }
+
+            // If you're using a log flush timer, stop and dispose it.
+            StopLogFlusher();
+
+            base.OnClosing(e);
+        }
+
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            StartLogFlusher();
             // Set default settings – these values are user-configurable in the UI.
             textBoxMaxDepth.Text = "10";
             textBoxMaxThreads.Text = "100";
@@ -64,6 +79,38 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         }
 
         #region Event Handlers (as referenced in Designer)
+
+        private readonly ConcurrentQueue<string> logQueue = new();
+        // Mark logFlushTimer as nullable because it’s initialized later.
+        private System.Timers.Timer? logFlushTimer;
+
+        private void StartLogFlusher()
+        {
+            logFlushTimer = new System.Timers.Timer(300); // flush every 300ms
+            logFlushTimer.Elapsed += (s, e) =>
+            {
+                if (!listBoxLog.Dispatcher.HasShutdownStarted)
+                {
+                    while (logQueue.TryDequeue(out string? log))
+                    {
+                        listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
+                        {
+                            listBoxLog.Items.Add(log);
+                        }));
+                    }
+                }
+            };
+            logFlushTimer.Start();
+        }
+
+        private void StopLogFlusher()
+        {
+            if (logFlushTimer != null)
+            {
+                logFlushTimer.Stop();
+                logFlushTimer.Dispose();
+            }
+        }
 
         private static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
 
@@ -424,8 +471,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
             else
             {
-                File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
+                await Task.Run(() =>
+                {
+                    File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
+                    File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
+                });
                 MessageBox.Show("Scan completed and CSV files generated successfully.");
             }
         }
@@ -786,27 +836,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #endregion
 
         #region UI Helper Methods
-        private bool realtimeLogErrorShown = false;
         private async void UpdateLog(string message)
         {
             string logEntry = $"{DateTime.Now}: {message}";
             fullLogList.Add(logEntry);
+            logQueue.Enqueue(logEntry);
 
-            // Update the UI only if the dispatcher hasn't begun shutting down.
-            try
-            {
-                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
-                {
-                    await listBoxLog.Dispatcher.InvokeAsync(() => listBoxLog.Items.Add(logEntry));
-                }
-            }
-            catch { /* Ignore exceptions if shutting down */ }
-
+            // Realtime file logging remains the same (you might also consider throttling that)
             bool isRealTimeSaveEnabled = false;
             string realTimeFilePath = "";
             try
             {
-                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                if (!listBoxLog.Dispatcher.HasShutdownStarted)
                 {
                     await listBoxLog.Dispatcher.InvokeAsync(() =>
                     {
@@ -831,15 +872,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                     catch (TaskCanceledException)
                     {
-                        try
-                        {
-                            if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
-                            {
-                                await listBoxLog.Dispatcher.InvokeAsync(() =>
-                                    listBoxLog.Items.Add("Realtime logging operation canceled."));
-                            }
-                        }
-                        catch { }
                         break;
                     }
                     catch (Exception ex)
@@ -849,10 +881,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         {
                             try
                             {
-                                if (!listBoxLog.Dispatcher.HasShutdownStarted && !listBoxLog.Dispatcher.HasShutdownFinished)
+                                if (!listBoxLog.Dispatcher.HasShutdownStarted)
                                 {
                                     await listBoxLog.Dispatcher.InvokeAsync(() =>
-                                        listBoxLog.Items.Add("Error saving realtime log: " + ex.Message));
+                                        logQueue.Enqueue("Error saving realtime log: " + ex.Message));
                                 }
                             }
                             catch { }
