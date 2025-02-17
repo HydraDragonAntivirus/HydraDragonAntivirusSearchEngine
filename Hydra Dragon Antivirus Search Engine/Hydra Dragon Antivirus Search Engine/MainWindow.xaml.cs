@@ -387,11 +387,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
-            // If not currently scanning, start the scan.
             if (!isScanning)
             {
                 isScanning = true;
-                BtnStartScan.Content = "Stop Scan"; // Change button text to indicate stop function.
+                BtnStartScan.Content = "Stop Scan";
                 try
                 {
                     if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
@@ -471,20 +470,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                     await scanner.StartScanAsync(cts.Token);
 
-                    int totalLines = scanner.BulkCsvLines.Count;
-                    string csvContent = string.Join("\n", scanner.BulkCsvLines);
-                    int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
-
-                    if (totalLines > csvMaxLines + 1)
-                        MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
-                    else if (csvSizeInBytes > csvMaxSize)
-                        MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
+                    // Finalize CSV output using Scanner's settings.
+                    bool csvOk = await scanner.FinalizeCsvFilesAsync();
+                    if (!csvOk)
+                        MessageBox.Show("CSV output exceeds the defined limits.");
                     else
-                    {
-                        await File.WriteAllLinesAsync(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                        await File.WriteAllLinesAsync(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
                         MessageBox.Show("Scan completed and CSV files generated successfully.");
-                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -497,12 +488,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 finally
                 {
                     isScanning = false;
-                    BtnStartScan.Content = "Start Scan"; // Revert button text.
+                    BtnStartScan.Content = "Start Scan";
                 }
             }
             else
             {
-                // If already scanning, cancel the scan.
                 if (cts != null && !cts.IsCancellationRequested)
                 {
                     cts.Cancel();
@@ -1005,12 +995,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly ConcurrentQueue<Seed> seedQueue = new();
             private readonly ConcurrentDictionary<string, bool> processedIPs = new();
             private readonly HashSet<string> WhiteListedIPs = new(StringComparer.OrdinalIgnoreCase);
-            private readonly HashSet<string> blacklistIPs = new(StringComparer.OrdinalIgnoreCase);
             int totalSeeds = 0;
             int processedCount = 0;
             private readonly HttpClient httpClient = new();
             private readonly bool scanKnownActive;
             private readonly bool allowAutoVerdict;
+
+            // Lock for thread-safe updates to BulkCsvLines.
+            private readonly object bulkCsvLock = new();
 
             public Scanner(
                 List<string> malwareFiles,
@@ -1060,101 +1052,66 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.SelectedIPType = selectedIPType;
             }
 
-            private async Task ProcessWhiteListFileAsync(string file, CancellationToken token)
+            public async Task<bool> FinalizeCsvFilesAsync()
             {
-                List<string> WhiteListSites = new();
-                using (var reader = new StreamReader(file))
+                int totalLines = BulkCsvLines.Count;
+                string csvContent = string.Join("\n", BulkCsvLines);
+                int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
+
+                if (totalLines > csvMaxLines + 1)
                 {
-                    string? line;
-                    while ((line = await reader.ReadLineAsync(token)) is not null)
-                    {
-                        token.ThrowIfCancellationRequested();
-                        string trimmed = line.Trim();
-                        if (string.IsNullOrEmpty(trimmed))
-                            continue;
-                        if (IPAddress.TryParse(trimmed, out _))
-                        {
-                            lock (WhiteListedIPs)
-                            {
-                                WhiteListedIPs.Add(trimmed);
-                            }
-                        }
-                        else
-                        {
-                            WhiteListSites.Add(trimmed);
-                        }
-                    }
+                    logCallback($"CSV output exceeds the maximum allowed number of lines ({csvMaxLines}).");
+                    return false;
                 }
-                var tasks = new List<Task>();
-                using var semaphore = new SemaphoreSlim(maxThreads);
-                foreach (var url in WhiteListSites)
+                else if (csvSizeInBytes > csvMaxSize)
                 {
-                    token.ThrowIfCancellationRequested();
-                    string actualUrl = Uri.IsWellFormedUriString(url, UriKind.Absolute) ? url : "http://" + url;
-                    await semaphore.WaitAsync(token);
-                    tasks.Add(Task.Run(async () =>
+                    logCallback($"CSV output exceeds the maximum allowed file size ({csvMaxSize} bytes).");
+                    return false;
+                }
+                else
+                {
+                    await File.WriteAllLinesAsync(outputFileName, BulkCsvLines, Encoding.UTF8);
+                    await File.WriteAllLinesAsync(WhiteListOutputFileName, WhiteListCsvLines, Encoding.UTF8);
+                    logCallback("CSV files generated successfully.");
+                    return true;
+                }
+            }
+
+            private async Task ProcessWhiteListFilesDirectAsync(List<string> files, CancellationToken token)
+            {
+                foreach (var file in files.Where(file => Path.GetExtension(file)
+                             .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                {
+                    try
                     {
-                        try
+                        // Read all lines from the file asynchronously.
+                        string[] lines = await File.ReadAllLinesAsync(file, token);
+                        foreach (var line in lines)
                         {
-                            token.ThrowIfCancellationRequested();
-                            var response = await httpClient.GetAsync(actualUrl, token);
-                            if (response.IsSuccessStatusCode)
+                            string trimmed = line.Trim();
+                            if (!string.IsNullOrEmpty(trimmed))
                             {
-                                string content = await response.Content.ReadAsStringAsync();
-                                var foundIPs = SeedHelper.ExtractIPAndPort(content);
-                                foreach (var (ip, port, version) in foundIPs)
+                                // Directly add the trimmed line to the whitelist.
+                                lock (WhiteListedIPs)
                                 {
-                                    token.ThrowIfCancellationRequested();
-                                    if (blacklistIPs.Contains(ip))
-                                    {
-                                        logCallback($"IP {ip} from WhiteList site {actualUrl} is in the blacklist; skipping.");
-                                        continue;
-                                    }
-                                    lock (WhiteListedIPs)
-                                    {
-                                        if (WhiteListedIPs.Add(ip))
-                                        {
-                                            string reportDate = DateTime.UtcNow.ToString("o");
-                                            string comment = $"WhiteList site visited: {actualUrl}";
-                                            string csvLine = $"{ip},\"WhiteList (visited)\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                                            lock (WhiteListCsvLines)
-                                            {
-                                                if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                                    WhiteListCsvLines.Add(csvLine);
-                                            }
-                                            realTimeWhiteListCsvCallback(csvLine);
-                                        }
-                                    }
+                                    WhiteListedIPs.Add(trimmed);
                                 }
                             }
-                            else
-                            {
-                                logCallback($"Failed to visit WhiteList site: {actualUrl} Status: {response.StatusCode}");
-                            }
                         }
-                        catch (Exception ex)
-                        {
-                            logCallback($"Error visiting WhiteList site: {actualUrl} Exception: {ex.Message}");
-                        }
-                        finally
-                        {
-                            semaphore.Release();
-                        }
-                    }, token));
+                    }
+                    catch (Exception ex)
+                    {
+                        logCallback($"Error processing whitelist file {file}: {ex.Message}");
+                    }
                 }
-                await Task.WhenAll(tasks);
             }
 
             public async Task StartScanAsync(CancellationToken token)
             {
                 try
                 {
-                    foreach (var file in WhiteListFiles.Where(file => IOPath.GetExtension(file)
-                                 .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        await ProcessWhiteListFileAsync(file, token);
-                    }
-                    // Priority order: Phishing, DDoS, Malicious.
+                    // Priority order: WhiteList, Phishing, DDoS, Malicious.
+                    await ProcessWhiteListFilesDirectAsync(WhiteListFiles, token);
                     await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
                     await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
                     await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
@@ -1176,8 +1133,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private async Task LoadSeedsFromFileListAsync(List<string> fileList, string defaultSourceType, CancellationToken token)
             {
-                foreach (var file in fileList.Where(file => IOPath.GetExtension(file)
-                             .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                foreach (var file in fileList.Where(file => Path.GetExtension(file)
+                                 .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (token.IsCancellationRequested)
                         return;
@@ -1269,7 +1226,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         comment = comment[..1024];
 
                     string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    BulkCsvLines.Add(csvLine);
+                    // Use lock for thread-safe access to BulkCsvLines.
+                    lock (bulkCsvLock)
+                    {
+                        BulkCsvLines.Add(csvLine);
+                    }
                     await realTimeBulkCsvCallback(csvLine);
 
                     if (seed.Depth < maxDepth)
@@ -1359,11 +1320,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         public static class SeedHelper
         {
-            public static bool IsValidIP(string ip)
-            {
-                return IPAddress.TryParse(ip, out _);
-            }
-
             public static List<(string ip, int? port, string version)> ExtractIPAndPort(string text)
             {
                 List<(string ip, int? port, string version)> results = new();
@@ -1384,9 +1340,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 return results;
             }
 
-            public static async Task<bool> IsActiveAndStaticAsync(string ip, int? port, CancellationToken token)
+            public static async Task<bool> IsActiveAndStaticAsync(string ip, int port, CancellationToken token)
             {
-                string url = $"http://{ip}" + (port.HasValue ? $":{port.Value}" : "");
+                string url = $"http://{ip}" + (port > 0 ? $":{port}" : "");
                 try
                 {
                     using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
@@ -1398,9 +1354,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         return false;
                     string finalHostname = finalUri.Host;
                     int finalPort = finalUri.Port > 0 ? finalUri.Port : 80;
-                    int expectedPort = port ?? 80;
+                    int expectedPort = port > 0 ? port : 80;
                     if (!string.IsNullOrEmpty(finalHostname) &&
-                        IsValidIP(finalHostname) &&
+                        IPAddress.TryParse(finalHostname, out _) &&
                         finalHostname == ip &&
                         finalPort == expectedPort)
                     {
@@ -1412,9 +1368,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 {
                     throw;
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    Console.Error.WriteLine($"Active/static check failed for {url}: {ex.Message}");
                     return false;
                 }
             }
