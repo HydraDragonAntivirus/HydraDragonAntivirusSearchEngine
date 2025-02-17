@@ -1279,30 +1279,31 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 string newSourceType = seed.SourceType;
 
-                if (scanKnownActive)
+                // Check if allowAutoVerdict is true
+                if (allowAutoVerdict)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     if (!active)
                     {
-                        if (allowAutoVerdict)
+                        // If inactive, mark as benign and add to whitelist
+                        newSourceType = "benign (auto verdict)";
+                        string reportDate = DateTime.UtcNow.ToString("o");
+                        string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
+                        string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+
+                        lock (WhiteListCsvLines)
                         {
-                            newSourceType = "benign (auto verdict)";
-                            string reportDate = DateTime.UtcNow.ToString("o");
-                            string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
-                            string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
-
-                            lock (WhiteListCsvLines)
-                            {
-                                if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                    WhiteListCsvLines.Add(csvLine);
-                            }
-
-                            await realTimeWhiteListCsvCallback(csvLine);
-                            return;
+                            // Add the line to the whitelist CSV if within size limits
+                            if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                                WhiteListCsvLines.Add(csvLine);
                         }
+
+                        await realTimeWhiteListCsvCallback(csvLine);
+                        return;
                     }
                 }
 
+                // Enqueue the seed for further processing if not auto-whitelisted
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
@@ -1422,21 +1423,35 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Asynchronous callbacks for writing CSV lines.
         private async Task AppendBulkCsvLineToFileAsync(string csvLine)
         {
-            if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
+            bool isRealTimeEnabled = false;
+            string fileName = string.Empty;
+
+            // Use the Dispatcher to safely read UI elements.
+            await textBoxRealTimeCsvBulkFile.Dispatcher.InvokeAsync(() =>
             {
-                string? directory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text);
+                isRealTimeEnabled = checkBoxRealTimeCsvBulk.IsChecked == true;
+                fileName = textBoxRealTimeCsvBulkFile.Text;
+            });
+
+            if (isRealTimeEnabled && !string.IsNullOrEmpty(fileName))
+            {
+                string? directory = IOPath.GetDirectoryName(fileName);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
                 try
                 {
-                    await File.AppendAllTextAsync(textBoxRealTimeCsvBulkFile.Text, csvLine + Environment.NewLine);
+                    await File.AppendAllTextAsync(fileName, csvLine + Environment.NewLine);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace,
-                        "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    // Display error on the UI thread.
+                    await textBoxRealTimeCsvBulkFile.Dispatcher.InvokeAsync(() =>
+                    {
+                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace,
+                            "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    });
                 }
             }
         }
@@ -1444,17 +1459,26 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private readonly object WhiteListCsvLock = new();
         private async Task AppendWhiteListCsvLineToFileAsync(string csvLine)
         {
-            if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
+            bool isRealTimeEnabled = false;
+            string fileName = string.Empty;
+
+            // Use the Dispatcher to safely read UI elements.
+            await textBoxRealTimeCsvWhiteListFile.Dispatcher.InvokeAsync(() =>
             {
-                string? directory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text);
+                isRealTimeEnabled = checkBoxRealTimeCsvWhiteList.IsChecked == true;
+                fileName = textBoxRealTimeCsvWhiteListFile.Text;
+            });
+
+            if (isRealTimeEnabled && !string.IsNullOrEmpty(fileName))
+            {
+                string? directory = IOPath.GetDirectoryName(fileName);
                 if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
                 }
                 lock (WhiteListCsvLock)
                 {
-                    // Synchronously write inside the lock.
-                    File.AppendAllText(textBoxRealTimeCsvWhiteListFile.Text, csvLine + Environment.NewLine);
+                    File.AppendAllText(fileName, csvLine + Environment.NewLine);
                 }
                 await Task.CompletedTask;
             }
