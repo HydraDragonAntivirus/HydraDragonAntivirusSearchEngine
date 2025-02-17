@@ -1509,13 +1509,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Asynchronous callbacks for writing CSV lines.
+        private static readonly SemaphoreSlim fileLock = new(1, 1);
+
         private async Task AppendBulkCsvLineToFileAsync(string csvLine)
         {
             bool isRealTimeEnabled = false;
             string fileName = string.Empty;
 
-            // Use the Dispatcher to safely read UI elements.
+            // Read UI settings safely
             await textBoxRealTimeCsvBulkFile.Dispatcher.InvokeAsync(() =>
             {
                 isRealTimeEnabled = checkBoxRealTimeCsvBulk.IsChecked == true;
@@ -1529,18 +1530,24 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 {
                     Directory.CreateDirectory(directory);
                 }
+
+                await fileLock.WaitAsync(); // Ensure only one thread writes at a time
+
                 try
                 {
-                    await File.AppendAllTextAsync(fileName, csvLine + Environment.NewLine);
-                }
-                catch (Exception ex)
-                {
-                    // Display error on the UI thread.
-                    await textBoxRealTimeCsvBulkFile.Dispatcher.InvokeAsync(() =>
+                    using (var stream = new FileStream(fileName, FileMode.Append, FileAccess.Write, FileShare.Read))
+                    using (var writer = new StreamWriter(stream, Encoding.UTF8))
                     {
-                        MessageBox.Show("Error saving Bulk CSV line: " + ex.Message + " " + ex.StackTrace,
-                            "Bulk CSV Error", MessageBoxButton.OK, MessageBoxImage.Error);
-                    });
+                        await writer.WriteLineAsync(csvLine);
+                    }
+                }
+                catch (IOException ex)
+                {
+                   UpdateLog($"Bulk CSV Error: {ex.Message}");
+                }
+                finally
+                {
+                    fileLock.Release();
                 }
             }
         }
