@@ -310,15 +310,7 @@
                                        FontWeight="SemiBold" 
                                        HorizontalAlignment="Center" 
                                        Margin="0,0,0,20"/>
-                            <StackPanel Orientation="Horizontal">
-                                <Button x:Name="BtnStartScan" 
-                                        Content="Start Scan" 
-                                        Width="150" 
-                                        Height="40" 
-                                        Margin="10,0"
-                                        Style="{DynamicResource AccentButtonStyle}"
-                                        Click="BtnStartScan_Click"/>
-                            </StackPanel>
+                            <StackPanel Orientation="Horizontal"/>
                         </StackPanel>
 
                         <!-- Progress Section -->
@@ -326,8 +318,8 @@
                                    Text="Current Loaded Definition File: None" 
                                    FontSize="14" 
                                    Foreground="Blue" 
-                                   HorizontalAlignment="Center"
-                                   Margin="0,28,0,48" Grid.RowSpan="2"/>
+                                   HorizontalAlignment="Left"
+                                   Margin="33,36,0,40" Grid.RowSpan="2"/>
                         <StackPanel Grid.Row="1" 
                                     HorizontalAlignment="Center" 
                                     Margin="0,0,0,20">
@@ -373,6 +365,10 @@
                                 </ListView>
                             </DockPanel>
                         </Border>
+                        <Button x:Name="BtnStartScan" 
+                                        Content="Start Scan"
+                                        Style="{DynamicResource AccentButtonStyle}"
+                                        Click="BtnStartScan_Click" Margin="33,6,729,20" Grid.Row="1"/>
                     </Grid>
                 </Border>
             </TabItem>
