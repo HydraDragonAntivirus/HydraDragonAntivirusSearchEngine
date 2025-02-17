@@ -1,11 +1,7 @@
 # Website
 website/IPv4Malware.txt
-# Website Output
-website/BulkReportRealtime.csv
-website/log.txt
-website/BulkReport.csv
-website/WhitelistReport.csv
-website/WhitelistRealtime.csv
+# Output
+/output
 # Log
 /log
 ## Ignore Visual Studio temporary files, build results, and

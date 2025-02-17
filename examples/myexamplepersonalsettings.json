@@ -16,7 +16,7 @@
   "RealTimeCsvWhiteListFile": "..\\..\\..\\..\\..\\output\\WhitelistRealtime.csv",
   "RealTimeCsvWhiteListPath": "..\\..\\..\\..\\..\\output",
   "RealTimeSave": true,
-  "RealTimeFile": "..\\..\\..\\..\\..\\website\\log.txt",
+  "RealTimeFile": "..\\..\\..\\..\\..\\output\\log.txt",
   "ScanKnownActive": false,
   "MalwareFiles": [],
   "DDoSFiles": [],
