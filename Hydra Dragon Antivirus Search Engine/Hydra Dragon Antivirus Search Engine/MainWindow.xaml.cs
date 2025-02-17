@@ -1249,7 +1249,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         return;
 
                     logCallback("Visited: " + url);
-
                     string category = seed.SourceType switch
                     {
                         "malicious" => categoryMalicious,
@@ -1310,40 +1309,40 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth, file, trimmed), ip, port, version, trimmed, token);
             }
 
-            private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
+private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
+{
+    token.ThrowIfCancellationRequested();
+    if (processedIPs.ContainsKey(ip))
+        return;
+
+    string newSourceType = seed.SourceType;
+
+    if (scanKnownActive)
+    {
+        bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
+        if (!active)
+        {
+            if (allowAutoVerdict)
             {
-                token.ThrowIfCancellationRequested();
-                if (processedIPs.ContainsKey(ip))
-                    return;
+                newSourceType = "benign (auto verdict)";
+                string reportDate = DateTime.UtcNow.ToString("o");
+                string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
+                string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
 
-                string newSourceType = seed.SourceType;
-
-                if (scanKnownActive)
+                lock (WhiteListCsvLines)
                 {
-                    bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
-                    if (!active)
-                    {
-                        if (allowAutoVerdict)
-                        {
-                            newSourceType = "benign (auto verdict)";
-                            string reportDate = DateTime.UtcNow.ToString("o");
-                            string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
-                            string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
-
-                            lock (WhiteListCsvLines)
-                            {
-                                if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                    WhiteListCsvLines.Add(csvLine);
-                            }
-
-                            await realTimeWhiteListCsvCallback(csvLine);
-                            return;
-                        }
-                    }
+                    if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                        WhiteListCsvLines.Add(csvLine);
                 }
 
-                EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+                await realTimeWhiteListCsvCallback(csvLine);
+                return;
             }
+        }
+    }
+
+    EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+}
 
             private void EnqueueSeed(Seed seed)
             {
