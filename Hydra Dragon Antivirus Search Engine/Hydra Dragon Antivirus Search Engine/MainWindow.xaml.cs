@@ -994,7 +994,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public List<string> WhiteListCsvLines { get; private set; } = new List<string>();
             private readonly ConcurrentQueue<Seed> seedQueue = new();
             private readonly ConcurrentDictionary<string, bool> processedIPs = new();
-            private readonly HashSet<string> WhiteListedIPs = new(StringComparer.OrdinalIgnoreCase);
             int totalSeeds = 0;
             int processedCount = 0;
             private readonly HttpClient httpClient = new();
@@ -1077,41 +1076,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            private async Task ProcessWhiteListFilesDirectAsync(List<string> files, CancellationToken token)
-            {
-                foreach (var file in files.Where(file => Path.GetExtension(file)
-                             .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
-                {
-                    try
-                    {
-                        // Read all lines from the file asynchronously.
-                        string[] lines = await File.ReadAllLinesAsync(file, token);
-                        foreach (var line in lines)
-                        {
-                            string trimmed = line.Trim();
-                            if (!string.IsNullOrEmpty(trimmed))
-                            {
-                                // Directly add the trimmed line to the whitelist.
-                                lock (WhiteListedIPs)
-                                {
-                                    WhiteListedIPs.Add(trimmed);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        logCallback($"Error processing whitelist file {file}: {ex.Message}");
-                    }
-                }
-            }
-
             public async Task StartScanAsync(CancellationToken token)
             {
                 try
                 {
                     // Priority order: WhiteList, Phishing, DDoS, Malicious.
-                    await ProcessWhiteListFilesDirectAsync(WhiteListFiles, token);
+                    await LoadSeedsFromFileListAsync(WhiteListFiles, "whitelist", token);
                     await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
                     await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
                     await LoadSeedsFromFileListAsync(malwareFiles, "malicious", token);
