@@ -1164,6 +1164,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 try
                 {
+                    // Check if ScanKnownActive is enabled and SourceURL and DiscoveredURL are the same
+                    if (!scanKnownActive && seed.OriginalSourceUrl == seed.DiscoveredUrl)
+                    {
+                        logCallback($"Skipping scan: Source URL and Discovered URL are the same: {seed.OriginalSourceUrl}");
+                        return;
+                    }
+
                     var response = await httpClient.GetAsync(url, token);
                     if (!response.IsSuccessStatusCode)
                     {
@@ -1255,10 +1262,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     if (!active)
                     {
-                        // If inactive, mark as benign and add to whitelist
-                        newSourceType = "benign (auto verdict)";
+                        // Benign Auto Verdict 3: Dead IP (inactive or non-static)
+                        newSourceType = "benign (auto verdict 3)";
                         string reportDate = DateTime.UtcNow.ToString("o");
-                        string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
+                        string comment = $"Auto-WhiteListed dead IP from {seed.OriginalSourceUrl}";
                         string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
 
                         lock (WhiteListCsvLines)
@@ -1269,8 +1276,59 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         }
 
                         await realTimeWhiteListCsvCallback(csvLine);
-                        return;
+                        return; // Skip adding this IP to the bulk CSV as it's whitelisted
                     }
+                    else
+                    {
+                        // Benign Auto Verdict 2: Active and Static IP (related to a benign URL)
+                        newSourceType = "benign (auto verdict 2)";
+                        string reportDate = DateTime.UtcNow.ToString("o");
+                        string comment = $"Active and static IP from {seed.OriginalSourceUrl} marked as benign";
+                        string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+
+                        lock (WhiteListCsvLines)
+                        {
+                            // Add the line to the whitelist CSV if within size limits
+                            if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                                WhiteListCsvLines.Add(csvLine);
+                        }
+
+                        await realTimeWhiteListCsvCallback(csvLine);
+                        return; // Skip adding this IP to the bulk CSV as it's whitelisted
+                    }
+                }
+
+                // Benign Auto Verdict 1: For malicious IPs that are no longer active/static
+                if (seed.SourceType == "malicious")
+                {
+                    newSourceType = "benign (auto verdict 1)";
+                    string reportDate = DateTime.UtcNow.ToString("o");
+                    string comment = $"Malicious IP {ip} is no longer active/static, marked as benign";
+                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+
+                    lock (WhiteListCsvLines)
+                    {
+                        // Add the line to the whitelist CSV if within size limits
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                            WhiteListCsvLines.Add(csvLine);
+                    }
+
+                    await realTimeWhiteListCsvCallback(csvLine);
+                    return; // Skip adding this IP to the bulk CSV as it's whitelisted
+                }
+
+                // Only add to the Bulk CSV if it's not in the whitelist
+                if (newSourceType != "WhiteList")
+                {
+                    string reportDate = DateTime.UtcNow.ToString("o");
+                    string comment = $"IP processed from {seed.OriginalSourceUrl}";
+                    string csvLine = $"{ip},\"{newSourceType}\",{reportDate},\"{EscapeCsvField(comment)}\"";
+
+                    lock (bulkCsvLock)
+                    {
+                        BulkCsvLines.Add(csvLine);
+                    }
+                    await realTimeBulkCsvCallback(csvLine);
                 }
 
                 // Enqueue the seed for further processing if not auto-whitelisted
