@@ -1160,73 +1160,24 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     return;
 
                 string url = seed.GetUrl();
-                logCallback("Processing: " + url);
+                logCallback($"Processing (Depth {seed.Depth}): {url}");
 
                 try
                 {
-                    // For seeds at depth 0 with ScanKnownActive disabled, perform the HTTP request and extract new seeds
-                    // so that progress is updated, but do not add the CSV scan result.
-                    if (!scanKnownActive && seed.Depth == 0)
+                    var response = await httpClient.GetAsync(url, token);
+                    if (!response.IsSuccessStatusCode)
                     {
-                        var response = await httpClient.GetAsync(url, token);
-                        if (!response.IsSuccessStatusCode)
-                        {
-                            logCallback($"Failed: {url} Status: {response.StatusCode}");
-                            return;
-                        }
-
-                        string content = await response.Content.ReadAsStringAsync(token);
-                        if (string.IsNullOrEmpty(content))
-                            return;
-
-                        logCallback("Visited: " + url);
-
-                        // Process discovered IPs (depth will increase for new seeds)
-                        if (seed.Depth < maxDepth)
-                        {
-                            var tasks = new List<Task>();
-
-                            // Process IPv4 matches
-                            string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
-                            foreach (Match m in Regex.Matches(content, ipv4Pattern))
-                            {
-                                tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
-                            }
-
-                            // Process IPv6 matches
-                            string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
-                            foreach (Match m in Regex.Matches(content, ipv6Pattern))
-                            {
-                                tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
-                            }
-
-                            await Task.WhenAll(tasks);
-                        }
+                        logCallback($"Failed: {url} Status: {response.StatusCode}");
                         return;
                     }
 
-                    // For seeds at depth > 0 with ScanKnownActive disabled, skip if the URLs are identical.
-                    if (!scanKnownActive && seed.Depth > 0 && seed.OriginalSourceUrl == seed.DiscoveredUrl)
-                    {
-                        logCallback($"Skipping scan at depth {seed.Depth}: Source URL and Discovered URL are the same: {seed.OriginalSourceUrl}");
-                        return;
-                    }
-
-                    // Normal processing for seeds that are either depth > 0 with ScanKnownActive enabled or
-                    // any seed when ScanKnownActive is enabled.
-                    var normalResponse = await httpClient.GetAsync(url, token);
-                    if (!normalResponse.IsSuccessStatusCode)
-                    {
-                        logCallback($"Failed: {url} Status: {normalResponse.StatusCode}");
-                        return;
-                    }
-
-                    string normalContent = await normalResponse.Content.ReadAsStringAsync(token);
-                    if (string.IsNullOrEmpty(normalContent))
+                    string content = await response.Content.ReadAsStringAsync(token);
+                    if (string.IsNullOrEmpty(content))
                         return;
 
-                    logCallback("Visited: " + url);
+                    logCallback($"Visited (Depth {seed.Depth}): {url}");
 
+                    // Build the CSV result line.
                     string category = seed.SourceType switch
                     {
                         "malicious" => categoryMalicious,
@@ -1246,37 +1197,44 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         comment = comment[..1024];
 
                     string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    // Add the CSV line to scan results.
-                    lock (bulkCsvLock)
-                    {
-                        BulkCsvLines.Add(csvLine);
-                    }
-                    await realTimeBulkCsvCallback(csvLine);
 
+                    // When ScanKnownActive is disabled, do not add a CSV result for depth 0 seeds.
+                    if (scanKnownActive || seed.Depth > 0)
+                    {
+                        lock (bulkCsvLock)
+                        {
+                            BulkCsvLines.Add(csvLine);
+                        }
+                        await realTimeBulkCsvCallback(csvLine);
+                    }
+
+                    // Continue processing the same IP by increasing depth
                     if (seed.Depth < maxDepth)
                     {
-                        var tasks = new List<Task>();
-
-                        // Process IPv4 matches
-                        string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
-                        foreach (Match m in Regex.Matches(normalContent, ipv4Pattern))
-                        {
-                            tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
-                        }
-
-                        // Process IPv6 matches
-                        string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
-                        foreach (Match m in Regex.Matches(normalContent, ipv6Pattern))
-                        {
-                            tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
-                        }
-
-                        await Task.WhenAll(tasks);
+                        var nextSeed = new Seed(seed.IP, seed.SourceType, seed.Version, seed.Port, seed.Depth + 1, seed.OriginalSourceUrl, seed.DiscoveredUrl);
+                        await ProcessSeedAsync(nextSeed, token); // Recursive call with incremented depth
                     }
+
+                    // Additionally, process new discovered IPs in the response (if any).
+                    var tasks = new List<Task>();
+
+                    string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
+                    foreach (Match m in Regex.Matches(content, ipv4Pattern))
+                    {
+                        tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth + 1, token));
+                    }
+
+                    string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
+                    foreach (Match m in Regex.Matches(content, ipv6Pattern))
+                    {
+                        tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth + 1, token));
+                    }
+
+                    await Task.WhenAll(tasks);
                 }
                 catch (Exception ex)
                 {
-                    logCallback("Error processing " + url + ": " + ex.Message);
+                    logCallback($"Error processing {url}: {ex.Message}");
                 }
             }
 
@@ -1345,7 +1303,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
 
                 // Benign Auto Verdict 1: For malicious IPs that are no longer active/static
-                if (seed.SourceType == "malicious")
+                if (seed.SourceType == "malicious" || seed.SourceType == "phishing" || seed.SourceType == "DDoS")
                 {
                     newSourceType = "benign (auto verdict 1)";
                     string reportDate = DateTime.UtcNow.ToString("o");
