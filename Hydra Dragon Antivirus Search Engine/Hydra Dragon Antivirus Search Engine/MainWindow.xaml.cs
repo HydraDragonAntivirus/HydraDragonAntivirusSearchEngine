@@ -1349,7 +1349,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         // Handle auto-verdict for dead URL.
                         newSourceType = "benign (auto verdict 3)";
-                        string csvLine = $"{discoveredUrl},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed dead URL from {seed.OriginalSourceUrl}\"";
+                        string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed dead URL from {seed.OriginalSourceUrl}\"";
                         lock (WhiteListCsvLines)
                         {
                             if (WhiteListCsvLines.Count < csvMaxLines + 1)
@@ -1362,7 +1362,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         // Handle auto-verdict for active URL.
                         newSourceType = "benign (auto verdict 2)";
-                        string csvLine = $"{discoveredUrl},\"WhiteList\",{DateTime.UtcNow:O},\"Active and static URL from {seed.OriginalSourceUrl} marked as benign\"";
+                        string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Active and static URL from {seed.OriginalSourceUrl} marked as benign\"";
                         lock (WhiteListCsvLines)
                         {
                             if (WhiteListCsvLines.Count < csvMaxLines + 1)
@@ -1415,8 +1415,37 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     logCallback($"Error fetching content from {discoveredUrl}: {ex.Message}");
                 }
 
+                // **Modify Here**: Add only the IP address to the WhiteListCsvLines
+                string ipAddress = GetIpFromUrl(discoveredUrl);
+                if (!string.IsNullOrEmpty(ipAddress) && !processedIPs.ContainsKey(ipAddress))
+                {
+                    // Now we use just the IP instead of the full URL
+                    string csvLine = $"{ipAddress},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed from {seed.OriginalSourceUrl}\"";
+                    lock (WhiteListCsvLines)
+                    {
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                            WhiteListCsvLines.Add(csvLine);
+                    }
+                    await realTimeWhiteListCsvCallback(csvLine);
+                    processedIPs.TryAdd(ipAddress, true);
+                }
+
                 // Enqueue the seed for further processing.
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
+            }
+
+            // Helper method to extract IP from a URL (without protocol and path)
+            private string GetIpFromUrl(string url)
+            {
+                try
+                {
+                    Uri uri = new Uri(url);
+                    return uri.Host; // This will return only the IP address or hostname
+                }
+                catch
+                {
+                    return string.Empty; // In case of an invalid URL, return empty string
+                }
             }
 
             private static async Task<string> DownloadHtmlContentAsync(string url, CancellationToken token)
@@ -1432,9 +1461,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private void EnqueueSeed(Seed seed)
             {
-                // Only enqueue if it hasn't been processed before.
-                if (processedIPs.TryAdd(seed.DiscoveredUrl, true))
-                    seedQueue.Enqueue(seed);
+                if (processedIPs.TryAdd(seed.IP, true))
+                {
+                    seedQueue.Enqueue(seed); // Add to the queue if it hasn't been processed before
+                }
             }
 
             private static string EscapeCsvField(string field)
