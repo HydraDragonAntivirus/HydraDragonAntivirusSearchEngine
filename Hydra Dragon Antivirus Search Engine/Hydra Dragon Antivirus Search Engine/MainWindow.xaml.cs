@@ -1208,48 +1208,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType)
-            {
-                string ip = match.Groups["ip"].Value;
-                int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
-                if (!processedIPs.TryAdd(ip, true))
-                    return;
-                bool isWhiteListed = WhiteListedIPs.Contains(ip);
-                if (isWhiteListed)
-                {
-                    string reportDate = DateTime.UtcNow.ToString("o");
-                    string comment = $"WhiteListed from file: {file}";
-                    string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    lock (WhiteListCsvLines)
-                    {
-                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                            WhiteListCsvLines.Add(csvLine);
-                    }
-                    await realTimeWhiteListCsvCallback(csvLine);
-                }
-                else
-                {
-                    string discoveredUrl;
-                    if (!scanKnownActive)
-                    {
-                        discoveredUrl = trimmed + "_discovered";
-                        while (malwareFiles.Contains(discoveredUrl) ||
-                               DDoSFiles.Contains(discoveredUrl) ||
-                               phishingFiles.Contains(discoveredUrl) ||
-                               WhiteListFiles.Contains(discoveredUrl))
-                        {
-                            discoveredUrl += "_x";
-                        }
-                    }
-                    else
-                    {
-                        discoveredUrl = trimmed;
-                    }
-                    seedQueue.Enqueue(new Seed(ip, defaultSourceType, version, port, 1, trimmed, discoveredUrl));
-                }
-                await Task.CompletedTask;
-            }
-
             private async Task WorkerAsync(CancellationToken token)
             {
                 while (!token.IsCancellationRequested)
@@ -1269,12 +1227,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            public async Task ProcessSeedAsync(Seed seed, CancellationToken token)
+            private async Task ProcessSeedAsync(Seed seed, CancellationToken token)
             {
                 if (seed.Depth > maxDepth)
                     return;
+
                 string url = seed.GetUrl();
                 logCallback("Processing: " + url);
+
                 try
                 {
                     var response = await httpClient.GetAsync(url, token);
@@ -1283,10 +1243,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         logCallback($"Failed: {url} Status: {response.StatusCode}");
                         return;
                     }
+
                     string content = await response.Content.ReadAsStringAsync(token);
                     if (string.IsNullOrEmpty(content))
                         return;
+
                     logCallback("Visited: " + url);
+
                     string category = seed.SourceType switch
                     {
                         "malicious" => categoryMalicious,
@@ -1294,28 +1257,39 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         "DDoS" => categoryDDoS,
                         _ => ""
                     };
+
                     string reportDate = DateTime.UtcNow.ToString("o");
                     string comment = commentTemplate
                         .Replace("{ip}", seed.IP)
                         .Replace("{source_url}", seed.OriginalSourceUrl)
                         .Replace("{discovered_url}", seed.DiscoveredUrl)
                         .Replace("{verdict}", seed.SourceType);
+
                     if (comment.Length > 1024)
                         comment = comment[..1024];
+
                     string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
                     BulkCsvLines.Add(csvLine);
                     await realTimeBulkCsvCallback(csvLine);
 
                     if (seed.Depth < maxDepth)
                     {
-                        var foundIPs = SeedHelper.ExtractIPAndPort(content);
                         var tasks = new List<Task>();
-                        HashSet<string> processedIPSet = new(processedIPs.Keys);
-                        foreach (var (ip, port, version) in foundIPs)
+
+                        // Process IPv4 matches
+                        string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
+                        foreach (Match m in Regex.Matches(content, ipv4Pattern))
                         {
-                            if (!processedIPSet.Contains(ip))
-                                tasks.Add(ProcessIPAsync(seed, ip, port, version, url, token));
+                            tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
                         }
+
+                        // Process IPv6 matches
+                        string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
+                        foreach (Match m in Regex.Matches(content, ipv6Pattern))
+                        {
+                            tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
+                        }
+
                         await Task.WhenAll(tasks);
                     }
                 }
@@ -1325,12 +1299,25 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
+            private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType, int currentDepth, CancellationToken token)
+            {
+                string ip = match.Groups["ip"].Value;
+                int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
+
+                if (!processedIPs.TryAdd(ip, true))
+                    return;
+
+                await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth, file, trimmed), ip, port, version, trimmed, token);
+            }
+
             private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
                 if (processedIPs.ContainsKey(ip))
                     return;
+
                 string newSourceType = seed.SourceType;
+
                 if (scanKnownActive)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
@@ -1342,16 +1329,19 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             string reportDate = DateTime.UtcNow.ToString("o");
                             string comment = $"Auto-WhiteListed benign IP from {seed.OriginalSourceUrl}";
                             string csvLine = $"{ip},\"WhiteList\",{reportDate},\"{EscapeCsvField(comment)}\"";
+
                             lock (WhiteListCsvLines)
                             {
                                 if (WhiteListCsvLines.Count < csvMaxLines + 1)
                                     WhiteListCsvLines.Add(csvLine);
                             }
+
                             await realTimeWhiteListCsvCallback(csvLine);
                             return;
                         }
                     }
                 }
+
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
