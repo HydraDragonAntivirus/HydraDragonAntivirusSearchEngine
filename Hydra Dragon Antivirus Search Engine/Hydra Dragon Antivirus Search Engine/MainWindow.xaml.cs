@@ -86,16 +86,27 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void StartLogFlusher()
         {
-            logFlushTimer = new System.Timers.Timer(300); // flush every 300ms
+            // Flush every 300ms (adjust the interval as needed)
+            logFlushTimer = new System.Timers.Timer(300);
             logFlushTimer.Elapsed += (s, e) =>
             {
                 if (!listBoxLog.Dispatcher.HasShutdownStarted)
                 {
+                    // Drain all log entries from the queue into a local list.
+                    List<string> logsToFlush = new List<string>();
                     while (logQueue.TryDequeue(out string? log))
+                    {
+                        logsToFlush.Add(log);
+                    }
+                    // If there are any log messages, update the UI in a single Dispatcher call.
+                    if (logsToFlush.Any())
                     {
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            listBoxLog.Items.Add(log);
+                            foreach (var log in logsToFlush)
+                            {
+                                listBoxLog.Items.Add(log);
+                            }
                         }));
                     }
                 }
@@ -387,96 +398,120 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
         {
-            if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
-                maxDepth = 10;
-            if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads))
-                maxThreads = 100;
-            if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines))
-                csvMaxLines = 10000;
-            if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize))
-                csvMaxSize = 2097152;
+            // Disable the Start button and enable the Stop button.
+            BtnStartScan.IsEnabled = false;
+            BtnStopScan.IsEnabled = true;
 
-            string outputFileName = textBoxOutputFile.Text;
-            string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
-            string categoryMalicious = textBoxCategoryMalicious.Text;
-            string categoryPhishing = textBoxCategoryPhishing.Text;
-            string categoryDDoS = textBoxCategoryDDoS.Text;
-            string commentTemplate = textBoxCommentTemplate.Text;
-
-            bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
-            bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
-
-            // Initialize realtime CSV files (create/clear them) if enabled.
-            InitializeRealtimeCsvFiles();
-            cts = new CancellationTokenSource();
-
-            // Scan IPv4:
-            scanner = new Scanner(
-                malwareFilesIPv4,
-                DDoSFilesIPv4,
-                phishingFilesIPv4,
-                WhiteListFilesIPv4,
-                maxDepth,
-                maxThreads,
-                categoryMalicious,
-                categoryPhishing,
-                categoryDDoS,
-                csvMaxLines,
-                csvMaxSize,
-                outputFileName,
-                whiteListOutputFileName,
-                UpdateLog,
-                UpdateProgress,
-                AppendBulkCsvLineToFile,
-                AppendWhiteListCsvLineToFile,
-                commentTemplate,
-                UpdateCurrentFileMessage,  // scan progress callback
-                scanKnownActive,
-                allowAutoVerdict,
-                "ipv4");
-            await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); });
-
-            // Scan IPv6:
-            scanner = new Scanner(
-                malwareFilesIPv6,
-                DDoSFilesIPv6,
-                phishingFilesIPv6,
-                WhiteListFilesIPv6,
-                maxDepth,
-                maxThreads,
-                categoryMalicious,
-                categoryPhishing,
-                categoryDDoS,
-                csvMaxLines,
-                csvMaxSize,
-                outputFileName,
-                whiteListOutputFileName,
-                UpdateLog,
-                UpdateProgress,
-                AppendBulkCsvLineToFile,
-                AppendWhiteListCsvLineToFile,
-                commentTemplate,
-                UpdateCurrentFileMessage,  // scan progress callback
-                scanKnownActive,
-                allowAutoVerdict,
-                "ipv6");
-            await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); }); int totalLines = scanner.BulkCsvLines.Count;
-
-            string csvContent = string.Join("\n", scanner.BulkCsvLines);
-            int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
-
-            if (totalLines > csvMaxLines + 1)
-                MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
-            else if (csvSizeInBytes > csvMaxSize)
-                MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
-            else
+            try
             {
-                await Task.Run(() =>
+                if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
+                    maxDepth = 10;
+                if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads))
+                    maxThreads = 100;
+                if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines))
+                    csvMaxLines = 10000;
+                if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize))
+                    csvMaxSize = 2097152;
+
+                string outputFileName = textBoxOutputFile.Text;
+                string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
+                string categoryMalicious = textBoxCategoryMalicious.Text;
+                string categoryPhishing = textBoxCategoryPhishing.Text;
+                string categoryDDoS = textBoxCategoryDDoS.Text;
+                string commentTemplate = textBoxCommentTemplate.Text;
+
+                bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
+                bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
+
+                // Initialize realtime CSV files (create/clear them) if enabled.
+                InitializeRealtimeCsvFiles();
+                cts = new CancellationTokenSource();
+
+                // Scan IPv4:
+                scanner = new Scanner(
+                    malwareFilesIPv4,
+                    DDoSFilesIPv4,
+                    phishingFilesIPv4,
+                    WhiteListFilesIPv4,
+                    maxDepth,
+                    maxThreads,
+                    categoryMalicious,
+                    categoryPhishing,
+                    categoryDDoS,
+                    csvMaxLines,
+                    csvMaxSize,
+                    outputFileName,
+                    whiteListOutputFileName,
+                    UpdateLog,
+                    UpdateProgress,
+                    AppendBulkCsvLineToFile,
+                    AppendWhiteListCsvLineToFile,
+                    commentTemplate,
+                    UpdateCurrentFileMessage,  // scan progress callback
+                    scanKnownActive,
+                    allowAutoVerdict,
+                    "ipv4");
+
+                await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); });
+
+                // Scan IPv6:
+                scanner = new Scanner(
+                    malwareFilesIPv6,
+                    DDoSFilesIPv6,
+                    phishingFilesIPv6,
+                    WhiteListFilesIPv6,
+                    maxDepth,
+                    maxThreads,
+                    categoryMalicious,
+                    categoryPhishing,
+                    categoryDDoS,
+                    csvMaxLines,
+                    csvMaxSize,
+                    outputFileName,
+                    whiteListOutputFileName,
+                    UpdateLog,
+                    UpdateProgress,
+                    AppendBulkCsvLineToFile,
+                    AppendWhiteListCsvLineToFile,
+                    commentTemplate,
+                    UpdateCurrentFileMessage,  // scan progress callback
+                    scanKnownActive,
+                    allowAutoVerdict,
+                    "ipv6");
+
+                await Task.Run(async () => { await scanner.StartScanAsync(cts.Token); });
+
+                int totalLines = scanner.BulkCsvLines.Count;
+                string csvContent = string.Join("\n", scanner.BulkCsvLines);
+                int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
+
+                if (totalLines > csvMaxLines + 1)
+                    MessageBox.Show("CSV output exceeds the maximum allowed number of lines (" + csvMaxLines + ").");
+                else if (csvSizeInBytes > csvMaxSize)
+                    MessageBox.Show("CSV output exceeds the maximum allowed file size (" + csvMaxSize + " bytes).");
+                else
                 {
-                    File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
-                    File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
-                });
-                MessageBox.Show("Scan completed and CSV files generated successfully.");
+                    await Task.Run(() =>
+                    {
+                        File.WriteAllLines(outputFileName, scanner.BulkCsvLines, Encoding.UTF8);
+                        File.WriteAllLines(whiteListOutputFileName, scanner.WhiteListCsvLines, Encoding.UTF8);
+                    });
+                    MessageBox.Show("Scan completed and CSV files generated successfully.");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                UpdateLog("Scan cancelled by the user.");
+            }
+            catch (Exception ex)
+            {
+                UpdateLog("Error: " + ex.Message);
+            }
+            finally
+            {
+                // Re-enable the Start button and disable the Stop button when the scan finishes or is canceled.
+                BtnStartScan.IsEnabled = true;
+                BtnStopScan.IsEnabled = false;
             }
         }
 
@@ -485,6 +520,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             if (cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
+                BtnStopScan.IsEnabled = false;
                 UpdateLog("Scan cancellation requested.");
             }
         }
