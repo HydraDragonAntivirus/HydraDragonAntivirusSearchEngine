@@ -8,7 +8,7 @@
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
   "CategoryDDoS": "18",
-  "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
+  "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})",
   "RealTimeCsvBulk": true,
   "RealTimeCsvBulkFile": "..\\..\\..\\..\\..\\output\\BulkReportRealtime.csv",
   "RealTimeCsvBulkPath": "..\\..\\..\\..\\..\\output",
