@@ -1323,7 +1323,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
 
                 // Only add to the Bulk CSV if it's not in the whitelist
-                if (newSourceType != "WhiteList")
+                if (newSourceType != "whiteList")
                 {
                     string reportDate = DateTime.UtcNow.ToString("o");
                     string comment = $"IP processed from {seed.OriginalSourceUrl}";
