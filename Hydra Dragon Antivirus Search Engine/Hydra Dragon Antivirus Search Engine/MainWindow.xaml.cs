@@ -1164,22 +1164,65 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 try
                 {
-                    // Check if ScanKnownActive is enabled and SourceURL and DiscoveredURL are the same
-                    if (!scanKnownActive && seed.OriginalSourceUrl == seed.DiscoveredUrl)
+                    // For seeds at depth 0 with ScanKnownActive disabled, perform the HTTP request and extract new seeds
+                    // so that progress is updated, but do not add the CSV scan result.
+                    if (!scanKnownActive && seed.Depth == 0)
                     {
-                        logCallback($"Skipping scan: Source URL and Discovered URL are the same: {seed.OriginalSourceUrl}");
+                        var response = await httpClient.GetAsync(url, token);
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            logCallback($"Failed: {url} Status: {response.StatusCode}");
+                            return;
+                        }
+
+                        string content = await response.Content.ReadAsStringAsync(token);
+                        if (string.IsNullOrEmpty(content))
+                            return;
+
+                        logCallback("Visited: " + url);
+
+                        // Process discovered IPs (depth will increase for new seeds)
+                        if (seed.Depth < maxDepth)
+                        {
+                            var tasks = new List<Task>();
+
+                            // Process IPv4 matches
+                            string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
+                            foreach (Match m in Regex.Matches(content, ipv4Pattern))
+                            {
+                                tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
+                            }
+
+                            // Process IPv6 matches
+                            string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
+                            foreach (Match m in Regex.Matches(content, ipv6Pattern))
+                            {
+                                tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
+                            }
+
+                            await Task.WhenAll(tasks);
+                        }
                         return;
                     }
 
-                    var response = await httpClient.GetAsync(url, token);
-                    if (!response.IsSuccessStatusCode)
+                    // For seeds at depth > 0 with ScanKnownActive disabled, skip if the URLs are identical.
+                    if (!scanKnownActive && seed.Depth > 0 && seed.OriginalSourceUrl == seed.DiscoveredUrl)
                     {
-                        logCallback($"Failed: {url} Status: {response.StatusCode}");
+                        logCallback($"Skipping scan at depth {seed.Depth}: Source URL and Discovered URL are the same: {seed.OriginalSourceUrl}");
                         return;
                     }
 
-                    string content = await response.Content.ReadAsStringAsync(token);
-                    if (string.IsNullOrEmpty(content))
+                    // Normal processing for seeds that are either depth > 0 with ScanKnownActive enabled or
+                    // any seed when ScanKnownActive is enabled.
+                    var normalResponse = await httpClient.GetAsync(url, token);
+                    if (!normalResponse.IsSuccessStatusCode)
+                    {
+                        logCallback($"Failed: {url} Status: {normalResponse.StatusCode}");
+                        return;
+                    }
+
+                    string normalContent = await normalResponse.Content.ReadAsStringAsync(token);
+                    if (string.IsNullOrEmpty(normalContent))
                         return;
 
                     logCallback("Visited: " + url);
@@ -1203,7 +1246,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         comment = comment[..1024];
 
                     string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                    // Use lock for thread-safe access to BulkCsvLines.
+                    // Add the CSV line to scan results.
                     lock (bulkCsvLock)
                     {
                         BulkCsvLines.Add(csvLine);
@@ -1216,14 +1259,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                         // Process IPv4 matches
                         string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
-                        foreach (Match m in Regex.Matches(content, ipv4Pattern))
+                        foreach (Match m in Regex.Matches(normalContent, ipv4Pattern))
                         {
                             tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
                         }
 
                         // Process IPv6 matches
                         string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
-                        foreach (Match m in Regex.Matches(content, ipv6Pattern))
+                        foreach (Match m in Regex.Matches(normalContent, ipv6Pattern))
                         {
                             tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
                         }
