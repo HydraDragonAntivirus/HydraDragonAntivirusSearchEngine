@@ -42,7 +42,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Scanner instance – created when the user clicks Start Scan.
         private Scanner? scanner;
         // Cancellation token source to allow stopping the scan.
-        private CancellationTokenSource cts = new CancellationTokenSource();
+        private CancellationTokenSource cts = new();
         // A full log list to support search and saving.
         private readonly List<string> fullLogList = new();
 
@@ -87,12 +87,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 if (!listBoxLog.Dispatcher.HasShutdownStarted)
                 {
-                    List<string> logsToFlush = new List<string>();
+                    List<string> logsToFlush = new();
                     while (logQueue.TryDequeue(out string? log))
                     {
                         logsToFlush.Add(log);
                     }
-                    if (logsToFlush.Any())
+                    if (logsToFlush.Count > 0)
                     {
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
@@ -168,7 +168,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 textBlockCurrentFile.Dispatcher.Invoke(() => textBlockCurrentFile.Text = message);
         }
 
-        private string ConvertToAbsolutePath(string path)
+        private static string ConvertToAbsolutePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return path;
@@ -285,7 +285,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseRealTimeLog_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog()
+            SaveFileDialog sfd = new()
             {
                 Filter = "Text Files|*.txt|All Files|*.*",
                 Title = "Select Real-Time Log File"
@@ -296,7 +296,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog()
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Output File"
@@ -307,7 +307,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog()
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select WhiteList Output File"
@@ -318,7 +318,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseBulkCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog()
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time Bulk CSV File"
@@ -329,7 +329,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog()
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time WhiteList CSV File"
@@ -340,7 +340,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog() { Filter = "JSON Files|*.json" };
+            SaveFileDialog sfd = new() { Filter = "JSON Files|*.json" };
             if (sfd.ShowDialog() == true)
             {
                 await SaveSettingsAsync(sfd.FileName);
@@ -350,7 +350,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnLoadSettings_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog() { Filter = "JSON Files|*.json" };
+            OpenFileDialog ofd = new() { Filter = "JSON Files|*.json" };
             bool? result = ofd.ShowDialog();
             if (result == true)
             {
@@ -516,7 +516,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Malware IPv4 List Handlers
         private void BtnBrowseMalwareIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
@@ -559,7 +559,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Malware IPv6 List Handlers
         private void BtnBrowseMalwareIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
@@ -602,7 +602,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region DDoS IPv4 List Handlers
         private void BtnBrowseDDoSIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
@@ -645,7 +645,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region DDoS IPv6 List Handlers
         private void BtnBrowseDDoSIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
@@ -688,7 +688,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Phishing IPv4 List Handlers
         private void BtnBrowsePhishingIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
@@ -731,7 +731,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region Phishing IPv6 List Handlers
         private void BtnBrowsePhishingIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
@@ -774,7 +774,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region WhiteList IPv4 List Handlers
         private void BtnBrowseWhiteListIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
@@ -817,7 +817,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         #region WhiteList IPv6 List Handlers
         private void BtnBrowseWhiteListIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
