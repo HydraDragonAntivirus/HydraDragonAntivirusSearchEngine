@@ -367,9 +367,13 @@
                             </DockPanel>
                         </Border>
                         <Button x:Name="BtnStartScan" 
-                                        Content="Start Scan"
-                                        Style="{DynamicResource AccentButtonStyle}"
-                                        Click="BtnStartScan_Click" Margin="33,6,729,20" Grid.Row="1"/>
+                                Content="Start Scan" 
+                                Style="{DynamicResource AccentButtonStyle}" 
+                                Click="BtnStartScan_Click" 
+                                Margin="33,6,729,20" 
+                                Grid.Row="1" 
+                                MinWidth="120" 
+                                MaxWidth="120" />
                     </Grid>
                 </Border>
             </TabItem>
