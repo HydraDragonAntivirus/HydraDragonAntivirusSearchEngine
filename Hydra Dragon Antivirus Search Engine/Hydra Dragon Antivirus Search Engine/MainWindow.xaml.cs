@@ -1023,8 +1023,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly Func<string, Task> realTimeBulkCsvCallback;
             private readonly Func<string, Task> realTimeWhiteListCsvCallback;
             private readonly Action<string> scanProgressCallback;
-            public List<string> BulkCsvLines { get; private set; } = new List<string>();
-            public List<string> WhiteListCsvLines { get; private set; } = new List<string>();
+            public List<string> BulkCsvLines { get; private set; } = new();
+            public List<string> WhiteListCsvLines { get; private set; } = new();
             private readonly ConcurrentQueue<Seed> seedQueue = new();
             private readonly ConcurrentDictionary<string, bool> processedIPs = new();
             int totalSeeds = 0;
