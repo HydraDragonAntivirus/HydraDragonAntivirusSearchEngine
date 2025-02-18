@@ -13,6 +13,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 using System.Windows;
+using System.Windows.Controls;
 using Microsoft.Win32;
 using IOPath = System.IO.Path;
 using log4net;
@@ -66,6 +67,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         {
             InitializeComponent();
             XmlConfigurator.Configure();
+            // Assume textBoxLogSearch's TextChanged event is wired to textBoxLogSearch_TextChanged.
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -98,6 +100,22 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region UI Helper Methods and Event Handlers
 
+
+        private void FilterLogResults()
+        {
+            if (listBoxLog == null)
+                return;
+            string filter = TextBoxLogSearch.Text.Trim();
+            listBoxLog.Items.Clear();
+            foreach (var log in fullLogList)
+            {
+                if (string.IsNullOrEmpty(filter) || log.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxLog.Items.Add(log);
+                }
+            }
+        }
+
         private void StartLogFlusher()
         {
             logFlushTimer = new System.Timers.Timer(300);
@@ -112,10 +130,22 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                     if (logsToFlush.Count > 0)
                     {
+                        // Use the current filter from TextBoxLogSearch.
+                        string filter = "";
+                        listBoxLog.Dispatcher.Invoke(() =>
+                        {
+                            filter = TextBoxLogSearch.Text.Trim();
+                        });
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             foreach (var log in logsToFlush)
-                                listBoxLog.Items.Add(log);
+                            {
+                                // Add only if matches the current filter.
+                                if (string.IsNullOrEmpty(filter) || log.Contains(filter, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    listBoxLog.Items.Add(log);
+                                }
+                            }
                         }));
                     }
                 }
@@ -470,6 +500,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 textBlockProgress.Text = $"{current} / {total}";
             });
         }
+
+        // New event handler for filtering logs as the user types.
+        private void TextBoxLogSearch_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            FilterLogResults();
+        }
+
 
         // BtnStartScan_Click event handler.
         private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
@@ -1278,8 +1315,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string ip = match.Groups["ip"].Value;
                 int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
 
-                // Allow processing if we haven’t seen this IP at an equal or greater depth.
-                if (processedIPs.TryGetValue(ip, out int currentProcessedDepth) && currentProcessedDepth >= currentDepth)
+                // Allow processing if we haven’t seen this IP at a greater depth.
+                if (processedIPs.TryGetValue(ip, out int currentProcessedDepth) && currentProcessedDepth > currentDepth)
                     return;
                 processedIPs[ip] = currentDepth;
 
@@ -1358,8 +1395,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 // Get the host from discoveredUrl for duplicate checking.
                 string host = GetIpFromUrl(discoveredUrl);
 
-                // Allow processing if we have not already processed this host at a greater or equal depth.
-                if (!scanKnownActiveHarmful && processedIPs.TryGetValue(host, out int processedDepth) && processedDepth >= seed.Depth)
+                // Allow processing if we have not already processed this host at a greater depth.
+                if (!scanKnownActiveHarmful && processedIPs.TryGetValue(host, out int processedDepth) && processedDepth > seed.Depth)
                 {
                     logCallback($"Skipping {host} at depth {seed.Depth} because it was already processed at depth {processedDepth}.");
                     return;
