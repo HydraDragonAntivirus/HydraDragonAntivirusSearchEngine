@@ -315,12 +315,6 @@
                         </StackPanel>
 
                         <!-- Progress Section -->
-                        <TextBlock x:Name="textBlockCurrentFile" 
-                                   Text="Current Loaded Definition File: None" 
-                                   FontSize="14" 
-                                   Foreground="Blue" 
-                                   HorizontalAlignment="Left"
-                                   Margin="33,36,0,40" Grid.RowSpan="2"/>
                         <StackPanel Grid.Row="1" 
                                     HorizontalAlignment="Center" 
                                     Margin="0,0,0,20">
@@ -354,13 +348,12 @@
                                            DockPanel.Dock="Top" 
                                            FontWeight="Medium" 
                                            Margin="0,0,0,10"/>
-                                <ListView x:Name="listBoxScanStatus" 
-                                          BorderThickness="0">
+                                <ListView Name="listViewScanStatus">
                                     <ListView.View>
                                         <GridView>
-                                            <GridViewColumn Header="Time" Width="150"/>
-                                            <GridViewColumn Header="Status" Width="200"/>
-                                            <GridViewColumn Header="Details" Width="400"/>
+                                            <GridViewColumn Header="Time" DisplayMemberBinding="{Binding Time}" />
+                                            <GridViewColumn Header="Status" DisplayMemberBinding="{Binding Status}" />
+                                            <GridViewColumn Header="Details" DisplayMemberBinding="{Binding Details}" />
                                         </GridView>
                                     </ListView.View>
                                 </ListView>
