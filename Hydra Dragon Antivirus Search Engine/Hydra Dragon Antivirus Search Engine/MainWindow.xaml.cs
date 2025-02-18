@@ -99,14 +99,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         #region UI Helper Methods and Event Handlers
 
-
         private void FilterLogResults()
         {
             if (listBoxLog == null)
                 return;
             string filter = TextBoxLogSearch.Text.Trim();
             listBoxLog.Items.Clear();
-            foreach (var log in fullLogList)
+            var logsSnapshot = fullLogList.ToList(); // Create a copy to safely iterate over
+            foreach (var log in logsSnapshot)
             {
                 if (string.IsNullOrEmpty(filter) || log.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 {
