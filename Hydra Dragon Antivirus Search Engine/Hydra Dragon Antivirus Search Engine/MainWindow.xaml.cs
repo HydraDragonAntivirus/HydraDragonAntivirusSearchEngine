@@ -1,26 +1,40 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Timers;
 using System.Windows;
 using Microsoft.Win32;
 using IOPath = System.IO.Path;
+using log4net;
+using log4net.Config;
 
 namespace Hydra_Dragon_Antivirus_Search_Engine
 {
     public partial class MainWindow : Window
     {
-        public MainWindow()
-        {
-            InitializeComponent();
-        }
+        // Logger initialization using explicit type to avoid null reference warnings.
+        private static readonly ILog logger = LogManager.GetLogger(typeof(MainWindow));
 
-        // Instead of a single list for each category, we now have eight lists.
+        // Field to hold the scanner instance.
+        private Scanner? scanner;
+
+        // Cancellation token for stopping scan.
+        private CancellationTokenSource cts = new();
+
+        // Field to track scan state.
+        private bool isScanning = false;
+
+        // Lists for different file categories.
         private readonly List<string> malwareFilesIPv4 = new();
         private readonly List<string> malwareFilesIPv6 = new();
         private readonly List<string> DDoSFilesIPv4 = new();
@@ -30,30 +44,38 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private readonly List<string> WhiteListFilesIPv4 = new();
         private readonly List<string> WhiteListFilesIPv6 = new();
 
-        // Folder paths
+        // Folder paths.
         private string malwarePath = string.Empty;
         private string ddosPath = string.Empty;
         private string phishingPath = string.Empty;
         private string whiteListPath = string.Empty;
-        // CSV folder paths:
+        // CSV folder paths.
         private string realTimeBulkPath = string.Empty;
-        private string realTimeWhiteListPath = string.Empty;
+        private string realTimeCsvWhiteListPath = string.Empty;
 
-        // Scanner instance – created when the user clicks Start Scan.
-        private Scanner? scanner;
-        // Cancellation token source to allow stopping the scan.
-        private CancellationTokenSource cts = new();
-        // A full log list to support search and saving.
+        // Log queue and full log list for UI.
+        private readonly ConcurrentQueue<string> logQueue = new();
         private readonly List<string> fullLogList = new();
+
+        // Timer for flushing logs to the UI.
+        private System.Timers.Timer? logFlushTimer;
+
+        // JSON options for settings.
+        private static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
+
+        public MainWindow()
+        {
+            InitializeComponent();
+            // Configure log4net from the assembly configuration.
+            XmlConfigurator.Configure();
+        }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
         {
-            // Cancel any ongoing scan operations.
             if (cts != null && !cts.IsCancellationRequested)
             {
                 cts.Cancel();
             }
-            // Stop log flush timer.
             StopLogFlusher();
             base.OnClosing(e);
         }
@@ -61,7 +83,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             StartLogFlusher();
-            // Set default settings.
+            // Set default settings in the UI textboxes.
             textBoxMaxDepth.Text = "10";
             textBoxMaxThreads.Text = "100";
             textBoxCsvMaxLines.Text = "10000";
@@ -74,14 +96,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})";
         }
 
-        #region Event Handlers
-
-        private readonly ConcurrentQueue<string> logQueue = new();
-        private System.Timers.Timer? logFlushTimer;
+        #region UI Helper Methods and Event Handlers
 
         private void StartLogFlusher()
         {
-            // Flush every 300ms.
+            // Flush the log queue every 300ms.
             logFlushTimer = new System.Timers.Timer(300);
             logFlushTimer.Elapsed += (s, e) =>
             {
@@ -92,7 +111,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         logsToFlush.Add(log);
                     }
-                    if (logsToFlush.Count > 0)
+                    if (logsToFlush.Any())
                     {
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
@@ -116,12 +135,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        private static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
-
-        // SaveSettingsAsync now uses asynchronous file I/O.
         private async Task SaveSettingsAsync(string filePath)
         {
-            AppSettings settings = new()
+            AppSettings settings = new AppSettings
             {
                 MaxDepth = int.TryParse(textBoxMaxDepth.Text, out int depth) ? depth : 10,
                 MaxThreads = int.TryParse(textBoxMaxThreads.Text, out int threads) ? threads : 100,
@@ -153,32 +169,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 PhishingPath = phishingPath,
                 WhiteListPath = whiteListPath,
                 RealTimeCsvBulkPath = realTimeBulkPath,
-                RealTimeCsvWhiteListPath = realTimeWhiteListPath
+                RealTimeCsvWhiteListPath = realTimeCsvWhiteListPath
             };
 
             string json = JsonSerializer.Serialize(settings, jsonOptions);
             await File.WriteAllTextAsync(filePath, json);
         }
 
-        private void UpdateCurrentFileMessage(string message)
-        {
-            if (textBlockCurrentFile.Dispatcher.CheckAccess())
-                textBlockCurrentFile.Text = message;
-            else
-                textBlockCurrentFile.Dispatcher.Invoke(() => textBlockCurrentFile.Text = message);
-        }
-
-        private static string ConvertToAbsolutePath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-                return path;
-            if (IOPath.IsPathRooted(path))
-                return IOPath.GetFullPath(path);
-            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-            return IOPath.GetFullPath(IOPath.Combine(baseDir, path));
-        }
-
-        // LoadSettingsAsync uses asynchronous file reading.
         private async Task LoadSettingsAsync(string filePath)
         {
             if (File.Exists(filePath))
@@ -276,16 +273,26 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     realTimeBulkPath = string.IsNullOrEmpty(settings.RealTimeCsvBulkPath)
                         ? (IOPath.GetDirectoryName(settings.RealTimeCsvBulkFile) ?? Environment.CurrentDirectory)
                         : settings.RealTimeCsvBulkPath;
-                    realTimeWhiteListPath = string.IsNullOrEmpty(settings.RealTimeCsvWhiteListPath)
+                    realTimeCsvWhiteListPath = string.IsNullOrEmpty(settings.RealTimeCsvWhiteListPath)
                         ? (IOPath.GetDirectoryName(settings.RealTimeCsvWhiteListFile) ?? Environment.CurrentDirectory)
                         : settings.RealTimeCsvWhiteListPath;
                 }
             }
         }
 
+        private string ConvertToAbsolutePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+            if (IOPath.IsPathRooted(path))
+                return IOPath.GetFullPath(path);
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            return IOPath.GetFullPath(IOPath.Combine(baseDir, path));
+        }
+
         private void BtnBrowseRealTimeLog_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "Text Files|*.txt|All Files|*.*",
                 Title = "Select Real-Time Log File"
@@ -296,7 +303,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Output File"
@@ -307,7 +314,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select WhiteList Output File"
@@ -318,7 +325,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseBulkCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time Bulk CSV File"
@@ -329,7 +336,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time WhiteList CSV File"
@@ -340,514 +347,77 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new() { Filter = "JSON Files|*.json" };
+            SaveFileDialog sfd = new SaveFileDialog { Filter = "JSON Files|*.json" };
             if (sfd.ShowDialog() == true)
             {
                 await SaveSettingsAsync(sfd.FileName);
-                MessageBox.Show("Settings saved successfully.");
+                MessageBox.Show("Settings saved successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
         private async void BtnLoadSettings_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new() { Filter = "JSON Files|*.json" };
+            OpenFileDialog ofd = new OpenFileDialog { Filter = "JSON Files|*.json" };
             bool? result = ofd.ShowDialog();
             if (result == true)
             {
                 await LoadSettingsAsync(ofd.FileName);
-                MessageBox.Show("Settings loaded successfully.");
+                MessageBox.Show("Settings loaded successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
-        // Asynchronously initialize (or clear) the realtime CSV files.
         private async Task InitializeRealtimeCsvFilesAsync()
         {
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
                 string? bulkDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text);
                 if (!string.IsNullOrEmpty(bulkDirectory) && !Directory.Exists(bulkDirectory))
-                {
                     Directory.CreateDirectory(bulkDirectory);
-                }
                 await File.WriteAllTextAsync(textBoxRealTimeCsvBulkFile.Text, string.Empty);
             }
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
                 string? whiteListDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text);
                 if (!string.IsNullOrEmpty(whiteListDirectory) && !Directory.Exists(whiteListDirectory))
-                {
                     Directory.CreateDirectory(whiteListDirectory);
-                }
                 await File.WriteAllTextAsync(textBoxRealTimeCsvWhiteListFile.Text, string.Empty);
             }
         }
 
-        // Add a field to track the scan state.
-        private bool isScanning = false;
-
-        private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
+        // Added missing event handlers for clearing and saving the log.
+        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
-            if (!isScanning)
-            {
-                isScanning = true;
-                BtnStartScan.Content = "Stop Scan";
-                try
-                {
-                    if (!int.TryParse(textBoxMaxDepth.Text, out int maxDepth))
-                        maxDepth = 10;
-                    if (!int.TryParse(textBoxMaxThreads.Text, out int maxThreads))
-                        maxThreads = 100;
-                    if (!int.TryParse(textBoxCsvMaxLines.Text, out int csvMaxLines))
-                        csvMaxLines = 10000;
-                    if (!int.TryParse(textBoxCsvMaxSize.Text, out int csvMaxSize))
-                        csvMaxSize = 2097152;
-
-                    string outputFileName = textBoxOutputFile.Text;
-                    string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
-                    string categoryMalicious = textBoxCategoryMalicious.Text;
-                    string categoryPhishing = textBoxCategoryPhishing.Text;
-                    string categoryDDoS = textBoxCategoryDDoS.Text;
-                    string commentTemplate = textBoxCommentTemplate.Text;
-
-                    bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
-                    bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
-
-                    // Initialize realtime CSV files asynchronously.
-                    await InitializeRealtimeCsvFilesAsync();
-                    cts = new CancellationTokenSource();
-
-                    // Scan IPv4.
-                    scanner = new Scanner(
-                        malwareFilesIPv4,
-                        DDoSFilesIPv4,
-                        phishingFilesIPv4,
-                        WhiteListFilesIPv4,
-                        maxDepth,
-                        maxThreads,
-                        categoryMalicious,
-                        categoryPhishing,
-                        categoryDDoS,
-                        csvMaxLines,
-                        csvMaxSize,
-                        outputFileName,
-                        whiteListOutputFileName,
-                        UpdateLog,
-                        UpdateProgress,
-                        AppendBulkCsvLineToFileAsync,
-                        AppendWhiteListCsvLineToFileAsync,
-                        commentTemplate,
-                        UpdateCurrentFileMessage,
-                        scanKnownActive,
-                        allowAutoVerdict,
-                        "ipv4");
-
-                    await scanner.StartScanAsync(cts.Token);
-
-                    // Scan IPv6.
-                    scanner = new Scanner(
-                        malwareFilesIPv6,
-                        DDoSFilesIPv6,
-                        phishingFilesIPv6,
-                        WhiteListFilesIPv6,
-                        maxDepth,
-                        maxThreads,
-                        categoryMalicious,
-                        categoryPhishing,
-                        categoryDDoS,
-                        csvMaxLines,
-                        csvMaxSize,
-                        outputFileName,
-                        whiteListOutputFileName,
-                        UpdateLog,
-                        UpdateProgress,
-                        AppendBulkCsvLineToFileAsync,
-                        AppendWhiteListCsvLineToFileAsync,
-                        commentTemplate,
-                        UpdateCurrentFileMessage,
-                        scanKnownActive,
-                        allowAutoVerdict,
-                        "ipv6");
-
-                    await scanner.StartScanAsync(cts.Token);
-
-                    // Finalize CSV output using Scanner's settings.
-                    bool csvOk = await scanner.FinalizeCsvFilesAsync();
-                    if (!csvOk)
-                        MessageBox.Show("CSV output exceeds the defined limits.");
-                    else
-                        MessageBox.Show("Scan completed and CSV files generated successfully.");
-                }
-                catch (OperationCanceledException)
-                {
-                    UpdateLog("Scan cancelled by the user.");
-                }
-                catch (Exception ex)
-                {
-                    UpdateLog("Error: " + ex.Message);
-                }
-                finally
-                {
-                    isScanning = false;
-                    BtnStartScan.Content = "Start Scan";
-                }
-            }
-            else
-            {
-                if (cts != null && !cts.IsCancellationRequested)
-                {
-                    cts.Cancel();
-                    UpdateLog("Scan cancellation requested.");
-                }
-            }
+            listBoxLog.Items.Clear();
+            fullLogList.Clear();
         }
 
-        #endregion
-
-        #region Malware IPv4 List Handlers
-        private void BtnBrowseMalwareIPv4_Click(object sender, RoutedEventArgs e)
+        private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new()
+            SaveFileDialog sfd = new SaveFileDialog
             {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
+                Filter = "Text Files|*.txt|All Files|*.*",
+                Title = "Save Log File"
             };
-            if (ofd.ShowDialog() == true)
+            if (sfd.ShowDialog() == true)
             {
-                string filePath = ofd.FileName;
-                malwarePath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                malwareFilesIPv4.Add(filePath);
-                listBoxMalwareIPv4.Items.Add(filePath);
+                File.WriteAllLines(sfd.FileName, fullLogList);
+                MessageBox.Show("Log saved successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
-        private void BtnAddMalwareIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxMalwareIPv4Input.Text))
-            {
-                if (textBoxMalwareIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxMalwareIPv4.Items.Add(textBoxMalwareIPv4Input.Text);
-                    malwareFilesIPv4.Add(textBoxMalwareIPv4Input.Text);
-                    textBoxMalwareIPv4Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteMalwareIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxMalwareIPv4.SelectedIndex >= 0)
-            {
-                int index = listBoxMalwareIPv4.SelectedIndex;
-                malwareFilesIPv4.RemoveAt(index);
-                listBoxMalwareIPv4.Items.RemoveAt(index);
-            }
-        }
-        #endregion
 
-        #region Malware IPv6 List Handlers
-        private void BtnBrowseMalwareIPv6_Click(object sender, RoutedEventArgs e)
+        // Implementations for appending CSV lines asynchronously.
+        private async Task AppendBulkCsvLineToFileAsync(string line)
         {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                malwarePath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                malwareFilesIPv6.Add(filePath);
-                listBoxMalwareIPv6.Items.Add(filePath);
-            }
+            if (!string.IsNullOrEmpty(textBoxOutputFile.Text))
+                await File.AppendAllTextAsync(textBoxOutputFile.Text, line + Environment.NewLine);
         }
-        private void BtnAddMalwareIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxMalwareIPv6Input.Text))
-            {
-                if (textBoxMalwareIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxMalwareIPv6.Items.Add(textBoxMalwareIPv6Input.Text);
-                    malwareFilesIPv6.Add(textBoxMalwareIPv6Input.Text);
-                    textBoxMalwareIPv6Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteMalwareIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxMalwareIPv6.SelectedIndex >= 0)
-            {
-                int index = listBoxMalwareIPv6.SelectedIndex;
-                malwareFilesIPv6.RemoveAt(index);
-                listBoxMalwareIPv6.Items.RemoveAt(index);
-            }
-        }
-        #endregion
 
-        #region DDoS IPv4 List Handlers
-        private void BtnBrowseDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        private async Task AppendWhiteListCsvLineToFileAsync(string line)
         {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                DDoSFilesIPv4.Add(filePath);
-                listBoxDDoSIPv4.Items.Add(filePath);
-            }
+            if (!string.IsNullOrEmpty(textBoxWhiteListOutputFile.Text))
+                await File.AppendAllTextAsync(textBoxWhiteListOutputFile.Text, line + Environment.NewLine);
         }
-        private void BtnAddDDoSIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxDDoSIPv4Input.Text))
-            {
-                if (textBoxDDoSIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxDDoSIPv4.Items.Add(textBoxDDoSIPv4Input.Text);
-                    DDoSFilesIPv4.Add(textBoxDDoSIPv4Input.Text);
-                    textBoxDDoSIPv4Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteDDoSIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxDDoSIPv4.SelectedIndex >= 0)
-            {
-                int index = listBoxDDoSIPv4.SelectedIndex;
-                DDoSFilesIPv4.RemoveAt(index);
-                listBoxDDoSIPv4.Items.RemoveAt(index);
-            }
-        }
-        #endregion
 
-        #region DDoS IPv6 List Handlers
-        private void BtnBrowseDDoSIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                DDoSFilesIPv6.Add(filePath);
-                listBoxDDoSIPv6.Items.Add(filePath);
-            }
-        }
-        private void BtnAddDDoSIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxDDoSIPv6Input.Text))
-            {
-                if (textBoxDDoSIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxDDoSIPv6.Items.Add(textBoxDDoSIPv6Input.Text);
-                    DDoSFilesIPv6.Add(textBoxDDoSIPv6Input.Text);
-                    textBoxDDoSIPv6Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteDDoSIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxDDoSIPv6.SelectedIndex >= 0)
-            {
-                int index = listBoxDDoSIPv6.SelectedIndex;
-                DDoSFilesIPv6.RemoveAt(index);
-                listBoxDDoSIPv6.Items.RemoveAt(index);
-            }
-        }
-        #endregion
-
-        #region Phishing IPv4 List Handlers
-        private void BtnBrowsePhishingIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                phishingFilesIPv4.Add(filePath);
-                listBoxPhishingIPv4.Items.Add(filePath);
-            }
-        }
-        private void BtnAddPhishingIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxPhishingIPv4Input.Text))
-            {
-                if (textBoxPhishingIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxPhishingIPv4.Items.Add(textBoxPhishingIPv4Input.Text);
-                    phishingFilesIPv4.Add(textBoxPhishingIPv4Input.Text);
-                    textBoxPhishingIPv4Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeletePhishingIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxPhishingIPv4.SelectedIndex >= 0)
-            {
-                int index = listBoxPhishingIPv4.SelectedIndex;
-                phishingFilesIPv4.RemoveAt(index);
-                listBoxPhishingIPv4.Items.RemoveAt(index);
-            }
-        }
-        #endregion
-
-        #region Phishing IPv6 List Handlers
-        private void BtnBrowsePhishingIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                phishingFilesIPv6.Add(filePath);
-                listBoxPhishingIPv6.Items.Add(filePath);
-            }
-        }
-        private void BtnAddPhishingIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxPhishingIPv6Input.Text))
-            {
-                if (textBoxPhishingIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxPhishingIPv6.Items.Add(textBoxPhishingIPv6Input.Text);
-                    phishingFilesIPv6.Add(textBoxPhishingIPv6Input.Text);
-                    textBoxPhishingIPv6Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeletePhishingIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxPhishingIPv6.SelectedIndex >= 0)
-            {
-                int index = listBoxPhishingIPv6.SelectedIndex;
-                phishingFilesIPv6.RemoveAt(index);
-                listBoxPhishingIPv6.Items.RemoveAt(index);
-            }
-        }
-        #endregion
-
-        #region WhiteList IPv4 List Handlers
-        private void BtnBrowseWhiteListIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                WhiteListFilesIPv4.Add(filePath);
-                listBoxWhiteListIPv4.Items.Add(filePath);
-            }
-        }
-        private void BtnAddWhiteListIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxWhiteListIPv4Input.Text))
-            {
-                if (textBoxWhiteListIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxWhiteListIPv4.Items.Add(textBoxWhiteListIPv4Input.Text);
-                    WhiteListFilesIPv4.Add(textBoxWhiteListIPv4Input.Text);
-                    textBoxWhiteListIPv4Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteWhiteListIPv4_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxWhiteListIPv4.SelectedIndex >= 0)
-            {
-                int index = listBoxWhiteListIPv4.SelectedIndex;
-                WhiteListFilesIPv4.RemoveAt(index);
-                listBoxWhiteListIPv4.Items.RemoveAt(index);
-            }
-        }
-        #endregion
-
-        #region WhiteList IPv6 List Handlers
-        private void BtnBrowseWhiteListIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            OpenFileDialog ofd = new()
-            {
-                Filter = "Text Files|*.txt",
-                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
-            };
-            if (ofd.ShowDialog() == true)
-            {
-                string filePath = ofd.FileName;
-                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
-                WhiteListFilesIPv6.Add(filePath);
-                listBoxWhiteListIPv6.Items.Add(filePath);
-            }
-        }
-        private void BtnAddWhiteListIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (File.Exists(textBoxWhiteListIPv6Input.Text))
-            {
-                if (textBoxWhiteListIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxWhiteListIPv6.Items.Add(textBoxWhiteListIPv6Input.Text);
-                    WhiteListFilesIPv6.Add(textBoxWhiteListIPv6Input.Text);
-                    textBoxWhiteListIPv6Input.Clear();
-                }
-                else
-                    MessageBox.Show("File is not a txt file.");
-            }
-            else
-                MessageBox.Show("File does not exist.");
-        }
-        private void BtnDeleteWhiteListIPv6_Click(object sender, RoutedEventArgs e)
-        {
-            if (listBoxWhiteListIPv6.SelectedIndex >= 0)
-            {
-                int index = listBoxWhiteListIPv6.SelectedIndex;
-                WhiteListFilesIPv6.RemoveAt(index);
-                listBoxWhiteListIPv6.Items.RemoveAt(index);
-            }
-        }
-        #endregion
-
-        #region UI Helper Methods
         private async void UpdateLog(string message)
         {
             string logEntry = $"{DateTime.Now}: {message}";
@@ -893,10 +463,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             try
                             {
                                 if (!listBoxLog.Dispatcher.HasShutdownStarted)
-                                {
-                                    await listBoxLog.Dispatcher.InvokeAsync(() =>
-                                        logQueue.Enqueue("Error saving realtime log: " + ex.Message));
-                                }
+                                    await listBoxLog.Dispatcher.InvokeAsync(() => logQueue.Enqueue("Error saving realtime log: " + ex.Message));
                             }
                             catch { }
                         }
@@ -918,6 +485,474 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 textBlockProgress.Text = $"{current} / {total}";
             });
         }
+
+        // BtnStartScan_Click event handler.
+        private async void BtnStartScan_Click(object sender, RoutedEventArgs e)
+        {
+            if (!isScanning)
+            {
+                isScanning = true;
+                BtnStartScan.Content = "Stop Scan";
+                try
+                {
+                    int maxDepth = int.TryParse(textBoxMaxDepth.Text, out int d) ? d : 10;
+                    int maxThreads = int.TryParse(textBoxMaxThreads.Text, out int t) ? t : 100;
+                    int csvMaxLines = int.TryParse(textBoxCsvMaxLines.Text, out int cl) ? cl : 10000;
+                    int csvMaxSize = int.TryParse(textBoxCsvMaxSize.Text, out int cs) ? cs : 2097152;
+                    string outputFileName = textBoxOutputFile.Text;
+                    string whiteListOutputFileName = textBoxWhiteListOutputFile.Text;
+                    string categoryMalicious = textBoxCategoryMalicious.Text;
+                    string categoryPhishing = textBoxCategoryPhishing.Text;
+                    string categoryDDoS = textBoxCategoryDDoS.Text;
+                    string commentTemplate = textBoxCommentTemplate.Text;
+                    bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
+                    bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
+
+                    // Initialize realtime CSV files.
+                    await InitializeRealtimeCsvFilesAsync();
+                    cts = new CancellationTokenSource();
+
+                    // Create and start scanner for IPv4.
+                    scanner = new Scanner(
+                        malwareFilesIPv4,
+                        DDoSFilesIPv4,
+                        phishingFilesIPv4,
+                        WhiteListFilesIPv4,
+                        maxDepth,
+                        maxThreads,
+                        categoryMalicious,
+                        categoryPhishing,
+                        categoryDDoS,
+                        csvMaxLines,
+                        csvMaxSize,
+                        outputFileName,
+                        whiteListOutputFileName,
+                        UpdateLog,
+                        UpdateProgress,
+                        AppendBulkCsvLineToFileAsync,
+                        AppendWhiteListCsvLineToFileAsync,
+                        commentTemplate,
+                        UpdateCurrentFileMessage,
+                        scanKnownActive,
+                        allowAutoVerdict,
+                        "ipv4"
+                    );
+                    await scanner.StartScanAsync(cts.Token);
+
+                    // Create and start scanner for IPv6.
+                    scanner = new Scanner(
+                        malwareFilesIPv6,
+                        DDoSFilesIPv6,
+                        phishingFilesIPv6,
+                        WhiteListFilesIPv6,
+                        maxDepth,
+                        maxThreads,
+                        categoryMalicious,
+                        categoryPhishing,
+                        categoryDDoS,
+                        csvMaxLines,
+                        csvMaxSize,
+                        outputFileName,
+                        whiteListOutputFileName,
+                        UpdateLog,
+                        UpdateProgress,
+                        AppendBulkCsvLineToFileAsync,
+                        AppendWhiteListCsvLineToFileAsync,
+                        commentTemplate,
+                        UpdateCurrentFileMessage,
+                        scanKnownActive,
+                        allowAutoVerdict,
+                        "ipv6"
+                    );
+                    await scanner.StartScanAsync(cts.Token);
+
+                    // Finalize CSV output.
+                    bool csvOk = await scanner.FinalizeCsvFilesAsync();
+                    if (!csvOk)
+                        MessageBox.Show("CSV output exceeds the defined limits.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    else
+                        MessageBox.Show("Scan completed and CSV files generated successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (OperationCanceledException)
+                {
+                    UpdateLog("Scan cancelled by the user.");
+                }
+                catch (Exception ex)
+                {
+                    UpdateLog("Error: " + ex.Message);
+                }
+                finally
+                {
+                    isScanning = false;
+                    BtnStartScan.Content = "Start Scan";
+                }
+            }
+            else
+            {
+                if (cts != null && !cts.IsCancellationRequested)
+                {
+                    cts.Cancel();
+                    UpdateLog("Scan cancellation requested.");
+                }
+            }
+        }
+
+        private void UpdateCurrentFileMessage(string message)
+        {
+            if (textBlockCurrentFile.Dispatcher.CheckAccess())
+                textBlockCurrentFile.Text = message;
+            else
+                textBlockCurrentFile.Dispatcher.Invoke(() => textBlockCurrentFile.Text = message);
+        }
+
+        #endregion
+
+        #region List Handlers for Seed Files
+
+        private void BtnBrowseMalwareIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                malwarePath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                malwareFilesIPv4.Add(filePath);
+                listBoxMalwareIPv4.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddMalwareIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxMalwareIPv4Input.Text))
+            {
+                if (textBoxMalwareIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxMalwareIPv4.Items.Add(textBoxMalwareIPv4Input.Text);
+                    malwareFilesIPv4.Add(textBoxMalwareIPv4Input.Text);
+                    textBoxMalwareIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteMalwareIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxMalwareIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxMalwareIPv4.SelectedIndex;
+                malwareFilesIPv4.RemoveAt(index);
+                listBoxMalwareIPv4.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowseMalwareIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                malwarePath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                malwareFilesIPv6.Add(filePath);
+                listBoxMalwareIPv6.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddMalwareIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxMalwareIPv6Input.Text))
+            {
+                if (textBoxMalwareIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxMalwareIPv6.Items.Add(textBoxMalwareIPv6Input.Text);
+                    malwareFilesIPv6.Add(textBoxMalwareIPv6Input.Text);
+                    textBoxMalwareIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteMalwareIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxMalwareIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxMalwareIPv6.SelectedIndex;
+                malwareFilesIPv6.RemoveAt(index);
+                listBoxMalwareIPv6.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowseDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                DDoSFilesIPv4.Add(filePath);
+                listBoxDDoSIPv4.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxDDoSIPv4Input.Text))
+            {
+                if (textBoxDDoSIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxDDoSIPv4.Items.Add(textBoxDDoSIPv4Input.Text);
+                    DDoSFilesIPv4.Add(textBoxDDoSIPv4Input.Text);
+                    textBoxDDoSIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteDDoSIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxDDoSIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxDDoSIPv4.SelectedIndex;
+                DDoSFilesIPv4.RemoveAt(index);
+                listBoxDDoSIPv4.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowseDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                ddosPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                DDoSFilesIPv6.Add(filePath);
+                listBoxDDoSIPv6.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxDDoSIPv6Input.Text))
+            {
+                if (textBoxDDoSIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxDDoSIPv6.Items.Add(textBoxDDoSIPv6Input.Text);
+                    DDoSFilesIPv6.Add(textBoxDDoSIPv6Input.Text);
+                    textBoxDDoSIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteDDoSIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxDDoSIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxDDoSIPv6.SelectedIndex;
+                DDoSFilesIPv6.RemoveAt(index);
+                listBoxDDoSIPv6.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowsePhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                phishingFilesIPv4.Add(filePath);
+                listBoxPhishingIPv4.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddPhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxPhishingIPv4Input.Text))
+            {
+                if (textBoxPhishingIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxPhishingIPv4.Items.Add(textBoxPhishingIPv4Input.Text);
+                    phishingFilesIPv4.Add(textBoxPhishingIPv4Input.Text);
+                    textBoxPhishingIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeletePhishingIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxPhishingIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxPhishingIPv4.SelectedIndex;
+                phishingFilesIPv4.RemoveAt(index);
+                listBoxPhishingIPv4.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowsePhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                phishingPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                phishingFilesIPv6.Add(filePath);
+                listBoxPhishingIPv6.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddPhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxPhishingIPv6Input.Text))
+            {
+                if (textBoxPhishingIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxPhishingIPv6.Items.Add(textBoxPhishingIPv6Input.Text);
+                    phishingFilesIPv6.Add(textBoxPhishingIPv6Input.Text);
+                    textBoxPhishingIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeletePhishingIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxPhishingIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxPhishingIPv6.SelectedIndex;
+                phishingFilesIPv6.RemoveAt(index);
+                listBoxPhishingIPv6.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowseWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                WhiteListFilesIPv4.Add(filePath);
+                listBoxWhiteListIPv4.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxWhiteListIPv4Input.Text))
+            {
+                if (textBoxWhiteListIPv4Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxWhiteListIPv4.Items.Add(textBoxWhiteListIPv4Input.Text);
+                    WhiteListFilesIPv4.Add(textBoxWhiteListIPv4Input.Text);
+                    textBoxWhiteListIPv4Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteWhiteListIPv4_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxWhiteListIPv4.SelectedIndex >= 0)
+            {
+                int index = listBoxWhiteListIPv4.SelectedIndex;
+                WhiteListFilesIPv4.RemoveAt(index);
+                listBoxWhiteListIPv4.Items.RemoveAt(index);
+            }
+        }
+
+        private void BtnBrowseWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog
+            {
+                Filter = "Text Files|*.txt",
+                InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
+            };
+            if (ofd.ShowDialog() == true)
+            {
+                string filePath = ofd.FileName;
+                whiteListPath = IOPath.GetDirectoryName(filePath) ?? Environment.CurrentDirectory;
+                WhiteListFilesIPv6.Add(filePath);
+                listBoxWhiteListIPv6.Items.Add(filePath);
+            }
+        }
+
+        private void BtnAddWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (File.Exists(textBoxWhiteListIPv6Input.Text))
+            {
+                if (textBoxWhiteListIPv6Input.Text.EndsWith(".txt", StringComparison.OrdinalIgnoreCase))
+                {
+                    listBoxWhiteListIPv6.Items.Add(textBoxWhiteListIPv6Input.Text);
+                    WhiteListFilesIPv6.Add(textBoxWhiteListIPv6Input.Text);
+                    textBoxWhiteListIPv6Input.Clear();
+                }
+                else
+                    MessageBox.Show("The file is not a txt file.");
+            }
+            else
+                MessageBox.Show("The file does not exist.");
+        }
+
+        private void BtnDeleteWhiteListIPv6_Click(object sender, RoutedEventArgs e)
+        {
+            if (listBoxWhiteListIPv6.SelectedIndex >= 0)
+            {
+                int index = listBoxWhiteListIPv6.SelectedIndex;
+                WhiteListFilesIPv6.RemoveAt(index);
+                listBoxWhiteListIPv6.Items.RemoveAt(index);
+            }
+        }
+
         #endregion
 
         #region Scanner and Helper Classes
@@ -941,17 +976,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public bool RealTimeSave { get; set; }
             public string RealTimeFile { get; set; } = string.Empty;
             public bool ScanKnownActive { get; set; }
-            public List<string> MalwareFiles { get; set; } = new();
-            public List<string> DDoSFiles { get; set; } = new();
-            public List<string> PhishingFiles { get; set; } = new();
-            public List<string> WhiteListFiles { get; set; } = new();
-            public string MalwarePath { get; set; } = string.Empty;
-            public string DDoSPath { get; set; } = string.Empty;
-            public string PhishingPath { get; set; } = string.Empty;
-            public string WhiteListPath { get; set; } = string.Empty;
-            public string RealTimeCsvBulkPath { get; set; } = string.Empty;
-            public string RealTimeCsvWhiteListPath { get; set; } = string.Empty;
-
             public List<string> MalwareFilesIPv4 { get; set; } = new();
             public List<string> MalwareFilesIPv6 { get; set; } = new();
             public List<string> DDoSFilesIPv4 { get; set; } = new();
@@ -960,16 +984,19 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public List<string> PhishingFilesIPv6 { get; set; } = new();
             public List<string> WhiteListFilesIPv4 { get; set; } = new();
             public List<string> WhiteListFilesIPv6 { get; set; } = new();
+            public string MalwarePath { get; set; } = string.Empty;
+            public string DDoSPath { get; set; } = string.Empty;
+            public string PhishingPath { get; set; } = string.Empty;
+            public string WhiteListPath { get; set; } = string.Empty;
+            public string RealTimeCsvBulkPath { get; set; } = string.Empty;
+            public string RealTimeCsvWhiteListPath { get; set; } = string.Empty;
         }
 
-        #endregion
-
-        /// <summary>
-        /// Scanner class: Loads seeds, performs HTTP scans concurrently, recursively discovers IPs,
-        /// and builds two CSV reports.
-        /// </summary>
         public partial class Scanner
         {
+            // Logger for Scanner using explicit type.
+            private readonly ILog scannerLogger = LogManager.GetLogger(typeof(Scanner));
+
             public string SelectedIPType { get; set; }
             private readonly List<string> malwareFiles;
             private readonly List<string> DDoSFiles;
@@ -999,8 +1026,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly HttpClient httpClient = new();
             private readonly bool scanKnownActive;
             private readonly bool allowAutoVerdict;
-
-            // Lock for thread-safe updates to BulkCsvLines.
             private readonly object bulkCsvLock = new();
 
             public Scanner(
@@ -1044,7 +1069,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.progressCallback = progressCallback;
                 this.realTimeBulkCsvCallback = realTimeBulkCsvCallback;
                 this.realTimeWhiteListCsvCallback = realTimeWhiteListCsvCallback;
-                this.commentTemplate = commentTemplate ?? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})";
+                this.commentTemplate = string.IsNullOrEmpty(commentTemplate)
+                    ? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})"
+                    : commentTemplate;
                 this.scanProgressCallback = scanProgressCallback;
                 this.scanKnownActive = scanKnownActive;
                 this.allowAutoVerdict = allowAutoVerdict;
@@ -1080,7 +1107,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 try
                 {
-                    // Priority order: WhiteList, Phishing, DDoS, Malicious.
+                    // Priority: WhiteList, then Phishing, then DDoS, then Malicious.
                     await LoadSeedsFromFileListAsync(WhiteListFiles, "WhiteList", token);
                     await LoadSeedsFromFileListAsync(phishingFiles, "phishing", token);
                     await LoadSeedsFromFileListAsync(DDoSFiles, "DDoS", token);
@@ -1144,7 +1171,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         await ProcessSeedAsync(seed, token);
                         processedCount++;
                         progressCallback(processedCount, totalSeeds);
-                        // Yield to allow UI processing
                         await Task.Yield();
                     }
                     else
@@ -1154,19 +1180,20 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            private async Task ProcessSeedAsync(Seed seed, CancellationToken token)
+            public async Task ProcessSeedAsync(Seed seed, CancellationToken token)
             {
                 if (seed.Depth > maxDepth)
                     return;
 
                 string url = seed.GetUrl();
+                scannerLogger.Info($"Processing (Depth {seed.Depth}): {url}");
                 logCallback($"Processing (Depth {seed.Depth}): {url}");
-
                 try
                 {
                     var response = await httpClient.GetAsync(url, token);
                     if (!response.IsSuccessStatusCode)
                     {
+                        scannerLogger.Warn($"Failed: {url} Status: {response.StatusCode}");
                         logCallback($"Failed: {url} Status: {response.StatusCode}");
                         return;
                     }
@@ -1175,9 +1202,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (string.IsNullOrEmpty(content))
                         return;
 
+                    scannerLogger.Info($"Visited (Depth {seed.Depth}): {url}");
                     logCallback($"Visited (Depth {seed.Depth}): {url}");
 
-                    // Build the CSV result line.
                     string category = seed.SourceType switch
                     {
                         "malicious" => categoryMalicious,
@@ -1199,7 +1226,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                     string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
 
-                    // When ScanKnownActive is disabled, do not add a CSV result for depth 0 seeds.
                     if (scanKnownActive || seed.Depth > 0)
                     {
                         lock (bulkCsvLock)
@@ -1209,14 +1235,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         await realTimeBulkCsvCallback(csvLine);
                     }
 
-                    // Continue processing the same IP by increasing depth
                     if (seed.Depth < maxDepth)
                     {
-                        var nextSeed = new Seed(seed.IP, seed.SourceType, seed.Version, seed.Port, seed.Depth + 1, seed.OriginalSourceUrl, seed.DiscoveredUrl);
-                        await ProcessSeedAsync(nextSeed, token); // Recursive call with incremented depth
+                        EnqueueSeed(new Seed(seed.IP, seed.SourceType, seed.Version, seed.Port, seed.Depth + 1, seed.OriginalSourceUrl, seed.DiscoveredUrl));
                     }
 
-                    // Additionally, process new discovered IPs in the response (if any).
                     var tasks = new List<Task>();
 
                     string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
@@ -1235,6 +1258,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
                 catch (Exception ex)
                 {
+                    scannerLogger.Error($"Error processing {url}: {ex.Message}");
                     logCallback($"Error processing {url}: {ex.Message}");
                 }
             }
@@ -1250,42 +1274,35 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth, file, trimmed), ip, port, version, trimmed, token);
             }
 
-            // Helper method to convert a URL into an absolute URL with scheme.
             private static string ConvertToUrl(string? url, string? baseUrl = "")
             {
-                // Ensure the URL is not null or empty
                 if (string.IsNullOrWhiteSpace(url))
                     return string.Empty;
 
-                // If URL already has "http://" or "https://", return as is.
                 if (url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
                     url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                 {
                     return url;
                 }
 
-                // Handle protocol-relative URLs (e.g. //example.com)
                 if (url.StartsWith("//"))
                 {
                     return "http:" + url;
                 }
 
-                // If a base URL is provided, attempt to resolve relative URLs to absolute URLs.
                 if (!string.IsNullOrEmpty(baseUrl) && Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? baseUri))
                 {
-                    // Combine the base URL with the relative URL
                     if (Uri.TryCreate(baseUri, url, out Uri? combinedUri))
                     {
                         return combinedUri.ToString();
                     }
                 }
 
-                // Fallback: prepend "http://" if no scheme found
                 return "http://" + url;
             }
 
             [GeneratedRegex(@"href\s*=\s*[""'](?<url>[^""']+)[""']", RegexOptions.IgnoreCase)]
-            private static partial Regex HrefRegex(); // Declare the method as partial, no need to implement
+            private static partial Regex HrefRegex();
 
             private static List<string> ExtractURLsFromHtml(string? htmlContent, string? baseUrl = "")
             {
@@ -1294,22 +1311,18 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (string.IsNullOrEmpty(htmlContent))
                     return urls;
 
-                // Use the generated regex method
-                var regex = HrefRegex(); // This will use the method generated at compile-time
+                var regex = HrefRegex();
                 var matches = regex.Matches(htmlContent);
 
                 foreach (Match match in matches)
                 {
                     string? extractedUrl = match.Groups["url"].Value.Trim();
 
-                    // Skip empty URLs
                     if (string.IsNullOrEmpty(extractedUrl))
                         continue;
 
-                    // Convert URL to absolute if needed
                     extractedUrl = ConvertToUrl(extractedUrl, baseUrl);
 
-                    // Validate that the URL is well-formed
                     if (Uri.TryCreate(extractedUrl, UriKind.Absolute, out Uri? validatedUri))
                     {
                         urls.Add(validatedUri.ToString());
@@ -1323,31 +1336,28 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 token.ThrowIfCancellationRequested();
 
-                // Convert discoveredUrl into a proper absolute URL using the original source URL as base.
                 discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
 
-                // Prevent duplicate processing for this URL.
                 if (processedIPs.ContainsKey(discoveredUrl))
                     return;
 
                 string newSourceType = seed.SourceType;
 
+                scannerLogger.Info($"Processing URL: {discoveredUrl} (IP: {ip}) at Depth: {seed.Depth} from Source URL: {seed.OriginalSourceUrl}");
                 logCallback($"Processing URL: {discoveredUrl} (IP: {ip}) at Depth: {seed.Depth} from Source URL: {seed.OriginalSourceUrl}");
 
-                // If the source URL is whitelisted and the discovered URL is the same, do not process it again.
                 if (newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) && discoveredUrl == seed.OriginalSourceUrl)
                 {
+                    scannerLogger.Info($"Skipping {discoveredUrl} - Already Whitelisted.");
                     logCallback($"Skipping {discoveredUrl} - Already Whitelisted.");
                     return;
                 }
 
-                // Check auto-verdict logic based on the URL activity.
                 if (allowAutoVerdict)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     if (!active)
                     {
-                        // Handle auto-verdict for dead URL.
                         newSourceType = "benign (auto verdict 3)";
                         string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed dead URL from {seed.OriginalSourceUrl}\"";
                         lock (WhiteListCsvLines)
@@ -1360,7 +1370,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                     else
                     {
-                        // Handle auto-verdict for active URL.
                         newSourceType = "benign (auto verdict 2)";
                         string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Active and static URL from {seed.OriginalSourceUrl} marked as benign\"";
                         lock (WhiteListCsvLines)
@@ -1373,14 +1382,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
-                // Skip if `scanKnownActive` is disabled and discovered URL matches the source URL.
                 if (!scanKnownActive && discoveredUrl == seed.OriginalSourceUrl)
                 {
+                    scannerLogger.Info($"Skipping {discoveredUrl} - scanKnownActive disabled and same as source.");
                     logCallback($"Skipping {discoveredUrl} - scanKnownActive disabled and same as source.");
                     return;
                 }
 
-                // Add to Bulk CSV if it's not part of the whitelist.
                 if (!newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
                     string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"URL processed from {seed.OriginalSourceUrl}\"";
@@ -1391,7 +1399,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     await realTimeBulkCsvCallback(csvLine);
                 }
 
-                // Discover new URLs from the HTML content of the discovered URL.
                 try
                 {
                     var content = await DownloadHtmlContentAsync(discoveredUrl, token);
@@ -1399,27 +1406,25 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                     foreach (var newUrl in newURLs)
                     {
-                        // Ensure that the new URL doesn't match the source URL unless `scanKnownActive` is enabled.
                         if (!scanKnownActive && newUrl == seed.OriginalSourceUrl)
                         {
+                            scannerLogger.Info($"Skipping discovered URL {newUrl} - Matches source and scanKnownActive is disabled.");
                             logCallback($"Skipping discovered URL {newUrl} - Matches source and scanKnownActive is disabled.");
                             continue;
                         }
 
-                        // Enqueue the new discovered seed for further processing, increasing depth.
                         EnqueueSeed(new Seed(ip, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl));
                     }
                 }
                 catch (Exception ex)
                 {
+                    scannerLogger.Error($"Error fetching content from {discoveredUrl}: {ex.Message}");
                     logCallback($"Error fetching content from {discoveredUrl}: {ex.Message}");
                 }
 
-                // **Modify Here**: Add only the IP address to the WhiteListCsvLines
                 string ipAddress = GetIpFromUrl(discoveredUrl);
                 if (!string.IsNullOrEmpty(ipAddress) && !processedIPs.ContainsKey(ipAddress))
                 {
-                    // Now we use just the IP instead of the full URL
                     string csvLine = $"{ipAddress},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed from {seed.OriginalSourceUrl}\"";
                     lock (WhiteListCsvLines)
                     {
@@ -1430,21 +1435,19 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     processedIPs.TryAdd(ipAddress, true);
                 }
 
-                // Enqueue the seed for further processing.
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
-            // Helper method to extract IP from a URL (without protocol and path)
             private string GetIpFromUrl(string url)
             {
                 try
                 {
                     Uri uri = new Uri(url);
-                    return uri.Host; // This will return only the IP address or hostname
+                    return uri.Host;
                 }
                 catch
                 {
-                    return string.Empty; // In case of an invalid URL, return empty string
+                    return string.Empty;
                 }
             }
 
@@ -1452,19 +1455,15 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             {
                 using var client = new HttpClient();
                 client.Timeout = TimeSpan.FromSeconds(10);
-
                 var response = await client.GetAsync(url, token);
-                response.EnsureSuccessStatusCode(); // Throws if status is not success
-
+                response.EnsureSuccessStatusCode();
                 return await response.Content.ReadAsStringAsync(CancellationToken.None);
             }
 
             private void EnqueueSeed(Seed seed)
             {
                 if (processedIPs.TryAdd(seed.IP, true))
-                {
-                    seedQueue.Enqueue(seed); // Add to the queue if it hasn't been processed before
-                }
+                    seedQueue.Enqueue(seed);
             }
 
             private static string EscapeCsvField(string field)
@@ -1500,145 +1499,61 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string url = $"http://{ip}" + (port > 0 ? $":{port}" : "");
                 try
                 {
-                    using var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                    HttpResponseMessage response = await httpClient.GetAsync(url, token);
-                    if (!response.IsSuccessStatusCode)
+                    using var client = new HttpClient();
+                    client.Timeout = TimeSpan.FromSeconds(5);
+                    var response = await client.GetAsync(url, token);
+                    if (response.StatusCode != HttpStatusCode.OK)
                         return false;
-                    Uri? finalUri = response.RequestMessage?.RequestUri;
-                    if (finalUri == null)
-                        return false;
-                    string finalHostname = finalUri.Host;
-                    int finalPort = finalUri.Port > 0 ? finalUri.Port : 80;
-                    int expectedPort = port > 0 ? port : 80;
-                    if (!string.IsNullOrEmpty(finalHostname) &&
-                        IPAddress.TryParse(finalHostname, out _) &&
-                        finalHostname == ip &&
-                        finalPort == expectedPort)
+                    var finalUrl = response.RequestMessage?.RequestUri;
+                    if (finalUrl != null)
                     {
-                        return true;
+                        string finalHostname = finalUrl.Host;
+                        int finalPort = finalUrl.Port == -1 ? 80 : finalUrl.Port;
+                        int expectedPort = port == 0 ? 80 : port;
+                        if (finalHostname.Equals(ip) && finalPort == expectedPort)
+                            return true;
                     }
                     return false;
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Exception)
+                catch
                 {
                     return false;
                 }
             }
         }
 
-        public record Seed(
-            string IP,
-            string SourceType,
-            string Version,
-            int? Port,
-            int Depth,
-            string OriginalSourceUrl,
-            string DiscoveredUrl)
+        public class Seed
         {
-            public string GetUrl() =>
-                Port.HasValue ? $"http://{IP}:{Port}" : $"http://{IP}";
-        }
+            public string IP { get; set; }
+            public string SourceType { get; set; }
+            public string Version { get; set; }
+            public int? Port { get; set; }
+            public int Depth { get; set; }
+            public string OriginalSourceUrl { get; set; }
+            public string DiscoveredUrl { get; set; }
 
-        // Filters the log listbox based on the search term.
-        private void TextBoxSearch_TextChanged(object sender, RoutedEventArgs e)
-        {
-            string filter = TextBoxSearch.Text;
-            listBoxLog.Items.Clear();
-            foreach (string entry in fullLogList)
+            public Seed(string ip, string sourceType, string version, int? port = null, int depth = 0, string originalSourceUrl = "", string discoveredUrl = "")
             {
-                if (entry.Contains(filter, StringComparison.OrdinalIgnoreCase))
-                {
-                    listBoxLog.Items.Add(entry);
-                }
+                IP = ip.ToLower();
+                SourceType = sourceType;
+                Version = version;
+                Port = port;
+                Depth = depth;
+                OriginalSourceUrl = originalSourceUrl;
+                DiscoveredUrl = discoveredUrl;
+            }
+
+            public string GetUrl()
+            {
+                return Port.HasValue && Port > 0 ? $"http://{IP}:{Port}" : $"http://{IP}";
+            }
+
+            public override string ToString()
+            {
+                return $"Seed({IP}{(Port.HasValue ? ":" + Port.ToString() : "")}, {SourceType}, {Version}, depth={Depth})";
             }
         }
 
-        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
-        {
-            listBoxLog.Items.Clear();
-        }
-
-        // Save log asynchronously.
-        private async void BtnSaveLog_Click(object sender, RoutedEventArgs e)
-        {
-            var sfd = new SaveFileDialog { Filter = "Text Files|*.txt" };
-            bool? result = sfd.ShowDialog();
-            if (result == true)
-            {
-                await File.WriteAllLinesAsync(sfd.FileName, fullLogList);
-                MessageBox.Show("Log saved successfully.");
-            }
-        }
-
-        private static readonly SemaphoreSlim fileLock = new(1, 1);
-
-        private async Task AppendBulkCsvLineToFileAsync(string csvLine)
-        {
-            bool isRealTimeEnabled = false;
-            string fileName = string.Empty;
-
-            // Read UI settings safely
-            await textBoxRealTimeCsvBulkFile.Dispatcher.InvokeAsync(() =>
-            {
-                isRealTimeEnabled = checkBoxRealTimeCsvBulk.IsChecked == true;
-                fileName = textBoxRealTimeCsvBulkFile.Text;
-            });
-
-            if (isRealTimeEnabled && !string.IsNullOrEmpty(fileName))
-            {
-                string? directory = IOPath.GetDirectoryName(fileName);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-
-                await fileLock.WaitAsync();
-
-                try
-                {
-                    await File.AppendAllTextAsync(fileName, csvLine + Environment.NewLine, Encoding.UTF8);
-                }
-                catch (IOException ex)
-                {
-                   UpdateLog($"Bulk CSV Error: {ex.Message}");
-                }
-                finally
-                {
-                    fileLock.Release();
-                }
-            }
-        }
-
-        private readonly object WhiteListCsvLock = new();
-        private async Task AppendWhiteListCsvLineToFileAsync(string csvLine)
-        {
-            bool isRealTimeEnabled = false;
-            string fileName = string.Empty;
-
-            // Use the Dispatcher to safely read UI elements.
-            await textBoxRealTimeCsvWhiteListFile.Dispatcher.InvokeAsync(() =>
-            {
-                isRealTimeEnabled = checkBoxRealTimeCsvWhiteList.IsChecked == true;
-                fileName = textBoxRealTimeCsvWhiteListFile.Text;
-            });
-
-            if (isRealTimeEnabled && !string.IsNullOrEmpty(fileName))
-            {
-                string? directory = IOPath.GetDirectoryName(fileName);
-                if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                }
-                lock (WhiteListCsvLock)
-                {
-                    File.AppendAllText(fileName, csvLine + Environment.NewLine);
-                }
-                await Task.CompletedTask;
-            }
-        }
+        #endregion
     }
 }

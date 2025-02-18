@@ -1,6 +1,6 @@
 {
   "MaxDepth": 10,
-  "MaxThreads": 100,
+  "MaxThreads": 20,
   "CsvMaxLines": 10000,
   "CsvMaxSize": 2097152,
   "OutputFile": "..\\..\\..\\..\\..\\output\\BulkReport.csv",
