@@ -67,7 +67,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         {
             InitializeComponent();
             XmlConfigurator.Configure();
-            // Assume textBoxLogSearch's TextChanged event is wired to textBoxLogSearch_TextChanged.
         }
 
         protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

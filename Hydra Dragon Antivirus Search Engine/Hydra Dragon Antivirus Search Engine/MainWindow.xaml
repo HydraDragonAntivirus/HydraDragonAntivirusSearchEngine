@@ -598,7 +598,8 @@
                                    Margin="0,0,10,0"/>
                         <TextBox x:Name="TextBoxLogSearch" 
                                  Width="200" 
-                                 Margin="0,0,10,0"/>
+                                 Margin="0,0,10,0"
+                                 TextChanged="TextBoxLogSearch_TextChanged"/>
                         <Button x:Name="BtnClearLog" 
                                 Content="Clear Log" 
                                 Width="100" 
