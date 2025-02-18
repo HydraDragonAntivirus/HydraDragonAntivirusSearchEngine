@@ -1539,18 +1539,59 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private void EnqueueSeed(Seed seed)
             {
-                if (!scanKnownActiveHarmful || seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
+                // When scanKnownActiveHarmful is enabled, for non‐WhiteList seeds
+                // we only update the blacklist CSV (Bulk CSV) and do not enqueue new work.
+                if (scanKnownActiveHarmful && !seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
-                    // Allow enqueue if the seed's depth is greater than the previously processed depth for that IP.
+                    // Check if we have already seen this IP.
                     if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
                     {
                         if (seed.Depth > existingDepth)
                         {
                             processedIPs[seed.IP] = seed.Depth;
-                            seedQueue.Enqueue(seed);
+                            // Create the harmful comment and CSV line.
+                            string depthText = $"(Depth {seed.Depth})";
+                            string harmfulComment = commentTemplate
+                                .Replace("{ip}", seed.IP)
+                                .Replace("{source_url}", seed.OriginalSourceUrl)
+                                .Replace("{discovered_url}", seed.DiscoveredUrl)
+                                .Replace("{verdict}", seed.SourceType)
+                                .Replace("{depth}", depthText);
+                            string csvLine = $"{seed.DiscoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
+                            lock (bulkCsvLock)
+                            {
+                                if (BulkCsvLines.Count < csvMaxLines + 1)
+                                    BulkCsvLines.Add(csvLine);
+                            }
+                            // Asynchronously call the real-time CSV callback.
+                            Task.Run(() => realTimeBulkCsvCallback(csvLine));
                         }
                     }
                     else
+                    {
+                        processedIPs[seed.IP] = seed.Depth;
+                        string depthText = $"(Depth {seed.Depth})";
+                        string harmfulComment = commentTemplate
+                            .Replace("{ip}", seed.IP)
+                            .Replace("{source_url}", seed.OriginalSourceUrl)
+                            .Replace("{discovered_url}", seed.DiscoveredUrl)
+                            .Replace("{verdict}", seed.SourceType)
+                            .Replace("{depth}", depthText);
+                        string csvLine = $"{seed.DiscoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
+                        lock (bulkCsvLock)
+                        {
+                            if (BulkCsvLines.Count < csvMaxLines + 1)
+                                BulkCsvLines.Add(csvLine);
+                        }
+                        Task.Run(() => realTimeBulkCsvCallback(csvLine));
+                    }
+                    return; // Do not enqueue for further processing.
+                }
+
+                // If not in scanKnownActiveHarmful mode or if it's a WhiteList seed, process normally.
+                if (processedIPs.TryGetValue(seed.IP, out int normalExistingDepth))
+                {
+                    if (seed.Depth > normalExistingDepth)
                     {
                         processedIPs[seed.IP] = seed.Depth;
                         seedQueue.Enqueue(seed);
@@ -1558,7 +1599,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
                 else
                 {
-                    // When enabled, allow harmful seeds to be enqueued even if the IP exists.
+                    processedIPs[seed.IP] = seed.Depth;
                     seedQueue.Enqueue(seed);
                 }
             }
