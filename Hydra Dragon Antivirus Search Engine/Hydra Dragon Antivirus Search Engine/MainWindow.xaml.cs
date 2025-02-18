@@ -22,13 +22,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 {
     public partial class MainWindow : Window
     {
-        // Logger initialization using explicit type.
+        // Logger using explicit type.
         private static readonly ILog logger = LogManager.GetLogger(typeof(MainWindow));
 
         // Scanner instance.
         private Scanner? scanner;
 
-        // Cancellation token for scan cancellation.
+        // Cancellation token to cancel scanning.
         private CancellationTokenSource cts = new();
 
         // Flag to track scan state.
@@ -53,7 +53,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private string realTimeBulkPath = string.Empty;
         private string realTimeCsvWhiteListPath = string.Empty;
 
-        // For real-time log writing.
+        // For logging.
         private readonly ConcurrentQueue<string> logQueue = new();
         private readonly List<string> fullLogList = new();
         private System.Timers.Timer? logFlushTimer;
@@ -61,7 +61,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // JSON options.
         private static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
 
-        // StreamWriter fields for real-time CSV writing.
+        // Real-time CSV StreamWriters.
         private StreamWriter? realtimeBulkWriter;
         private StreamWriter? realtimeWhiteListWriter;
 
@@ -86,7 +86,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             StartLogFlusher();
-            // Set default UI values.
+            // Default settings.
             textBoxMaxDepth.Text = "10";
             textBoxMaxThreads.Text = "100";
             textBoxCsvMaxLines.Text = "10000";
@@ -99,7 +99,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})";
         }
 
-        #region UI Helper Methods & Event Handlers
+        #region UI Helper Methods and Event Handlers
 
         private void StartLogFlusher()
         {
@@ -366,7 +366,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Updated to use StreamWriters with AutoFlush for real-time writing.
+        // Open StreamWriters with AutoFlush and write header.
         private async Task InitializeRealtimeCsvFilesAsync()
         {
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
@@ -375,6 +375,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (!Directory.Exists(bulkDirectory))
                     Directory.CreateDirectory(bulkDirectory);
                 realtimeBulkWriter = new StreamWriter(textBoxRealTimeCsvBulkFile.Text, false, Encoding.UTF8) { AutoFlush = true };
+                realtimeBulkWriter.WriteLine("IP,Categories,ReportDate,Comment");
             }
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
@@ -382,6 +383,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (!Directory.Exists(whiteListDirectory))
                     Directory.CreateDirectory(whiteListDirectory);
                 realtimeWhiteListWriter = new StreamWriter(textBoxRealTimeCsvWhiteListFile.Text, false, Encoding.UTF8) { AutoFlush = true };
+                realtimeWhiteListWriter.WriteLine("IP,Categories,ReportDate,Comment");
             }
             await Task.CompletedTask;
         }
@@ -404,7 +406,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Log updating method.
         private async void UpdateLog(string message)
         {
             string logEntry = $"{DateTime.Now}: {message}";
@@ -553,6 +554,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     );
                     await scanner.StartScanAsync(cts.Token);
 
+                    // Before finalizing, insert header into bulk CSV if missing.
                     bool csvOk = await scanner.FinalizeCsvFilesAsync();
                     if (!csvOk)
                         MessageBox.Show("CSV output exceeds the defined limits.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -939,7 +941,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Event handlers for clearing and saving the log.
+        // Log clear and save handlers.
         private void BtnClearLog_Click(object sender, RoutedEventArgs e)
         {
             listBoxLog.Items.Clear();
@@ -1087,6 +1089,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             public async Task<bool> FinalizeCsvFilesAsync()
             {
+                // Insert header into Bulk CSV if missing.
+                string header = "IP,Categories,ReportDate,Comment";
+                if (BulkCsvLines.Count == 0 || !BulkCsvLines[0].StartsWith(header))
+                {
+                    BulkCsvLines.Insert(0, header);
+                }
+
                 int totalLines = BulkCsvLines.Count;
                 string csvContent = string.Join("\n", BulkCsvLines);
                 int csvSizeInBytes = Encoding.UTF8.GetByteCount(csvContent);
@@ -1137,8 +1146,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private async Task LoadSeedsFromFileListAsync(List<string> fileList, string defaultSourceType, CancellationToken token)
             {
-                foreach (var file in fileList.Where(file => Path.GetExtension(file)
-                                 .Equals(".txt", StringComparison.OrdinalIgnoreCase)))
+                foreach (var file in fileList.Where(file => Path.GetExtension(file).Equals(".txt", StringComparison.OrdinalIgnoreCase)))
                 {
                     if (token.IsCancellationRequested)
                         return;
@@ -1231,10 +1239,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (comment.Length > 1024)
                         comment = comment[..1024];
 
-                    string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
-
-                    if (scanKnownActive || seed.Depth > 0)
+                    // Do not add bulk CSV entry for WhiteList seeds.
+                    if ((scanKnownActive || seed.Depth > 0) && !seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                     {
+                        string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
                         lock (bulkCsvLock)
                         {
                             BulkCsvLines.Add(csvLine);
@@ -1345,6 +1353,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
 
+                // Skip if discovered URL is identical to the source.
+                if (discoveredUrl == seed.OriginalSourceUrl)
+                {
+                    logCallback($"Skipping discovered URL {discoveredUrl} as it is identical to the source.");
+                    return;
+                }
+
                 if (processedIPs.ContainsKey(discoveredUrl))
                     return;
 
@@ -1389,13 +1404,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
-                if (!scanKnownActive && discoveredUrl == seed.OriginalSourceUrl)
-                {
-                    scannerLogger.Info($"Skipping {discoveredUrl} - scanKnownActive disabled and same as source.");
-                    logCallback($"Skipping {discoveredUrl} - scanKnownActive disabled and same as source.");
-                    return;
-                }
-
                 if (!newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
                     string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"URL processed from {seed.OriginalSourceUrl}\"";
@@ -1413,13 +1421,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                     foreach (var newUrl in newURLs)
                     {
-                        if (!scanKnownActive && newUrl == seed.OriginalSourceUrl)
+                        if (newUrl == seed.OriginalSourceUrl)
                         {
-                            scannerLogger.Info($"Skipping discovered URL {newUrl} - Matches source and scanKnownActive is disabled.");
-                            logCallback($"Skipping discovered URL {newUrl} - Matches source and scanKnownActive is disabled.");
+                            logCallback($"Skipping discovered URL {newUrl} as it is identical to the source.");
                             continue;
                         }
-
                         EnqueueSeed(new Seed(ip, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl));
                     }
                 }
