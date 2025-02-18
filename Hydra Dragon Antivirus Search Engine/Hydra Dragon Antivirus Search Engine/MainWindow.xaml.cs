@@ -1633,11 +1633,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     .Replace("{depth}", depthText);
                 string csvLine = $"{seed.DiscoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
 
-                lock (bulkCsvLock)
-                {
-                    if (BulkCsvLines.Count < csvMaxLines + 1)
-                        BulkCsvLines.Add(csvLine);
-                }
+                if (BulkCsvLines.Count < csvMaxLines + 1)
+                    BulkCsvLines.Add(csvLine);
+
                 Task.Run(() => realTimeBulkCsvCallback(csvLine));
             }
 
@@ -1665,11 +1663,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             private static string EscapeCsvField(string field)
             {
+                // Remove any null characters (0x00) from the field.
+                field = field.Replace("\0", "");
+                // Escape double quotes.
                 return field.Replace("\"", "\\\"");
             }
         }
 
-        public static class SeedHelper
+            public static class SeedHelper
         {
             public static List<(string ip, int? port, string version)> ExtractIPAndPort(string text)
             {
