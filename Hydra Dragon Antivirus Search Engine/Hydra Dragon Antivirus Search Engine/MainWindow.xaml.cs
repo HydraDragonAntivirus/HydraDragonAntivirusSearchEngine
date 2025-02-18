@@ -1531,32 +1531,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 await ProcessIPAsync(recursiveSeed, ip, port, version, discoveredUrl, token);
             }
 
-            private void EnqueueSeed(Seed seed)
-            {
-                if (!scanKnownActiveHarmful || seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
-                {
-                    // Allow enqueue if the seed's depth is greater than the previously processed depth for that IP.
-                    if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
-                    {
-                        if (seed.Depth > existingDepth)
-                        {
-                            processedIPs[seed.IP] = seed.Depth;
-                            seedQueue.Enqueue(seed);
-                        }
-                    }
-                    else
-                    {
-                        processedIPs[seed.IP] = seed.Depth;
-                        seedQueue.Enqueue(seed);
-                    }
-                }
-                else
-                {
-                    // When enabled, allow harmful seeds to be enqueued even if the IP exists.
-                    seedQueue.Enqueue(seed);
-                }
-            }
-
             private static string GetIpFromUrl(string url)
             {
                 try
