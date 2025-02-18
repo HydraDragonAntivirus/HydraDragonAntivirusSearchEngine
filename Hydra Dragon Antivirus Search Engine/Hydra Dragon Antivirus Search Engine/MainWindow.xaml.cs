@@ -22,9 +22,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 {
     public partial class MainWindow : Window
     {
-        // Logger using explicit type.
-        private static readonly ILog logger = LogManager.GetLogger(typeof(MainWindow));
-
         // Scanner instance.
         private Scanner? scanner;
 
@@ -113,7 +110,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         logsToFlush.Add(log);
                     }
-                    if (logsToFlush.Any())
+                    if (logsToFlush.Count > 0)
                     {
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
@@ -137,7 +134,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async Task SaveSettingsAsync(string filePath)
         {
-            AppSettings settings = new AppSettings
+            AppSettings settings = new()
             {
                 MaxDepth = int.TryParse(textBoxMaxDepth.Text, out int depth) ? depth : 10,
                 MaxThreads = int.TryParse(textBoxMaxThreads.Text, out int threads) ? threads : 100,
@@ -280,7 +277,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        private string ConvertToAbsolutePath(string path)
+        private static string ConvertToAbsolutePath(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
                 return path;
@@ -292,7 +289,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseRealTimeLog_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "Text Files|*.txt|All Files|*.*",
                 Title = "Select Real-Time Log File"
@@ -303,7 +300,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Output File"
@@ -314,7 +311,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListOutputFile_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select WhiteList Output File"
@@ -325,7 +322,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseBulkCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time Bulk CSV File"
@@ -336,7 +333,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListCsv_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "CSV Files|*.csv|All Files|*.*",
                 Title = "Select Real-Time WhiteList CSV File"
@@ -347,7 +344,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnSaveSettings_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog { Filter = "JSON Files|*.json" };
+            SaveFileDialog sfd = new() { Filter = "JSON Files|*.json" };
             if (sfd.ShowDialog() == true)
             {
                 await SaveSettingsAsync(sfd.FileName);
@@ -357,7 +354,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private async void BtnLoadSettings_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog { Filter = "JSON Files|*.json" };
+            OpenFileDialog ofd = new() { Filter = "JSON Files|*.json" };
             bool? result = ofd.ShowDialog();
             if (result == true)
             {
@@ -493,7 +490,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     string categoryPhishing = textBoxCategoryPhishing.Text;
                     string categoryDDoS = textBoxCategoryDDoS.Text;
                     string commentTemplate = textBoxCommentTemplate.Text;
-                    // Rename scanKnownActive to scanKnownActiveHarmful: applies only to harmful seeds.
+                    // Use scanKnownActiveHarmful for harmful seeds.
                     bool scanKnownActiveHarmful = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
                     bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
 
@@ -599,7 +596,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseMalwareIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
@@ -642,7 +639,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseMalwareIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(malwarePath) ? Environment.CurrentDirectory : malwarePath
@@ -685,7 +682,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseDDoSIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
@@ -728,7 +725,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseDDoSIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(ddosPath) ? Environment.CurrentDirectory : ddosPath
@@ -771,7 +768,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowsePhishingIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
@@ -814,7 +811,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowsePhishingIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(phishingPath) ? Environment.CurrentDirectory : phishingPath
@@ -857,7 +854,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListIPv4_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
@@ -900,7 +897,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnBrowseWhiteListIPv6_Click(object sender, RoutedEventArgs e)
         {
-            OpenFileDialog ofd = new OpenFileDialog
+            OpenFileDialog ofd = new()
             {
                 Filter = "Text Files|*.txt",
                 InitialDirectory = string.IsNullOrEmpty(whiteListPath) ? Environment.CurrentDirectory : whiteListPath
@@ -950,7 +947,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
         {
-            SaveFileDialog sfd = new SaveFileDialog
+            SaveFileDialog sfd = new()
             {
                 Filter = "Text Files|*.txt|All Files|*.*",
                 Title = "Save Log File"
@@ -1033,7 +1030,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             int totalSeeds = 0;
             int processedCount = 0;
             private readonly HttpClient httpClient = new();
-            // Renamed flag: scanKnownActive now applies only to harmful seeds.
+            // scanKnownActiveHarmful applies only to harmful seeds.
             private readonly bool scanKnownActiveHarmful;
             private readonly bool allowAutoVerdict;
             private readonly object bulkCsvLock = new();
@@ -1080,7 +1077,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 this.realTimeBulkCsvCallback = realTimeBulkCsvCallback;
                 this.realTimeWhiteListCsvCallback = realTimeWhiteListCsvCallback;
                 this.commentTemplate = string.IsNullOrEmpty(commentTemplate)
-                    ? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})"
+                    ? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})"
                     : commentTemplate;
                 this.scanProgressCallback = scanProgressCallback;
                 this.scanKnownActiveHarmful = scanKnownActiveHarmful;
@@ -1240,7 +1237,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (comment.Length > 1024)
                         comment = comment[..1024];
 
-                    // Only add bulk CSV entry for harmful seeds (non-WhiteList) and if either at depth > 0 or scanKnownActiveHarmful is true.
+                    // Only add bulk CSV entry for harmful seeds (non-WhiteList) when at depth > 0 or when scanKnownActiveHarmful is true.
                     if (!seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) &&
                         (scanKnownActiveHarmful || seed.Depth > 0))
                     {
@@ -1355,10 +1352,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
 
-                // Skip if discovered URL equals the source.
-                if (discoveredUrl == seed.OriginalSourceUrl)
+                // Skip if discovered URL is empty or identical to the source.
+                if (string.IsNullOrWhiteSpace(discoveredUrl) || discoveredUrl == seed.OriginalSourceUrl)
                 {
-                    logCallback($"Skipping discovered URL {discoveredUrl} as it is identical to the source.");
+                    logCallback($"Skipping discovered URL '{discoveredUrl}' as it is empty or identical to the source.");
                     return;
                 }
 
@@ -1380,36 +1377,35 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (allowAutoVerdict)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
-                    if (!active)
+                    // Set auto-verdict type and build the whitelist comment.
+                    newSourceType = active ? "benign (auto verdict 2)" : "benign (auto verdict 3)";
+                    string whitelistComment = commentTemplate
+                        .Replace("{ip}", ip)
+                        .Replace("{source_url}", seed.OriginalSourceUrl)
+                        .Replace("{discovered_url}", discoveredUrl)
+                        .Replace("{verdict}", "WhiteList")
+                        .Replace("{depth}", seed.Depth.ToString());
+                    string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
+                    lock (WhiteListCsvLines)
                     {
-                        newSourceType = "benign (auto verdict 3)";
-                        string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed dead URL from {seed.OriginalSourceUrl}\"";
-                        lock (WhiteListCsvLines)
-                        {
-                            if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                WhiteListCsvLines.Add(csvLine);
-                        }
-                        await realTimeWhiteListCsvCallback(csvLine);
-                        return;
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                            WhiteListCsvLines.Add(csvLine);
                     }
-                    else
-                    {
-                        newSourceType = "benign (auto verdict 2)";
-                        string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"Active and static URL from {seed.OriginalSourceUrl} marked as benign\"";
-                        lock (WhiteListCsvLines)
-                        {
-                            if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                WhiteListCsvLines.Add(csvLine);
-                        }
-                        await realTimeWhiteListCsvCallback(csvLine);
-                        return;
-                    }
+                    await realTimeWhiteListCsvCallback(csvLine);
+                    return;
                 }
 
-                // For harmful seeds (non-WhiteList), add bulk CSV entry.
+                // For harmful seeds (non-WhiteList) add bulk CSV entry.
                 if (!newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
-                    string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"URL processed from {seed.OriginalSourceUrl}\"";
+                    // Compute the comment for harmful seeds.
+                    string comment = commentTemplate
+                        .Replace("{ip}", seed.IP)
+                        .Replace("{source_url}", seed.OriginalSourceUrl)
+                        .Replace("{discovered_url}", discoveredUrl)
+                        .Replace("{verdict}", newSourceType)
+                        .Replace("{depth}", seed.Depth.ToString());
+                    string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(comment)}\"";
                     lock (bulkCsvLock)
                     {
                         BulkCsvLines.Add(csvLine);
@@ -1426,7 +1422,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     {
                         if (newUrl == seed.OriginalSourceUrl)
                         {
-                            logCallback($"Skipping discovered URL {newUrl} as it is identical to the source.");
+                            logCallback($"Skipping discovered URL '{newUrl}' as it is identical to the source.");
                             continue;
                         }
                         EnqueueSeed(new Seed(ip, "unknown", version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl));
@@ -1441,7 +1437,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string ipAddress = GetIpFromUrl(discoveredUrl);
                 if (!string.IsNullOrEmpty(ipAddress) && !processedIPs.ContainsKey(ipAddress))
                 {
-                    string csvLine = $"{ipAddress},\"WhiteList\",{DateTime.UtcNow:O},\"Auto-WhiteListed from {seed.OriginalSourceUrl}\"";
+                    string whitelistComment = commentTemplate
+                        .Replace("{ip}", ip)
+                        .Replace("{source_url}", seed.OriginalSourceUrl)
+                        .Replace("{discovered_url}", discoveredUrl)
+                        .Replace("{verdict}", "WhiteList")
+                        .Replace("{depth}", seed.Depth.ToString());
+                    string csvLine = $"{ipAddress},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
                     lock (WhiteListCsvLines)
                     {
                         if (WhiteListCsvLines.Count < csvMaxLines + 1)
@@ -1454,11 +1456,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 EnqueueSeed(new Seed(ip, newSourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl));
             }
 
-            private string GetIpFromUrl(string url)
+            private static string GetIpFromUrl(string url)
             {
                 try
                 {
-                    Uri uri = new Uri(url);
+                    Uri uri = new(url);
                     return uri.Host;
                 }
                 catch
@@ -1550,13 +1552,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
             public Seed(string ip, string sourceType, string version, int? port = null, int depth = 0, string originalSourceUrl = "", string discoveredUrl = "")
             {
-                IP = ip.ToLower();
-                SourceType = sourceType;
-                Version = version;
+                IP = ip?.ToLower() ?? string.Empty;
+                SourceType = sourceType ?? string.Empty;
+                Version = version ?? string.Empty;
                 Port = port;
                 Depth = depth;
-                OriginalSourceUrl = originalSourceUrl;
-                DiscoveredUrl = discoveredUrl;
+                OriginalSourceUrl = originalSourceUrl ?? string.Empty;
+                DiscoveredUrl = discoveredUrl ?? string.Empty;
             }
 
             public string GetUrl()
