@@ -1537,101 +1537,108 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 EnqueueSeed(recursiveSeed);
             }
 
+
+            // Checks across all in-memory collections to decide if this seed is already known.
+            private bool IsDuplicate(Seed seed)
+            {
+                // Check the processedIPs dictionary.
+                if (processedIPs.TryGetValue(seed.IP, out int existingDepth) && existingDepth >= seed.Depth)
+                    return true;
+
+                // Check the seedQueue (requires converting the concurrent queue to an enumerable).
+                if (seedQueue.Any(s => s.IP.Equals(seed.IP, StringComparison.OrdinalIgnoreCase)))
+                    return true;
+
+                // Check the Bulk CSV lines. Assume the first field in each CSV line is the IP.
+                if (BulkCsvLines.Any(line =>
+                {
+                    string ipField = line.Split(',')[0].Trim().Trim('\"');
+                    return ipField.Equals(seed.IP, StringComparison.OrdinalIgnoreCase);
+                }))
+                    return true;
+
+                // Check the WhiteList CSV lines similarly.
+                if (WhiteListCsvLines.Any(line =>
+                {
+                    string ipField = line.Split(',')[0].Trim().Trim('\"');
+                    return ipField.Equals(seed.IP, StringComparison.OrdinalIgnoreCase);
+                }))
+                    return true;
+
+                return false;
+            }
+
+            /// <summary>
+            /// Enqueues a seed for further processing (or, when scanKnownActiveHarmful is enabled, updates the blacklist CSV)
+            /// after checking duplicates across all in-memory collections. This method also ensures we never go beyond maxDepth.
+            /// </summary>
             private void EnqueueSeed(Seed seed)
             {
-                // When scanKnownActiveHarmful is enabled
+                // Do not process seeds beyond max depth.
+                if (seed.Depth >= maxDepth)
+                    return;
+
+                // Check all in-memory lists to avoid duplicates.
+                if (IsDuplicate(seed))
+                    return;
+
+                // When scanKnownActiveHarmful is enabled...
                 if (scanKnownActiveHarmful)
                 {
                     // For non-WhiteList seeds:
                     if (!seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                     {
-                        // If the seed is an initial (depth 0) seed, process it normally.
                         if (seed.Depth == 0)
                         {
-                            if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
-                            {
-                                if (seed.Depth > existingDepth)
-                                {
-                                    processedIPs[seed.IP] = seed.Depth;
-                                    seedQueue.Enqueue(seed);
-                                }
-                            }
-                            else
-                            {
-                                processedIPs[seed.IP] = seed.Depth;
-                                seedQueue.Enqueue(seed);
-                            }
-                        }
-                        // For deeper seeds (depth > 0), update the blacklist CSV if a greater depth is seen.
-                        else
-                        {
-                            if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
-                            {
-                                if (seed.Depth > existingDepth)
-                                {
-                                    processedIPs[seed.IP] = seed.Depth;
-                                    AddSeedToBlacklistCsv(seed);
-                                }
-                            }
-                            else
-                            {
-                                processedIPs[seed.IP] = seed.Depth;
-                                AddSeedToBlacklistCsv(seed);
-                            }
-                        }
-                        return; // Do not enqueue further for non-WhiteList seeds in scanKnownActiveHarmful mode.
-                    }
-                    else
-                    {
-                        // For WhiteList seeds, always process normally.
-                        if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
-                        {
-                            if (seed.Depth > existingDepth)
-                            {
-                                processedIPs[seed.IP] = seed.Depth;
-                                seedQueue.Enqueue(seed);
-                            }
-                        }
-                        else
-                        {
+                            // For depth 0, enqueue normally.
                             processedIPs[seed.IP] = seed.Depth;
                             seedQueue.Enqueue(seed);
                         }
-                        return;
-                    }
-                }
-                else
-                {
-                    // When scanKnownActiveHarmful is NOT enabled, process all seeds normally.
-                    if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
-                    {
-                        if (seed.Depth > existingDepth)
+                        else
                         {
+                            // For deeper seeds, do not enqueue further; update the blacklist CSV instead.
                             processedIPs[seed.IP] = seed.Depth;
-                            seedQueue.Enqueue(seed);
+                            AddSeedToBlacklistCsv(seed);
                         }
                     }
-                    else
+                    else // For WhiteList seeds, always enqueue.
                     {
                         processedIPs[seed.IP] = seed.Depth;
                         seedQueue.Enqueue(seed);
                     }
                 }
+                else
+                {
+                    // When scanKnownActiveHarmful is not enabled, simply enqueue the seed.
+                    processedIPs[seed.IP] = seed.Depth;
+                    seedQueue.Enqueue(seed);
+                }
             }
 
-            /// <summary>
-            /// Helper method to update the blacklist CSV for non-WhiteList seeds.
-            /// </summary>
             private void AddSeedToBlacklistCsv(Seed seed)
             {
+                // İlk olarak seed'in discovered URL'sini null karakterlerinden temizliyoruz.
+                string finalDiscoveredUrl = seed.DiscoveredUrl.Replace("\0", "");
+
+                // Eğer discovered URL, originalSourceUrl ile başlıyorsa; IP adresiyle yeniden oluşturuyoruz.
+                if (!string.IsNullOrEmpty(seed.OriginalSourceUrl) &&
+                    finalDiscoveredUrl.StartsWith(seed.OriginalSourceUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    finalDiscoveredUrl = "http://" + seed.IP;
+                }
+                // Ek temizlik yapalım.
+                finalDiscoveredUrl = finalDiscoveredUrl.Replace("\0", "");
+
                 string depthText = $"(Depth {seed.Depth})";
                 string harmfulComment = commentTemplate
                     .Replace("{ip}", seed.IP)
                     .Replace("{source_url}", seed.OriginalSourceUrl)
-                    .Replace("{discovered_url}", seed.DiscoveredUrl)
+                    .Replace("{discovered_url}", finalDiscoveredUrl)
                     .Replace("{verdict}", seed.SourceType)
-                    .Replace("{depth}", depthText);
-                string csvLine = $"{seed.DiscoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
+                    .Replace("{depth}", depthText)
+                    .Replace("\0", ""); // Yorum içindeki null karakterleri temizle
+
+                string csvLine = $"{finalDiscoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
 
                 if (BulkCsvLines.Count < csvMaxLines + 1)
                     BulkCsvLines.Add(csvLine);
