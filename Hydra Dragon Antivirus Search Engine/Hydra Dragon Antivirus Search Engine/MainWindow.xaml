@@ -596,7 +596,7 @@
                         <TextBlock Text="Search:" 
                                    VerticalAlignment="Center" 
                                    Margin="0,0,10,0"/>
-                        <TextBox x:Name="TextBoxSearch" 
+                        <TextBox x:Name="TextBoxLogSearch" 
                                  Width="200" 
                                  Margin="0,0,10,0"/>
                         <Button x:Name="BtnClearLog" 
