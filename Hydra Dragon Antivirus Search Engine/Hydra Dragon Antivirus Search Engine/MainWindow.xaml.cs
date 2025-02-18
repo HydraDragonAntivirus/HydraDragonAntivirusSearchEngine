@@ -22,16 +22,16 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 {
     public partial class MainWindow : Window
     {
-        // Logger initialization using explicit type to avoid null reference warnings.
+        // Logger initialization using explicit type.
         private static readonly ILog logger = LogManager.GetLogger(typeof(MainWindow));
 
-        // Field to hold the scanner instance.
+        // Scanner instance.
         private Scanner? scanner;
 
-        // Cancellation token for stopping scan.
+        // Cancellation token for scan cancellation.
         private CancellationTokenSource cts = new();
 
-        // Field to track scan state.
+        // Flag to track scan state.
         private bool isScanning = false;
 
         // Lists for different file categories.
@@ -53,20 +53,21 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private string realTimeBulkPath = string.Empty;
         private string realTimeCsvWhiteListPath = string.Empty;
 
-        // Log queue and full log list for UI.
+        // For real-time log writing.
         private readonly ConcurrentQueue<string> logQueue = new();
         private readonly List<string> fullLogList = new();
-
-        // Timer for flushing logs to the UI.
         private System.Timers.Timer? logFlushTimer;
 
-        // JSON options for settings.
+        // JSON options.
         private static readonly JsonSerializerOptions jsonOptions = new() { WriteIndented = true };
+
+        // StreamWriter fields for real-time CSV writing.
+        private StreamWriter? realtimeBulkWriter;
+        private StreamWriter? realtimeWhiteListWriter;
 
         public MainWindow()
         {
             InitializeComponent();
-            // Configure log4net from the assembly configuration.
             XmlConfigurator.Configure();
         }
 
@@ -77,13 +78,15 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 cts.Cancel();
             }
             StopLogFlusher();
+            realtimeBulkWriter?.Close();
+            realtimeWhiteListWriter?.Close();
             base.OnClosing(e);
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             StartLogFlusher();
-            // Set default settings in the UI textboxes.
+            // Set default UI values.
             textBoxMaxDepth.Text = "10";
             textBoxMaxThreads.Text = "100";
             textBoxCsvMaxLines.Text = "10000";
@@ -96,11 +99,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             textBoxCommentTemplate.Text = "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})";
         }
 
-        #region UI Helper Methods and Event Handlers
+        #region UI Helper Methods & Event Handlers
 
         private void StartLogFlusher()
         {
-            // Flush the log queue every 300ms.
             logFlushTimer = new System.Timers.Timer(300);
             logFlushTimer.Elapsed += (s, e) =>
             {
@@ -116,9 +118,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         listBoxLog.Dispatcher.BeginInvoke(new Action(() =>
                         {
                             foreach (var log in logsToFlush)
-                            {
                                 listBoxLog.Items.Add(log);
-                            }
                         }));
                     }
                 }
@@ -366,58 +366,45 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
+        // Updated to use StreamWriters with AutoFlush for real-time writing.
         private async Task InitializeRealtimeCsvFilesAsync()
         {
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
             {
-                string? bulkDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text);
-                if (!string.IsNullOrEmpty(bulkDirectory) && !Directory.Exists(bulkDirectory))
+                string bulkDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text) ?? Environment.CurrentDirectory;
+                if (!Directory.Exists(bulkDirectory))
                     Directory.CreateDirectory(bulkDirectory);
-                await File.WriteAllTextAsync(textBoxRealTimeCsvBulkFile.Text, string.Empty);
+                realtimeBulkWriter = new StreamWriter(textBoxRealTimeCsvBulkFile.Text, false, Encoding.UTF8) { AutoFlush = true };
             }
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
             {
-                string? whiteListDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text);
-                if (!string.IsNullOrEmpty(whiteListDirectory) && !Directory.Exists(whiteListDirectory))
+                string whiteListDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text) ?? Environment.CurrentDirectory;
+                if (!Directory.Exists(whiteListDirectory))
                     Directory.CreateDirectory(whiteListDirectory);
-                await File.WriteAllTextAsync(textBoxRealTimeCsvWhiteListFile.Text, string.Empty);
+                realtimeWhiteListWriter = new StreamWriter(textBoxRealTimeCsvWhiteListFile.Text, false, Encoding.UTF8) { AutoFlush = true };
             }
+            await Task.CompletedTask;
         }
 
-        // Added missing event handlers for clearing and saving the log.
-        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
-        {
-            listBoxLog.Items.Clear();
-            fullLogList.Clear();
-        }
-
-        private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
-        {
-            SaveFileDialog sfd = new SaveFileDialog
-            {
-                Filter = "Text Files|*.txt|All Files|*.*",
-                Title = "Save Log File"
-            };
-            if (sfd.ShowDialog() == true)
-            {
-                File.WriteAllLines(sfd.FileName, fullLogList);
-                MessageBox.Show("Log saved successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-
-        // Implementations for appending CSV lines asynchronously.
         private async Task AppendBulkCsvLineToFileAsync(string line)
         {
-            if (!string.IsNullOrEmpty(textBoxOutputFile.Text))
-                await File.AppendAllTextAsync(textBoxOutputFile.Text, line + Environment.NewLine);
+            if (realtimeBulkWriter != null)
+            {
+                realtimeBulkWriter.WriteLine(line);
+                await realtimeBulkWriter.FlushAsync();
+            }
         }
 
         private async Task AppendWhiteListCsvLineToFileAsync(string line)
         {
-            if (!string.IsNullOrEmpty(textBoxWhiteListOutputFile.Text))
-                await File.AppendAllTextAsync(textBoxWhiteListOutputFile.Text, line + Environment.NewLine);
+            if (realtimeWhiteListWriter != null)
+            {
+                realtimeWhiteListWriter.WriteLine(line);
+                await realtimeWhiteListWriter.FlushAsync();
+            }
         }
 
+        // Log updating method.
         private async void UpdateLog(string message)
         {
             string logEntry = $"{DateTime.Now}: {message}";
@@ -508,11 +495,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
                     bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
 
-                    // Initialize realtime CSV files.
+                    // Initialize real-time CSV files.
                     await InitializeRealtimeCsvFilesAsync();
                     cts = new CancellationTokenSource();
 
-                    // Create and start scanner for IPv4.
+                    // Start scanner for IPv4.
                     scanner = new Scanner(
                         malwareFilesIPv4,
                         DDoSFilesIPv4,
@@ -539,7 +526,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     );
                     await scanner.StartScanAsync(cts.Token);
 
-                    // Create and start scanner for IPv6.
+                    // Start scanner for IPv6.
                     scanner = new Scanner(
                         malwareFilesIPv6,
                         DDoSFilesIPv6,
@@ -566,7 +553,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     );
                     await scanner.StartScanAsync(cts.Token);
 
-                    // Finalize CSV output.
                     bool csvOk = await scanner.FinalizeCsvFilesAsync();
                     if (!csvOk)
                         MessageBox.Show("CSV output exceeds the defined limits.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -953,6 +939,27 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
+        // Event handlers for clearing and saving the log.
+        private void BtnClearLog_Click(object sender, RoutedEventArgs e)
+        {
+            listBoxLog.Items.Clear();
+            fullLogList.Clear();
+        }
+
+        private void BtnSaveLog_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog sfd = new SaveFileDialog
+            {
+                Filter = "Text Files|*.txt|All Files|*.*",
+                Title = "Save Log File"
+            };
+            if (sfd.ShowDialog() == true)
+            {
+                File.WriteAllLines(sfd.FileName, fullLogList);
+                MessageBox.Show("Log saved successfully.", "Information", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
         #endregion
 
         #region Scanner and Helper Classes
@@ -994,7 +1001,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
         public partial class Scanner
         {
-            // Logger for Scanner using explicit type.
+            // Logger for Scanner.
             private readonly ILog scannerLogger = LogManager.GetLogger(typeof(Scanner));
 
             public string SelectedIPType { get; set; }
