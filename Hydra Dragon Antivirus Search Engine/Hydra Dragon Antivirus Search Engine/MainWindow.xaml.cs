@@ -400,7 +400,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string bulkDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvBulkFile.Text) ?? Environment.CurrentDirectory;
                 if (!Directory.Exists(bulkDirectory))
                     Directory.CreateDirectory(bulkDirectory);
-                realtimeBulkWriter = new StreamWriter(textBoxRealTimeCsvBulkFile.Text, false, Encoding.UTF8) { AutoFlush = true };
+
+                // Create a new file (truncated) to avoid leftover null bytes
+                var bulkStream = new FileStream(textBoxRealTimeCsvBulkFile.Text, FileMode.Create, FileAccess.Write, FileShare.None);
+                realtimeBulkWriter = new StreamWriter(bulkStream, Encoding.UTF8) { AutoFlush = true };
                 realtimeBulkWriter.WriteLine("IP,Categories,ReportDate,Comment");
             }
             if (checkBoxRealTimeCsvWhiteList.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvWhiteListFile.Text))
@@ -408,7 +411,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string whiteListDirectory = IOPath.GetDirectoryName(textBoxRealTimeCsvWhiteListFile.Text) ?? Environment.CurrentDirectory;
                 if (!Directory.Exists(whiteListDirectory))
                     Directory.CreateDirectory(whiteListDirectory);
-                realtimeWhiteListWriter = new StreamWriter(textBoxRealTimeCsvWhiteListFile.Text, false, Encoding.UTF8) { AutoFlush = true };
+
+                // Create a new file (truncated) to avoid leftover null bytes
+                var whiteListStream = new FileStream(textBoxRealTimeCsvWhiteListFile.Text, FileMode.Create, FileAccess.Write, FileShare.None);
+                realtimeWhiteListWriter = new StreamWriter(whiteListStream, Encoding.UTF8) { AutoFlush = true };
                 realtimeWhiteListWriter.WriteLine("IP,Categories,ReportDate,Comment");
             }
             await Task.CompletedTask;
@@ -1476,9 +1482,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             logCallback($"Skipping discovered URL '{newUrl}' as it is identical to the source.");
                             continue;
                         }
-                        // Create a new seed with incremented depth and process it immediately.
+                        // Create a new seed with incremented depth and enqueue it.
                         var newSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl);
-                        await ProcessIPAsync(newSeed, ip, port, version, newUrl, token);
+                        EnqueueSeed(newSeed);
                     }
 
                     // Additionally, process any IP addresses found via regex patterns in the content.
@@ -1526,9 +1532,35 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
-                // Instead of enqueuing the seed for further processing, recursively call ProcessIPAsync.
+                // Instead of directly recursing, enqueue the seed for further processing.
                 var recursiveSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl);
-                await ProcessIPAsync(recursiveSeed, ip, port, version, discoveredUrl, token);
+                EnqueueSeed(recursiveSeed);
+            }
+
+            private void EnqueueSeed(Seed seed)
+            {
+                if (!scanKnownActiveHarmful || seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Allow enqueue if the seed's depth is greater than the previously processed depth for that IP.
+                    if (processedIPs.TryGetValue(seed.IP, out int existingDepth))
+                    {
+                        if (seed.Depth > existingDepth)
+                        {
+                            processedIPs[seed.IP] = seed.Depth;
+                            seedQueue.Enqueue(seed);
+                        }
+                    }
+                    else
+                    {
+                        processedIPs[seed.IP] = seed.Depth;
+                        seedQueue.Enqueue(seed);
+                    }
+                }
+                else
+                {
+                    // When enabled, allow harmful seeds to be enqueued even if the IP exists.
+                    seedQueue.Enqueue(seed);
+                }
             }
 
             private static string GetIpFromUrl(string url)
