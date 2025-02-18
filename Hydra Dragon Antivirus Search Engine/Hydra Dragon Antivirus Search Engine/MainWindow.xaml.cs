@@ -28,7 +28,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         // Scanner instance.
         private Scanner? scanner;
 
-        // Cancellation token to cancel scanning.
+        // Cancellation token for scan cancellation.
         private CancellationTokenSource cts = new();
 
         // Flag to track scan state.
@@ -53,7 +53,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private string realTimeBulkPath = string.Empty;
         private string realTimeCsvWhiteListPath = string.Empty;
 
-        // For logging.
+        // Logging helpers.
         private readonly ConcurrentQueue<string> logQueue = new();
         private readonly List<string> fullLogList = new();
         private System.Timers.Timer? logFlushTimer;
@@ -86,7 +86,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             StartLogFlusher();
-            // Default settings.
+            // Set default UI values.
             textBoxMaxDepth.Text = "10";
             textBoxMaxThreads.Text = "100";
             textBoxCsvMaxLines.Text = "10000";
@@ -366,7 +366,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             }
         }
 
-        // Open StreamWriters with AutoFlush and write header.
+        // Open StreamWriters for real-time CSV writing with header.
         private async Task InitializeRealtimeCsvFilesAsync()
         {
             if (checkBoxRealTimeCsvBulk.IsChecked == true && !string.IsNullOrEmpty(textBoxRealTimeCsvBulkFile.Text))
@@ -493,7 +493,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     string categoryPhishing = textBoxCategoryPhishing.Text;
                     string categoryDDoS = textBoxCategoryDDoS.Text;
                     string commentTemplate = textBoxCommentTemplate.Text;
-                    bool scanKnownActive = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
+                    // Rename scanKnownActive to scanKnownActiveHarmful: applies only to harmful seeds.
+                    bool scanKnownActiveHarmful = checkBoxScanKnownActive.IsChecked.GetValueOrDefault();
                     bool allowAutoVerdict = checkBoxAllowAutoVerdict.IsChecked.GetValueOrDefault();
 
                     // Initialize real-time CSV files.
@@ -521,7 +522,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         AppendWhiteListCsvLineToFileAsync,
                         commentTemplate,
                         UpdateCurrentFileMessage,
-                        scanKnownActive,
+                        scanKnownActiveHarmful,
                         allowAutoVerdict,
                         "ipv4"
                     );
@@ -548,13 +549,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         AppendWhiteListCsvLineToFileAsync,
                         commentTemplate,
                         UpdateCurrentFileMessage,
-                        scanKnownActive,
+                        scanKnownActiveHarmful,
                         allowAutoVerdict,
                         "ipv6"
                     );
                     await scanner.StartScanAsync(cts.Token);
 
-                    // Before finalizing, insert header into bulk CSV if missing.
                     bool csvOk = await scanner.FinalizeCsvFilesAsync();
                     if (!csvOk)
                         MessageBox.Show("CSV output exceeds the defined limits.", "Warning", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -1033,7 +1033,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             int totalSeeds = 0;
             int processedCount = 0;
             private readonly HttpClient httpClient = new();
-            private readonly bool scanKnownActive;
+            // Renamed flag: scanKnownActive now applies only to harmful seeds.
+            private readonly bool scanKnownActiveHarmful;
             private readonly bool allowAutoVerdict;
             private readonly object bulkCsvLock = new();
 
@@ -1057,7 +1058,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 Func<string, Task> realTimeWhiteListCsvCallback,
                 string commentTemplate,
                 Action<string> scanProgressCallback,
-                bool scanKnownActive = false,
+                bool scanKnownActiveHarmful = false,
                 bool allowAutoVerdict = true,
                 string selectedIPType = "ipv4")
             {
@@ -1082,14 +1083,14 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     ? "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})"
                     : commentTemplate;
                 this.scanProgressCallback = scanProgressCallback;
-                this.scanKnownActive = scanKnownActive;
+                this.scanKnownActiveHarmful = scanKnownActiveHarmful;
                 this.allowAutoVerdict = allowAutoVerdict;
                 this.SelectedIPType = selectedIPType;
             }
 
             public async Task<bool> FinalizeCsvFilesAsync()
             {
-                // Insert header into Bulk CSV if missing.
+                // Ensure the header exists in the bulk CSV.
                 string header = "IP,Categories,ReportDate,Comment";
                 if (BulkCsvLines.Count == 0 || !BulkCsvLines[0].StartsWith(header))
                 {
@@ -1239,8 +1240,9 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (comment.Length > 1024)
                         comment = comment[..1024];
 
-                    // Do not add bulk CSV entry for WhiteList seeds.
-                    if ((scanKnownActive || seed.Depth > 0) && !seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
+                    // Only add bulk CSV entry for harmful seeds (non-WhiteList) and if either at depth > 0 or scanKnownActiveHarmful is true.
+                    if (!seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) &&
+                        (scanKnownActiveHarmful || seed.Depth > 0))
                     {
                         string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
                         lock (bulkCsvLock)
@@ -1353,7 +1355,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
 
                 discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
 
-                // Skip if discovered URL is identical to the source.
+                // Skip if discovered URL equals the source.
                 if (discoveredUrl == seed.OriginalSourceUrl)
                 {
                     logCallback($"Skipping discovered URL {discoveredUrl} as it is identical to the source.");
@@ -1404,6 +1406,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
                 }
 
+                // For harmful seeds (non-WhiteList), add bulk CSV entry.
                 if (!newSourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
                     string csvLine = $"{discoveredUrl},\"{newSourceType}\",{DateTime.UtcNow:O},\"URL processed from {seed.OriginalSourceUrl}\"";
