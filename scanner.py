@@ -120,8 +120,13 @@ class ScannerWorker(QObject):
         self.settings = settings
         self.max_depth = int(settings.get("MaxDepth", 10))
         self.max_workers = int(settings.get("MaxThreads", 100))
-        # CSV line limit is now hardcoded to 10,000 lines (AbuseIPDB maximum)
-        self.csv_line_limit = 10000
+        # User-defined CsvMaxLines; if above 10k, enforce 10k per file.
+        self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
+        self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
+        # User-defined CsvMaxSize (in bytes)
+        self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
+        if self.user_csv_max_lines > 10000:
+            self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but will be enforced as 10,000 per file due to AbuseIPDB limits.")
         self.comment_template = settings.get("CommentTemplate", "")
         self.scan_known_active = settings.get("ScanKnownActive", False)
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
@@ -162,6 +167,9 @@ class ScannerWorker(QObject):
         self.whitelist_line_count = 0
         self.bulk_file = None
         self.whitelist_file = None
+        # We'll also track the current file sizes in bytes
+        self.bulk_file_size = 0
+        self.whitelist_file_size = 0
 
         # Pause/Resume event; set means "not paused"
         self.pause_event = threading.Event()
@@ -184,13 +192,18 @@ class ScannerWorker(QObject):
             os.makedirs(whitelist_dir, exist_ok=True)
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
-        self.bulk_line_count = 1  # include header
+        header = "IP,Categories,ReportDate,Comment\n"
+        self.bulk_line_count = 1  # header counts as first line
         self.whitelist_line_count = 1
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
-        header = "IP,Categories,ReportDate,Comment\n"
         self.bulk_file.write(header)
         self.whitelist_file.write(header)
+        self.bulk_file.flush()
+        self.whitelist_file.flush()
+        # Initialize size counters using the header's byte-length
+        self.bulk_file_size = len(header.encode("utf-8"))
+        self.whitelist_file_size = len(header.encode("utf-8"))
 
     def close_csv_files(self):
         if self.bulk_file:
@@ -200,31 +213,44 @@ class ScannerWorker(QObject):
 
     def write_bulk_line(self, line):
         with self.lock:
-            if self.bulk_line_count >= self.csv_line_limit:
+            line_bytes = len(line.encode("utf-8"))
+            # Rotate file if line count or file size limit is reached
+            if self.bulk_line_count >= self.csv_max_lines or (self.bulk_file_size + line_bytes) >= self.csv_max_size:
                 self.bulk_file.close()
                 self.bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_bulk_csv)
                 new_filename = f"{base}_{self.bulk_file_index}{ext}"
                 self.bulk_file = open(new_filename, "w", encoding="utf-8")
-                self.bulk_file.write("IP,Categories,ReportDate,Comment\n")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.bulk_file.write(header)
+                self.bulk_file.flush()
                 self.bulk_line_count = 1
+                self.bulk_file_size = len(header.encode("utf-8"))
+                self.log(f"Bulk file size or line limit reached; switching to file: {new_filename}")
             self.bulk_file.write(line)
             self.bulk_file.flush()
             self.bulk_line_count += 1
+            self.bulk_file_size += line_bytes
 
     def write_whitelist_line(self, line):
         with self.lock:
-            if self.whitelist_line_count >= self.csv_line_limit:
+            line_bytes = len(line.encode("utf-8"))
+            if self.whitelist_line_count >= self.csv_max_lines or (self.whitelist_file_size + line_bytes) >= self.csv_max_size:
                 self.whitelist_file.close()
                 self.whitelist_file_index += 1
                 base, ext = os.path.splitext(self.out_whitelist_csv)
                 new_filename = f"{base}_{self.whitelist_file_index}{ext}"
                 self.whitelist_file = open(new_filename, "w", encoding="utf-8")
-                self.whitelist_file.write("IP,Categories,ReportDate,Comment\n")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.whitelist_file.write(header)
+                self.whitelist_file.flush()
                 self.whitelist_line_count = 1
+                self.whitelist_file_size = len(header.encode("utf-8"))
+                self.log(f"Whitelist file size or line limit reached; switching to file: {new_filename}")
             self.whitelist_file.write(line)
             self.whitelist_file.flush()
             self.whitelist_line_count += 1
+            self.whitelist_file_size += line_bytes
 
     def run_scan(self):
         self.log("Starting scan...")
@@ -529,7 +555,8 @@ class MainWindow(QMainWindow):
 
         add_field("Max Depth:", "MaxDepth", 10)
         add_field("Max Threads:", "MaxThreads", 20)
-        # Note: CsvMaxLines is now hardcoded to 10,000 so this field is optional.
+        # Default CsvMaxLines is now 10,000.
+        add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
@@ -591,7 +618,7 @@ class MainWindow(QMainWindow):
         settings = {}
         for key, le in self.fields.items():
             value = le.text().strip()
-            if key in ("MaxDepth", "MaxThreads", "CsvMaxSize"):
+            if key in ("MaxDepth", "MaxThreads", "CsvMaxLines", "CsvMaxSize"):
                 try:
                     value = int(value)
                 except:
