@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 
 script_dir = os.getcwd()
 log_dir = os.path.join(script_dir, "log")
-output_dir = os.path.join(script_dir, "log")
+output_dir = os.path.join(script_dir, "output")
 default_bulk = os.path.join(output_dir, "BulkReport.csv")
 default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 os.makedirs(log_dir, exist_ok=True)
