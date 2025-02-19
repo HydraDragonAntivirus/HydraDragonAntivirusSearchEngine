@@ -9,7 +9,7 @@ if sys.platform != "win32":
 # For a Windows GUI application, use the Win32GUI base.
 base = "Win32GUI"
 
-# Build options – include packages used in your application.
+# Build options include packages used in your application.
 build_options = {
     "packages": ["PySide6", "requests"],
     "excludes": ["tkinter"],

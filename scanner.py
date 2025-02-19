@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 
 from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -438,38 +439,48 @@ class ScannerWorker(QObject):
 
     def load_seeds(self):
         seeds = []
-        # Order: whitelist (IPv6 then IPv4), then phishing (IPv6 then IPv4), then ddos (IPv6 then IPv4), then malicious (IPv6 then IPv4)
+        file_ip_cache = {}
+
+        def get_ips_from_file(file):
+            if file not in file_ip_cache:
+                file_ip_cache[file] = self.load_lines(file)
+            return file_ip_cache[file]
+
+        # Order: whitelist (IPv6 then IPv4), then phishing (IPv6 then IPv4),
+        # then ddos (IPv6 then IPv4), then malicious (IPv6 then IPv4)
         for file in self.whitelist_files_ipv6:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "benign", "ipv6", depth=0))
         for file in self.whitelist_files_ipv4:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "benign", "ipv4", depth=0))
         for file in self.phishing_files_ipv6:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "phishing", "ipv6", depth=0))
         for file in self.phishing_files_ipv4:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
         for file in self.ddos_files_ipv6:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "ddos", "ipv6", depth=0))
         for file in self.ddos_files_ipv4:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "ddos", "ipv4", depth=0))
         for file in self.malware_files_ipv6:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "malicious", "ipv6", depth=0))
         for file in self.malware_files_ipv4:
-            for ip in self.load_lines(file):
+            for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
+
+        # Build the union of all known IPs using the cached results.
         self.all_known_ips = set()
         for file_list in [self.whitelist_files_ipv6, self.whitelist_files_ipv4,
                           self.phishing_files_ipv6, self.phishing_files_ipv4,
                           self.ddos_files_ipv6, self.ddos_files_ipv4,
                           self.malware_files_ipv6, self.malware_files_ipv4]:
             for file in file_list:
-                self.all_known_ips |= self.load_lines(file)
+                self.all_known_ips |= get_ips_from_file(file)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         self.log(f"Total known IPs: {len(self.all_known_ips)}")
         return seeds
@@ -490,6 +501,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Hydra Dragon Antivirus Search Engine")
+        self.setWindowIcon(QIcon("assets/HydraDragonAV.png"))
         self.worker = None
         self.thread = None
         self.is_scanning = False  # Tracks whether a scan is running
@@ -678,13 +690,16 @@ class MainWindow(QMainWindow):
             self.thread.quit()
             self.thread.wait()
 
-# -----------------------------
-# Main entry point
-# -----------------------------
-if __name__ == "__main__":
+def main():
     app = QApplication(sys.argv)
     app.setStyleSheet(antivirus_style)
     window = MainWindow()
     window.resize(800, 600)
     window.show()
     sys.exit(app.exec())
+
+# -----------------------------
+# Main entry point
+# -----------------------------
+if __name__ == "__main__":
+    main()
