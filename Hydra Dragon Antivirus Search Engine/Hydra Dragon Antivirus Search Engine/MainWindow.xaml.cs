@@ -1262,7 +1262,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         {
                       
                             ipStatus[seed.IP] = false;
-
+                         
                             await ProcessSeedAsync(seed, token);
                             processedCount++;
 
@@ -1340,21 +1340,23 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     }
 
                     var tasks = new List<Task>();
-
+                    int depth = 0;
                     string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
                     foreach (Match m in Regex.Matches(content, ipv4Pattern))
                     {
-                        tasks.Add(ProcessMatch(m, "ipv4", url, m.Value, seed.SourceType, seed.Depth, token));
+                        depth++;
+                        tasks.Add(ProcessMatch(m, seed, "ipv4", url, m.Value, seed.SourceType, depth, token));
                         
                     }
 
                     string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
                     foreach (Match m in Regex.Matches(content, ipv6Pattern))
                     {
-                        tasks.Add(ProcessMatch(m, "ipv6", url, m.Value, seed.SourceType, seed.Depth, token));
+                        depth++;
+                        tasks.Add(ProcessMatch(m, seed, "ipv6", url, m.Value, seed.SourceType, depth, token));
                       
                     }
-
+                    
                     await Task.WhenAll(tasks);
                 }
                 catch (Exception ex)
@@ -1364,16 +1366,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
 
-            private async Task ProcessMatch(Match match, string version, string file, string trimmed, string defaultSourceType, int currentDepth, CancellationToken token)
+            private async Task ProcessMatch(Match match, Seed seed, string version, string file, string trimmed, string defaultSourceType, int currentDepth, CancellationToken token)
             {
                 string ip = match.Groups["ip"].Value;
                 int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
 
-                // Create a new Seed with depth incremented by one.
-                var newSeed = new Seed(ip, defaultSourceType, version, port, currentDepth + 1, file, trimmed);
-
-                // Process the seed (this will eventually enqueue it via EnqueueSeed, which handles duplicate checking).
-                await ProcessIPAsync(newSeed, ip, port, version, trimmed, token);
+                seed.Depth = currentDepth;
+                await ProcessIPAsync(seed, ip, port, version, trimmed, token);
             }
 
             private static string ConvertToUrl(string? url, string? baseUrl = "")
@@ -1448,12 +1447,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string host = GetIpFromUrl(discoveredUrl);
 
                 // (Optional) You can check for duplicate hosts here using IsDuplicate if needed.
-                if (!scanKnownActiveHarmful && IsDuplicate(new Seed(host, seed.SourceType, version, port, seed.Depth, seed.OriginalSourceUrl, discoveredUrl)))
-                {
-                    logCallback($"Skipping {host} as it is already processed.");
-                    return;
-                }
-
+                
                 logCallback($"Processing URL: {discoveredUrl} (IP: {ip}) at (Depth {seed.Depth}) from Source URL: {seed.OriginalSourceUrl}");
 
                 if (seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) && discoveredUrl == seed.OriginalSourceUrl)
@@ -1513,25 +1507,23 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     var newURLs = ExtractURLsFromHtml(content, discoveredUrl);
                     foreach (var newUrl in newURLs)
                     {
-                        if (newUrl == seed.OriginalSourceUrl)
-                        {
-                            logCallback($"Skipping discovered URL '{newUrl}' as it is identical to the source.");
-                            continue;
-                        }
                         var newSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl);
                         EnqueueSeed(newSeed);
                     }
 
                     var tasks = new List<Task>();
                     string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
+                    int depth = 0;
                     foreach (Match m in Regex.Matches(content, ipv4Pattern))
                     {
-                        tasks.Add(ProcessMatch(m, "ipv4", discoveredUrl, m.Value, seed.SourceType, seed.Depth + 1, token));
+                        depth++;
+                        tasks.Add(ProcessMatch(m, seed, "ipv4", discoveredUrl, m.Value, seed.SourceType, depth, token));
                     }
                     string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
                     foreach (Match m in Regex.Matches(content, ipv6Pattern))
                     {
-                        tasks.Add(ProcessMatch(m, "ipv6", discoveredUrl, m.Value, seed.SourceType, seed.Depth + 1, token));
+                        depth++;
+                        tasks.Add(ProcessMatch(m, seed, "ipv6", discoveredUrl, m.Value, seed.SourceType, depth, token));
                     }
                     await Task.WhenAll(tasks);
                 }
