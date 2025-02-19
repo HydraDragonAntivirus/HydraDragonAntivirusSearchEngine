@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (
 script_dir = os.getcwd()
 log_dir = os.path.join(script_dir, "log")
 output_dir = os.path.join(script_dir, "log")
+default_bulk = os.path.join(output_dir, "BulkReport.csv")
+default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 os.makedirs(log_dir, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
@@ -140,8 +142,8 @@ class ScannerWorker(QObject):
         self.cat_ddos = settings.get("CategoryDDoS", "18")
         self.cat_phishing = settings.get("CategoryPhishing", "7")
         # Output filenames
-        self.out_bulk_csv = settings.get("OutputFile", "BulkReport.csv")
-        self.out_whitelist_csv = settings.get("WhiteListOutputFile", "WhitelistReport.csv")
+        self.out_bulk_csv = settings.get("OutputFile", default_bulk)
+        self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
 
         self.my_public_ip = None
         self.all_known_ips = set()
@@ -534,8 +536,8 @@ class MainWindow(QMainWindow):
         add_field("Max Threads:", "MaxThreads", 20)
         add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
-        add_field("Bulk Report File:", "OutputFile", "BulkReport.csv")
-        add_field("Whitelist Report File:", "WhiteListOutputFile", "WhitelistReport.csv")
+        add_field("Bulk Report File:", "OutputFile", default_bulk)
+        add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
         add_field("Category Malicious:", "CategoryMalicious", "20")
         add_field("Category Phishing:", "CategoryPhishing", "7")
         add_field("Category DDoS:", "CategoryDDoS", "18")
