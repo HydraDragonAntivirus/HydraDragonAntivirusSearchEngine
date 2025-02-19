@@ -22,7 +22,7 @@ build_options = {
 # Define the executable.
 executables = [
     Executable(
-        "hydradragonantivirussearchengine.py",  # Main script filename.
+        "antivirus.py",  # Main script filename.
         target_name="HydraDragonAntivirusSearchEngine.exe",
         base=base,
         icon="assets/HydraDragonAV.ico",

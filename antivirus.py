@@ -29,9 +29,8 @@ from PySide6.QtWidgets import (
     QTextEdit,  # For multi-line logging
 )
 
-script_dir = os.getcwd()
-log_dir = os.path.join(script_dir, "log")
-output_dir = os.path.join(script_dir, "output")
+log_dir = "log"
+output_dir = "output"
 default_bulk = os.path.join(output_dir, "BulkReport.csv")
 default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 os.makedirs(log_dir, exist_ok=True)
@@ -554,7 +553,7 @@ class MainWindow(QMainWindow):
             row += 1
 
         add_field("Max Depth:", "MaxDepth", 10)
-        add_field("Max Threads:", "MaxThreads", 20)
+        add_field("Max Threads:", "MaxThreads", 100)
         # Default CsvMaxLines is now 10,000.
         add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
