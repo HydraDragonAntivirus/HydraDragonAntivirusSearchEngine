@@ -108,8 +108,7 @@ The system ensures that even the most **obscure and hidden malicious IPs** are i
 
 ## Credits
 
-- **HydraDragonAntivirus** (main developer, repo owner, Python developer, C# developer, designer)
-- **Winball501** (main developer, C# developer, designer, converted Python to C# project)
+- **HydraDragonAntivirus** (main developer, repo owner, Python developer, designer)
 
 ## TODO
 - Add the ability to **pause the scan** for more control during long-running processes.

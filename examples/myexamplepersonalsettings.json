@@ -3,49 +3,39 @@
   "MaxThreads": 20,
   "CsvMaxLines": 10000,
   "CsvMaxSize": 2097152,
-  "OutputFile": "..\\..\\..\\..\\..\\output\\BulkReport.csv",
-  "WhiteListOutputFile": "..\\..\\..\\..\\..\\output\\WhitelistReport.csv",
+  "OutputFile": "output\\BulkReport.csv",
+  "WhiteListOutputFile": "output\\WhitelistReport.csv",
   "CategoryMalicious": "20",
   "CategoryPhishing": "7",
   "CategoryDDoS": "18",
   "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})",
-  "RealTimeCsvBulk": true,
-  "RealTimeCsvBulkFile": "..\\..\\..\\..\\..\\output\\BulkReportRealtime.csv",
-  "RealTimeCsvBulkPath": "..\\..\\..\\..\\..\\output",
-  "RealTimeCsvWhiteList": true,
-  "RealTimeCsvWhiteListFile": "..\\..\\..\\..\\..\\output\\WhitelistRealtime.csv",
-  "RealTimeCsvWhiteListPath": "..\\..\\..\\..\\..\\output",
   "RealTimeSave": true,
-  "RealTimeFile": "..\\..\\..\\..\\..\\output\\log.txt",
+  "RealTimeFile": "output\\log.txt",
   "ScanKnownActive": false,
   "AllowAutoVerdict": true,
-  "MalwareFiles": [],
-  "DDoSFiles": [],
-  "PhishingFiles": [],
-  "WhiteListFiles": [],
-  "MalwarePath": "..\\..\\..\\..\\..\\website",
-  "DDoSPath": "..\\..\\..\\..\\..\\website",
-  "PhishingPath": "..\\..\\..\\..\\..\\website",
-  "WhiteListPath": "..\\..\\..\\..\\..\\website",
+  "MalwarePath": "website",
+  "DDoSPath": "website",
+  "PhishingPath": "website",
+  "WhiteListPath": "website",
   "MalwareFilesIPv4": [
-    "..\\..\\..\\..\\..\\website\\IPv4Malware.txt"
+    "website\\IPv4Malware.txt"
   ],
   "MalwareFilesIPv6": [
-    "..\\..\\..\\..\\..\\website\\IPv6Malware.txt"
+    "website\\IPv6Malware.txt"
   ],
   "DDoSFilesIPv4": [
-    "..\\..\\..\\..\\..\\website\\IPv4DDoS.txt"
+    "website\\IPv4DDoS.txt"
   ],
   "DDoSFilesIPv6": [],
   "PhishingFilesIPv4": [
-    "..\\..\\..\\..\\..\\website\\IPv4PhishingActive.txt",
-    "..\\..\\..\\..\\..\\website\\IPv4PhishingInActive.txt"
+    "website\\IPv4PhishingActive.txt",
+    "website\\IPv4PhishingInActive.txt"
   ],
   "PhishingFilesIPv6": [],
   "WhiteListFilesIPv4": [
-    "..\\..\\..\\..\\..\\website\\IPv4WhiteList.txt"
+    "website\\IPv4WhiteList.txt"
   ],
   "WhiteListFilesIPv6": [
-    "..\\..\\..\\..\\..\\website\\IPv6WhiteList.txt"
+    "website\\IPv6WhiteList.txt"
   ]
 }
