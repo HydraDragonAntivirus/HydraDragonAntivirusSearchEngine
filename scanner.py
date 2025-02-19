@@ -703,7 +703,8 @@ class MainWindow(QMainWindow):
     def update_progress(self, processed, total):
         self.progress_bar.setMaximum(total if total > 0 else 1)
         self.progress_bar.setValue(processed)
-        self.progress_bar.setFormat(f"{processed}/{total}")
+        percent = (processed / total * 100) if total > 0 else 0
+        self.progress_bar.setFormat(f"{processed}/{total} ({percent:.0f}%)")
 
     def scan_finished(self):
         self.append_log("Scan finished.")
