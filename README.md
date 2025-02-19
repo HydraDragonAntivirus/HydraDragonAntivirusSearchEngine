@@ -145,3 +145,5 @@ You can download the latest release of the **Hydra Dragon Antivirus Search Engin
 For more information and updates, visit the official repository on GitHub:
 
 [Hydra Dragon Antivirus Search Engine - GitHub Repository](https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine)
+
+---
