@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
     QScrollArea,
+    QTextEdit
 )
 
 script_dir = os.getcwd()
@@ -37,7 +38,7 @@ os.makedirs(log_dir, exist_ok=True)
 os.makedirs(output_dir, exist_ok=True)
 
 # -----------------------------
-# Configure Logging: Redirect logs log\log.txt
+# Configure Logging: Redirect logs to log/log.txt
 # -----------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -79,7 +80,7 @@ QPushButton:pressed {
 QLabel {
     color: #e0e0e0;
 }
-QLineEdit {
+QLineEdit, QTextEdit {
     background-color: #3c3c3c;
     border: 1px solid #5a5a5a;
     padding: 4px;
@@ -149,8 +150,8 @@ class ScannerWorker(QObject):
         self.all_known_ips = set()
         self.processed_set = set()
         self.processed_count = 0
-        self.total_seeds = 0
-        self.lock = threading.Lock()
+        self.total_seeds = 0  # This will increase as new seeds are queued
+        self.counter_lock = threading.Lock()  # Only used for counter updates
         self.cancelled = False
 
         # CSV splitting variables
@@ -196,45 +197,34 @@ class ScannerWorker(QObject):
         if self.whitelist_file:
             self.whitelist_file.close()
 
+    # File writing without locking to allow real-time file access.
     def write_bulk_line(self, line):
-        with self.lock:
-            if self.csv_max_lines == 10000:
-                if self.bulk_line_count >= self.csv_max_lines:
-                    self.log("Bulk CSV limit reached (10000 lines), stopping scan.")
-                    self.cancelled = True
-                    return
-            else:
-                if self.bulk_line_count >= self.csv_max_lines:
-                    self.bulk_file.close()
-                    self.bulk_file_index += 1
-                    base, ext = os.path.splitext(self.out_bulk_csv)
-                    new_filename = f"{base}_{self.bulk_file_index}{ext}"
-                    self.bulk_file = open(new_filename, "w", encoding="utf-8")
-                    self.bulk_file.write("IP,Categories,ReportDate,Comment\n")
-                    self.bulk_line_count = 1
-            self.bulk_file.write(line)
-            self.bulk_file.flush()
-            self.bulk_line_count += 1
+        if self.bulk_line_count >= self.csv_max_lines:
+            self.log(f"Bulk CSV reached {self.csv_max_lines} lines, splitting file.")
+            self.bulk_file.close()
+            self.bulk_file_index += 1
+            base, ext = os.path.splitext(self.out_bulk_csv)
+            new_filename = f"{base}_{self.bulk_file_index}{ext}"
+            self.bulk_file = open(new_filename, "w", encoding="utf-8")
+            self.bulk_file.write("IP,Categories,ReportDate,Comment\n")
+            self.bulk_line_count = 1
+        self.bulk_file.write(line)
+        self.bulk_file.flush()
+        self.bulk_line_count += 1
 
     def write_whitelist_line(self, line):
-        with self.lock:
-            if self.csv_max_lines == 10000:
-                if self.whitelist_line_count >= self.csv_max_lines:
-                    self.log("Whitelist CSV limit reached (10000 lines), stopping scan.")
-                    self.cancelled = True
-                    return
-            else:
-                if self.whitelist_line_count >= self.csv_max_lines:
-                    self.whitelist_file.close()
-                    self.whitelist_file_index += 1
-                    base, ext = os.path.splitext(self.out_whitelist_csv)
-                    new_filename = f"{base}_{self.whitelist_file_index}{ext}"
-                    self.whitelist_file = open(new_filename, "w", encoding="utf-8")
-                    self.whitelist_file.write("IP,Categories,ReportDate,Comment\n")
-                    self.whitelist_line_count = 1
-            self.whitelist_file.write(line)
-            self.whitelist_file.flush()
-            self.whitelist_line_count += 1
+        if self.whitelist_line_count >= self.csv_max_lines:
+            self.log(f"Whitelist CSV reached {self.csv_max_lines} lines, splitting file.")
+            self.whitelist_file.close()
+            self.whitelist_file_index += 1
+            base, ext = os.path.splitext(self.out_whitelist_csv)
+            new_filename = f"{base}_{self.whitelist_file_index}{ext}"
+            self.whitelist_file = open(new_filename, "w", encoding="utf-8")
+            self.whitelist_file.write("IP,Categories,ReportDate,Comment\n")
+            self.whitelist_line_count = 1
+        self.whitelist_file.write(line)
+        self.whitelist_file.flush()
+        self.whitelist_line_count += 1
 
     def run_scan(self):
         self.log("Starting scan...")
@@ -245,6 +235,7 @@ class ScannerWorker(QObject):
             self.finished_signal.emit()
             return
 
+        # Initialize counters with the initial seed count.
         self.total_seeds = len(seeds)
         self.log(f"Enqueued initial seeds: {len(seeds)}")
         self.open_csv_files()
@@ -264,8 +255,7 @@ class ScannerWorker(QObject):
 
     def worker_thread(self, seed_queue):
         while not self.cancelled:
-            # Wait here if paused
-            self.pause_event.wait()
+            self.pause_event.wait()  # Pause if needed.
             try:
                 seed = seed_queue.get(timeout=5)
             except Empty:
@@ -276,7 +266,8 @@ class ScannerWorker(QObject):
     def process_seed_worker(self, seed, seed_queue):
         if self.cancelled:
             return
-        with self.lock:
+        # Check and mark seed as processed.
+        with self.counter_lock:
             if seed.ip in self.processed_set:
                 return
             self.processed_set.add(seed.ip)
@@ -306,7 +297,8 @@ class ScannerWorker(QObject):
                 if self.my_public_ip and ip == self.my_public_ip:
                     self.log(f"Skipping my own public IP: {ip}")
                     continue
-                with self.lock:
+                # Check if IP already processed or known.
+                with self.counter_lock:
                     if ip in self.all_known_ips or ip in self.processed_set:
                         continue
 
@@ -342,11 +334,10 @@ class ScannerWorker(QObject):
 
                 new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=seed.depth + 1, source_url=final_url)
                 seed_queue.put(new_seed)
-                with self.lock:
-                    self.processed_count += 1
-                    self.update_progress()
+                with self.counter_lock:
+                    self.total_seeds += 1
 
-        with self.lock:
+        with self.counter_lock:
             self.processed_count += 1
             self.update_progress()
 
@@ -579,7 +570,6 @@ class MainWindow(QMainWindow):
 
         self.pause_button = QPushButton("Pause Scan")
         self.pause_button.clicked.connect(self.toggle_pause)
-        # Hide pause button initially; it will be shown once the scan starts.
         self.pause_button.setVisible(False)
         control_layout.addWidget(self.pause_button)
         main_layout.addLayout(control_layout)
@@ -587,10 +577,9 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         main_layout.addWidget(self.progress_bar)
 
-        self.log_text = QLineEdit()
-        self.log_text.setReadOnly(True)
+        # Logging area using QTextEdit.
         main_layout.addWidget(QLabel("Log:"))
-        self.log_text = QLineEdit()
+        self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
         main_layout.addWidget(self.log_text)
 
@@ -678,10 +667,11 @@ class MainWindow(QMainWindow):
             self.append_log("Scan cancellation requested.")
 
     def append_log(self, message):
-        self.log_text.setText(message)
+        # Append new log messages instead of replacing text.
+        self.log_text.append(message)
 
     def update_progress(self, processed, total):
-        self.progress_bar.setMaximum(total)
+        self.progress_bar.setMaximum(total if total > 0 else 1)
         self.progress_bar.setValue(processed)
         self.progress_bar.setFormat(f"{processed}/{total}")
 
