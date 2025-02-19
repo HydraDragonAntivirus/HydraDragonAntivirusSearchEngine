@@ -1082,8 +1082,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             public List<string> BulkCsvLines { get; private set; } = new();
             public List<string> WhiteListCsvLines { get; private set; } = new();
             private readonly ConcurrentQueue<Seed> seedQueue = new();
-            // Changed processedIPs from a flag to store maximum depth processed per IP.
-            private readonly ConcurrentDictionary<string, int> processedIPs = new();
+            private readonly ConcurrentBag<string> benignAutoVerdict3List = new ConcurrentBag<string>();
+            private readonly ConcurrentBag<string> benignAutoVerdict2List = new ConcurrentBag<string>();
+            private readonly ConcurrentBag<string> benignAutoVerdict1List = new ConcurrentBag<string>();
+            private readonly ConcurrentBag<string> newDDoSList = new ConcurrentBag<string>();
+            private readonly ConcurrentBag<string> newPhishingList = new ConcurrentBag<string>();
+            private readonly ConcurrentBag<string> newMalwareList = new ConcurrentBag<string>();
             int totalSeeds = 0;
             int processedCount = 0;
             private readonly HttpClient httpClient = new();
@@ -1365,12 +1369,11 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 string ip = match.Groups["ip"].Value;
                 int? port = match.Groups["port"].Success ? (int?)int.Parse(match.Groups["port"].Value) : null;
 
-                // Allow processing if we haven’t seen this IP at a greater depth.
-                if (processedIPs.TryGetValue(ip, out int currentProcessedDepth) && currentProcessedDepth > currentDepth)
-                    return;
-                processedIPs[ip] = currentDepth;
+                // Create a new Seed with depth incremented by one.
+                var newSeed = new Seed(ip, defaultSourceType, version, port, currentDepth + 1, file, trimmed);
 
-                await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth + 1, file, trimmed), ip, port, version, trimmed, token);
+                // Process the seed (this will eventually enqueue it via EnqueueSeed, which handles duplicate checking).
+                await ProcessIPAsync(newSeed, ip, port, version, trimmed, token);
             }
 
             private static string ConvertToUrl(string? url, string? baseUrl = "")
@@ -1431,50 +1434,46 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 return urls;
             }
 
-            private async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
+            public async Task ProcessIPAsync(Seed seed, string ip, int? port, string version, string discoveredUrl, CancellationToken token)
             {
                 token.ThrowIfCancellationRequested();
 
-                // Stop processing if maximum depth has been reached.
                 if (seed.Depth >= maxDepth)
                     return;
 
-                // Normalize discoveredUrl; if not a valid absolute URL, default to "http://{ip}"
                 discoveredUrl = ConvertToUrl(discoveredUrl, seed.OriginalSourceUrl);
                 if (!Uri.TryCreate(discoveredUrl, UriKind.Absolute, out _))
-                {
                     discoveredUrl = "http://" + ip;
-                }
 
-                // Get the host from discoveredUrl for duplicate checking.
                 string host = GetIpFromUrl(discoveredUrl);
 
-                // Allow processing only if we haven't already processed this host at a greater depth.
-                if (!scanKnownActiveHarmful && processedIPs.TryGetValue(host, out int processedDepth) && processedDepth > seed.Depth)
+                // (Optional) You can check for duplicate hosts here using IsDuplicate if needed.
+                if (!scanKnownActiveHarmful && IsDuplicate(new Seed(host, seed.SourceType, version, port, seed.Depth, seed.OriginalSourceUrl, discoveredUrl)))
                 {
-                    logCallback($"Skipping {host} at depth {seed.Depth} because it was already processed at depth {processedDepth}.");
+                    logCallback($"Skipping {host} as it is already processed.");
                     return;
                 }
 
-                scannerLogger.Info($"Processing URL: {discoveredUrl} (IP: {ip}) at (Depth {seed.Depth}) from Source URL: {seed.OriginalSourceUrl}");
                 logCallback($"Processing URL: {discoveredUrl} (IP: {ip}) at (Depth {seed.Depth}) from Source URL: {seed.OriginalSourceUrl}");
 
-                // For a WhiteList seed whose discovered URL equals its original source, skip processing.
                 if (seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase) && discoveredUrl == seed.OriginalSourceUrl)
                 {
-                    scannerLogger.Info($"Skipping {discoveredUrl} - Already Whitelisted.");
                     logCallback($"Skipping {discoveredUrl} - Already Whitelisted.");
                     return;
                 }
 
-                // Build a depth string for comments.
                 string depthText = $"(Depth {seed.Depth})";
 
-                // If auto-verdict is enabled, treat this as a whitelist entry.
+                // If auto-verdict is enabled, decide between benignAutoVerdict2 and benignAutoVerdict3.
                 if (allowAutoVerdict)
                 {
                     bool active = await SeedHelper.IsActiveAndStaticAsync(ip, port ?? 0, token);
                     string verdict = active ? "benign (auto verdict 2)" : "benign (auto verdict 3)";
+                    if (active)
+                        benignAutoVerdict2List.Add(ip);
+                    else
+                        benignAutoVerdict3List.Add(ip);
+
                     string whitelistComment = commentTemplate
                         .Replace("{ip}", ip)
                         .Replace("{source_url}", seed.OriginalSourceUrl)
@@ -1482,13 +1481,13 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         .Replace("{verdict}", "WhiteList")
                         .Replace("{depth}", depthText);
                     string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
-                     if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                            WhiteListCsvLines.Add(csvLine);
+                    if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                        WhiteListCsvLines.Add(csvLine);
                     await realTimeWhiteListCsvCallback(csvLine);
                     return;
                 }
 
-                // For harmful seeds (non‑whitelist) add a bulk CSV entry.
+                // For harmful seeds (non‑whitelist), add bulk CSV entry.
                 if (!seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
                 {
                     string harmfulComment = commentTemplate
@@ -1508,12 +1507,10 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     if (string.IsNullOrEmpty(content))
                         return;
 
-                    scannerLogger.Info($"Visited (Depth {seed.Depth}): {discoveredUrl}");
                     logCallback($"Visited (Depth {seed.Depth}): {discoveredUrl}");
 
                     // Extract URLs from the HTML content.
                     var newURLs = ExtractURLsFromHtml(content, discoveredUrl);
-
                     foreach (var newUrl in newURLs)
                     {
                         if (newUrl == seed.OriginalSourceUrl)
@@ -1521,86 +1518,75 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             logCallback($"Skipping discovered URL '{newUrl}' as it is identical to the source.");
                             continue;
                         }
-                        // Create a new seed with incremented depth and enqueue it.
-                        var newSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth, seed.OriginalSourceUrl, newUrl);
+                        var newSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, newUrl);
                         EnqueueSeed(newSeed);
                     }
 
-                    // Additionally, process any IP addresses found via regex patterns in the content.
                     var tasks = new List<Task>();
-
                     string ipv4Pattern = @"\b(?<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?<port>[0-9]{1,5}))?\b";
                     foreach (Match m in Regex.Matches(content, ipv4Pattern))
                     {
                         tasks.Add(ProcessMatch(m, "ipv4", discoveredUrl, m.Value, seed.SourceType, seed.Depth + 1, token));
                     }
-
                     string ipv6Pattern = @"\b(?<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?<port>[0-9]{1,5}))?\b";
                     foreach (Match m in Regex.Matches(content, ipv6Pattern))
                     {
                         tasks.Add(ProcessMatch(m, "ipv6", discoveredUrl, m.Value, seed.SourceType, seed.Depth + 1, token));
                     }
-
                     await Task.WhenAll(tasks);
                 }
                 catch (Exception ex)
                 {
-                    scannerLogger.Error($"Error fetching content from {discoveredUrl}: {ex.Message}");
                     logCallback($"Error fetching content from {discoveredUrl}: {ex.Message}");
                 }
 
-                // For whitelist entries, also update processed IP information and add a CSV entry if at depth 1.
-                if (!string.IsNullOrEmpty(host))
+                // For whitelist entries at depth 1, add to benignAutoVerdict1.
+                if (!string.IsNullOrEmpty(host) && seed.Depth == 1)
                 {
-                    processedIPs.AddOrUpdate(host, seed.Depth, (key, oldDepth) => Math.Max(oldDepth, seed.Depth));
-                    if (seed.Depth == 1)
-                    {
-                        string whitelistComment = commentTemplate
-                            .Replace("{ip}", ip)
-                            .Replace("{source_url}", seed.OriginalSourceUrl)
-                            .Replace("{discovered_url}", discoveredUrl)
-                            .Replace("{verdict}", "WhiteList")
-                            .Replace("{depth}", depthText);
-                        string csvLine = $"{host},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
-                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                            WhiteListCsvLines.Add(csvLine);
-                        await realTimeWhiteListCsvCallback(csvLine);
-                    }
+                    benignAutoVerdict1List.Add(host);
+                    string whitelistComment = commentTemplate
+                        .Replace("{ip}", ip)
+                        .Replace("{source_url}", seed.OriginalSourceUrl)
+                        .Replace("{discovered_url}", discoveredUrl)
+                        .Replace("{verdict}", "WhiteList")
+                        .Replace("{depth}", depthText);
+                    string csvLine = $"{host},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
+                    if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                        WhiteListCsvLines.Add(csvLine);
+                    await realTimeWhiteListCsvCallback(csvLine);
                 }
 
-                // Instead of directly recursing, enqueue the seed for further processing.
+                // Instead of recursing directly, enqueue a recursive seed.
                 var recursiveSeed = new Seed(ip, seed.SourceType, version, port ?? 0, seed.Depth + 1, seed.OriginalSourceUrl, discoveredUrl);
                 EnqueueSeed(recursiveSeed);
             }
 
-
             // Checks across all in-memory collections to decide if this seed is already known.
             private bool IsDuplicate(Seed seed)
             {
-                // Check the processedIPs dictionary.
-                if (processedIPs.TryGetValue(seed.IP, out int existingDepth) && existingDepth >= seed.Depth)
+                if (benignAutoVerdict3List.Contains(seed.IP) ||
+                    benignAutoVerdict2List.Contains(seed.IP) ||
+                    benignAutoVerdict1List.Contains(seed.IP) ||
+                    newDDoSList.Contains(seed.IP) ||
+                    newPhishingList.Contains(seed.IP) ||
+                    newMalwareList.Contains(seed.IP))
+                {
                     return true;
-
-                // Check the seedQueue (requires converting the concurrent queue to an enumerable).
+                }
                 if (seedQueue.Any(s => s.IP.Equals(seed.IP, StringComparison.OrdinalIgnoreCase)))
                     return true;
-
-                // Check the Bulk CSV lines. Assume the first field in each CSV line is the IP.
                 if (BulkCsvLines.Any(line =>
                 {
                     string ipField = line.Split(',')[0].Trim().Trim('\"');
                     return ipField.Equals(seed.IP, StringComparison.OrdinalIgnoreCase);
                 }))
                     return true;
-
-                // Check the WhiteList CSV lines similarly.
                 if (WhiteListCsvLines.Any(line =>
                 {
                     string ipField = line.Split(',')[0].Trim().Trim('\"');
                     return ipField.Equals(seed.IP, StringComparison.OrdinalIgnoreCase);
                 }))
                     return true;
-
                 return false;
             }
 
@@ -1614,41 +1600,29 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 if (seed.Depth >= maxDepth)
                     return;
 
-                // Check all in-memory lists to avoid duplicates.
                 if (IsDuplicate(seed))
                     return;
 
-                // When scanKnownActiveHarmful is enabled...
-                if (scanKnownActiveHarmful)
+                // Map the seed's source type to one of the new lists.
+                switch (seed.SourceType.ToLower())
                 {
-                    // For non-WhiteList seeds:
-                    if (!seed.SourceType.Equals("WhiteList", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (seed.Depth == 0)
-                        {
-                            // For depth 0, enqueue normally.
-                            processedIPs[seed.IP] = seed.Depth;
-                            seedQueue.Enqueue(seed);
-                        }
-                        else
-                        {
-                            // For deeper seeds, do not enqueue further; update the blacklist CSV instead.
-                            processedIPs[seed.IP] = seed.Depth;
-                            AddSeedToBlacklistCsv(seed);
-                        }
-                    }
-                    else // For WhiteList seeds, always enqueue.
-                    {
-                        processedIPs[seed.IP] = seed.Depth;
-                        seedQueue.Enqueue(seed);
-                    }
+                    case "malicious":
+                        newMalwareList.Add(seed.IP);
+                        break;
+                    case "phishing":
+                        newPhishingList.Add(seed.IP);
+                        break;
+                    case "ddos":
+                        newDDoSList.Add(seed.IP);
+                        break;
+                    case "whitelist":
+                        benignAutoVerdict1List.Add(seed.IP);
+                        break;
+                    default:
+                        break;
                 }
-                else
-                {
-                    // When scanKnownActiveHarmful is not enabled, simply enqueue the seed.
-                    processedIPs[seed.IP] = seed.Depth;
-                    seedQueue.Enqueue(seed);
-                }
+
+                seedQueue.Enqueue(seed);
             }
 
             private void AddSeedToBlacklistCsv(Seed seed)
