@@ -2,42 +2,45 @@
 
 ## Overview
 
-**Hydra Dragon Antivirus Search Engine** is a specialized tool designed to find **zero-day malicious IP addresses** on the web. It's not a full antivirus product, but instead, it uses databases to extract **related unknown IP addresses**. It doesn’t scan IP address content with traditional antivirus engines, rather it searches for patterns and connections to help identify malicious activity. 
+**Hydra Dragon Antivirus Search Engine** is a specialized tool designed to find **zero-day malicious IP addresses** on the web. It's not a full antivirus product, but instead, it uses databases to extract **related unknown IP addresses**. It doesn’t scan IP address content with traditional antivirus engines; rather, it searches for patterns and connections to help identify malicious activity.
 
-This project was built to assist the **Comodo Antivirus community**, where Comodo blocks known malware containment and malicious IPs through its firewall and website filtering. However, it sometimes misses unknown C2 (Command & Control) servers, leading to the exposure of sensitive data on the dark web. The goal of this tool is to fill that gap and **protect users from data theft by identifying unknown malicious IPs**.
+This project was built to assist the **Comodo Antivirus community**, where Comodo blocks known malware and malicious IPs through its firewall and website filtering. However, it sometimes misses unknown C2 (Command & Control) servers, leading to the exposure of sensitive data on the dark web. The goal of this tool is to fill that gap and **protect users from data theft by identifying unknown malicious IPs**.
 
 If you detect malware with your original IP, it's highly recommended to remove it from the logs and create an **AbuseIPDB account** to avoid being reported. The tool can be used to check for these unknown IP addresses, and new IPs should be submitted to **AbuseIPDB**.
 
 ### **Important Notice**
-- **Logs Tab**: You will need to check the **Logs tab** in the application to view the latest results of the scan.
+- **Logs Tab**: You will need to check the **Logs tab** in the application to view the latest scan results.
 - **AbuseIPDB Integration**: This tool is specifically designed to help improve the **AbuseIPDB** database by detecting malicious IPs that are not yet flagged.
 - **Example JSON Configuration**: You can use the example folder to load settings for the scan.
-  
+
 ### **What this Tool Does**:
 - **Malicious IP Finder**: It helps identify potentially malicious or unknown IPs (both IPv4 and IPv6).
 - **AbuseIPDB Integration**: Specifically targets AbuseIPDB's database to identify and report malicious IP addresses, filling in gaps where unknown C2 servers might be missed.
 - **Zero-Day Detection**: Searches for zero-day malicious IPs that may have slipped under the radar of traditional antivirus software.
-  
+
 ### **What this Tool Does Not Do**:
-- It does **not scan** IP address content via HydraDragonAntivirus engines.
+- It does **not scan** IP address content with traditional antivirus engines.
 - It does not provide full antivirus protection, but rather focuses on identifying related unknown IP addresses.
-  
+
 ---
 
 ## Features
 
-- **Real-Time Monitoring**: Continuously scans for malicious activities in real-time.
+- **Real-Time Monitoring**: Continuously scans for malicious activities in real time.
 - **Benign Auto Verdicts**: Automatically classifies IPs and URLs based on their activity and behavior (Benign Auto Verdict 1, 2, 3).
-- **Efficient Reporting**: Generates bulk and whitelist reports in CSV format for easy export and analysis.
+- **Efficient Reporting**: Generates two CSV reports:
+  - **BulkReport.csv** (and split files if necessary) for non-benign IPs.
+  - **WhitelistReport.csv** (and split files if necessary) for benign IPs.
 - **IPv4 and IPv6 Support**: Supports both IPv4 and IPv6 address spaces.
 - **Database Integration**: Helps integrate with **AbuseIPDB** to flag potentially malicious IP addresses.
 - **Logs Tab**: Monitors the logs for real-time updates and detected IPs.
+- **CSV File Management**: Automatically stops the scan when the CSV file reaches 10,000 lines (if that limit is set) or splits the file into multiple parts if a higher limit is provided.
 
 ---
 
 ## **Benign Auto Verdicts in Malware Detection**
 
-Hydra Dragon Antivirus Search Engine uses **Benign Auto Verdicts** to classify IPs based on their activity and status. The verdicts help to classify whether an IP that was previously flagged as malicious has become benign or is still a threat.
+Hydra Dragon Antivirus Search Engine uses **Benign Auto Verdicts** to classify IPs based on their activity and status. These verdicts help determine whether an IP that was previously flagged as malicious has become benign or remains a threat.
 
 ### **1. Benign Auto Verdict 1: Malicious to Benign**
 - **Scenario**: An IP flagged as malicious is now **inactive** or **non-static**.
@@ -60,49 +63,60 @@ Hydra Dragon Antivirus Search Engine uses **Benign Auto Verdicts** to classify I
 ## Setup and Usage
 
 ### Prerequisites
-- **.NET 8.0** or later for compiling and running the project.
-- **Hydra Dragon Antivirus Search Engine** requires internet access to query public databases for known malicious IPs.
+- Python 3.8 or later.
+- Hydra Dragon Antivirus Search Engine requires internet access to query public databases for known malicious IPs.
 
 ### Installation
 
 1. Clone the repository to your local machine:
 
-   `git clone https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine.git`
+git clone https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine.git
 
-2. Navigate to the project directory and restore the dependencies:
+2. Navigate to the project directory:
 
-   `cd HydraDragonAntivirusSearchEngine`
-   `cd Hydra Dragon Antivirus Search Engine`
+cd HydraDragonAntivirusSearchEngine
 
-   `dotnet restore`
+3. Install the dependencies:
 
-3. Build and run the application:
+pip install -r requirements.txt
 
-   `dotnet run`
+4. Run the application:
+
+python scanner.py
+
+5. (Optional) Build the executable (Windows only):
+
+python setup.py build
 
 ### Configuring the Application
-- The system is configured through the **MainWindow.xaml.cs** file. Adjust settings such as **MaxDepth**, **MaxThreads**, **CsvMaxLines**, and **CsvMaxSize** according to your needs.
-- CSV output files for both **bulk reports** and **whitelist** can be configured in the settings dialog within the app.
+- The application is configured via a settings dialog with individual input fields.
+- You can load, edit, and save the JSON settings through the GUI.
+- Adjust parameters such as **MaxDepth**, **MaxThreads**, **CsvMaxLines**, and **CsvMaxSize**.
+- Specify the file lists for **malware**, **DDoS**, **phishing**, and **whitelist** IPs.
+- The CSV output files for bulk reporting and whitelist are generated based on these settings. If the CSV file exceeds the configured line count, the application will stop the scan (if the limit is 10,000) or automatically split the file (if a higher limit is set).
 
 ### Running the Scan
-1. Choose the files to scan by selecting the relevant **malware**, **DDoS**, **phishing**, and **whitelist** files.
-2. Click the **Start Scan** button to begin scanning.
-3. Monitor the progress and view logs through the **Logs Tab**.
+1. Load your JSON settings file using the GUI.
+2. Optionally edit the settings via the provided input fields.
+3. Click the **Start Scan** button to begin scanning.
+4. Monitor the progress and view log messages in the GUI. All log messages are also written to `log.txt`.
 
-### Real-Time Monitoring
-- **Real-time CSV generation**: Enable real-time logging of both **bulk** and **whitelist** entries to separate CSV files.
-- **Log Search**: Use the search functionality in the **Logs Tab** to filter through log entries.
+### Real-Time Monitoring and Reporting
+- **Real-time CSV generation**: The application generates two CSV files:
+- **BulkReport.csv** (and additional files with suffixes if split) for non-benign IPs.
+- **WhitelistReport.csv** (and additional files with suffixes if split) for benign IPs.
+- **Log Monitoring**: All log messages are displayed in the GUI and written to `log.txt`.
 
 ## Deep Recursive Scanning for Malicious IP Detection
 
-Hydra Dragon Antivirus Search Engine is built to perform **extensive deep scanning** in order to detect unknown **zero-day malicious IPs**. Unlike traditional antivirus tools, it doesn't simply scan static IP lists but dives deeper into the web by following links and analyzing **related websites**. The tool performs **recursive searches** with the ability to go multiple levels deep, systematically exploring websites linked to known sources to uncover hidden malicious IP addresses.
+Hydra Dragon Antivirus Search Engine performs **extensive deep scanning** to detect unknown **zero-day malicious IPs**. Unlike traditional antivirus tools that rely on static IP lists, this tool recursively explores related websites by following links and analyzing content.
 
-- **Very Super Advanced Deep Depth Scanning**: The system utilizes a **depth-first search** strategy, exploring links on discovered websites to uncover more IPs at each level. For example, if a malicious IP is discovered on a website, the tool will follow links on that website to uncover even more IPs, continuing this process to an arbitrary level (the **max depth** can be configured).
-- **Increased Coverage**: This approach helps to detect **C2 (Command and Control) servers** and other malicious entities that might not be immediately visible but are **linked through multiple levels** of related websites.
-- **Recursive Discovery**: At each level of depth, the tool extracts new URLs, processes them, and uncovers new IP addresses, creating a **comprehensive relationship map** of potentially harmful IPs that may evade traditional detection methods.
-- **Depth Control**: You can configure how deep the scan goes, ensuring that the system can explore as many levels as required, offering a **thorough investigation of the internet's IP landscape**.
+- **Advanced Deep Scanning**: Uses a **depth-first search** strategy to uncover IP addresses linked to known sources.
+- **Increased Coverage**: Helps detect **C2 (Command & Control) servers** and other malicious entities that may not be immediately visible.
+- **Recursive Discovery**: Continuously extracts new URLs and IP addresses, building a comprehensive map of potentially malicious IPs.
+- **Depth Control**: The maximum scan depth is configurable, ensuring thorough investigation without endless recursion.
 
-The system ensures that even the most **obscure and hidden malicious IPs** are identified by traversing complex webs of related websites, providing **a deep dive into the internet's dark corners** where malicious activity might be taking place undetected.
+The tool ensures that even the most **obscure and hidden malicious IPs** are identified, providing a deep dive into the web's dark corners where malicious activities may go undetected.
 
 ---
 
@@ -112,7 +126,7 @@ The system ensures that even the most **obscure and hidden malicious IPs** are i
 
 ## TODO
 - Add the ability to **pause the scan** for more control during long-running processes.
-- Scan from different locations to collect more data
+- Implement scanning from different locations to collect more data.
 
 ## License
 
@@ -131,5 +145,3 @@ You can download the latest release of the **Hydra Dragon Antivirus Search Engin
 For more information and updates, visit the official repository on GitHub:
 
 [Hydra Dragon Antivirus Search Engine - GitHub Repository](https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine)
-
----

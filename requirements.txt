@@ -1,1 +1,3 @@
-tqdm
+PySide6
+requests
+cx_Freeze

@@ -5,6 +5,7 @@ import json
 import ipaddress
 import threading
 import requests
+import logging
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
@@ -20,9 +21,22 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
-    QTextEdit,
     QProgressBar,
     QFileDialog,
+    QGridLayout,
+    QScrollArea,
+)
+
+script_dir = os.getcwd()
+
+# -----------------------------
+# Configure Logging: Redirect logs to output\log.txt
+# -----------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s: %(message)s",
+    filename=os.path.join(script_dir, "output", "log.txt"),
+    filemode="a"
 )
 
 # -----------------------------
@@ -35,7 +49,6 @@ QWidget {
     font-family: Arial, sans-serif;
     font-size: 14px;
 }
-
 QPushButton {
     background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
                                 stop:0.2 #007bff, stop:0.8 #0056b3);
@@ -45,65 +58,26 @@ QPushButton {
     border-radius: 8px;
     min-width: 70px;
     font-weight: bold;
-    text-align: center;
-    qproperty-iconSize: 16px;
 }
-
 QPushButton:hover {
     background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
                                 stop:0.2 #0056b3, stop:0.8 #004380);
     border-color: #0056b3;
 }
-
 QPushButton:pressed {
     background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
                                 stop:0.2 #004380, stop:0.8 #003d75);
     border-color: #004380;
 }
-
 QLabel {
     color: #e0e0e0;
 }
-
-QFileDialog {
-    background-color: #2b2b2b;
-    color: #e0e0e0;
-}
-
-QListWidget {
+QLineEdit {
     background-color: #3c3c3c;
-    color: #e0e0e0;
     border: 1px solid #5a5a5a;
-}
-
-QListWidget::item {
     padding: 4px;
 }
-
-QListWidget::item:selected {
-    background-color: #007bff;
-    color: white;
-}
-
-QCheckBox {
-    color: #e0e0e0;
-}
-
-QComboBox {
-    background-color: #3c3c3c;
-    color: #e0e0e0;
-    border: 1px solid #5a5a5a;
-    padding: 2px 8px;
-    border-radius: 4px;
-    min-width: 80px;
-}
-
-QDialog {
-    background-color: #2b2b2b;
-    color: #e0e0e0;
-}
-
-QDialogButtonBox {
+QScrollArea {
     background-color: #2b2b2b;
 }
 """
@@ -114,7 +88,7 @@ QDialogButtonBox {
 class Seed:
     def __init__(self, ip, source_type, version, port=None, depth=0, source_url=None):
         self.ip = ip.lower()
-        # source_type can be "malicious", "ddos", "phishing", or "benign"
+        # source_type: "malicious", "ddos", "phishing", or "benign"
         self.source_type = source_type  
         self.version = version  # "ipv4" or "ipv6"
         self.port = port        # Port number if available
@@ -125,7 +99,7 @@ class Seed:
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
 
 # -----------------------------
-# ScannerWorker using settings from JSON
+# ScannerWorker using settings
 # -----------------------------
 class ScannerWorker(QObject):
     log_signal = Signal(str)
@@ -136,36 +110,34 @@ class ScannerWorker(QObject):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.max_depth = settings.get("MaxDepth", 10)
-        self.max_workers = settings.get("MaxThreads", 20)
-        self.csv_max_lines = settings.get("CsvMaxLines", 10000)
-        self.csv_max_size = settings.get("CsvMaxSize", 2097152)
+        self.max_depth = int(settings.get("MaxDepth", 10))
+        self.max_workers = int(settings.get("MaxThreads", 20))
+        self.csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.comment_template = settings.get("CommentTemplate", "")
         self.scan_known_active = settings.get("ScanKnownActive", False)
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
-        # File paths for seed lists
-        self.malware_files_ipv4 = settings.get("MalwareFilesIPv4", [])
-        self.malware_files_ipv6 = settings.get("MalwareFilesIPv6", [])
-        self.ddos_files_ipv4 = settings.get("DDoSFilesIPv4", [])
-        self.ddos_files_ipv6 = settings.get("DDoSFilesIPv6", [])
-        self.phishing_files_ipv4 = settings.get("PhishingFilesIPv4", [])
-        self.phishing_files_ipv6 = settings.get("PhishingFilesIPv6", [])
-        self.whitelist_files_ipv4 = settings.get("WhiteListFilesIPv4", [])
-        self.whitelist_files_ipv6 = settings.get("WhiteListFilesIPv6", [])
-        # For this example, we use the path settings (all set to "website" in your JSON)
+        # File lists (comma‑separated strings converted to lists)
+        self.malware_files_ipv4 = [x.strip() for x in settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]
+        self.malware_files_ipv6 = [x.strip() for x in settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]
+        self.ddos_files_ipv4 = [x.strip() for x in settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]
+        self.ddos_files_ipv6 = [x.strip() for x in settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]
+        self.phishing_files_ipv4 = [x.strip() for x in settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]
+        self.phishing_files_ipv6 = [x.strip() for x in settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]
+        self.whitelist_files_ipv4 = [x.strip() for x in settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]
+        self.whitelist_files_ipv6 = [x.strip() for x in settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]
+        # Paths
         self.malware_path = settings.get("MalwarePath", "")
         self.ddos_path = settings.get("DDoSPath", "")
         self.phishing_path = settings.get("PhishingPath", "")
         self.whitelist_path = settings.get("WhiteListPath", "")
-        # Output filenames (could be extended to be configurable too)
-        self.out_malicious_filename    = "NewDiscoveredIPs_malicious.csv"   # CategoryMalicious: settings["CategoryMalicious"]
-        self.out_ddos_filename         = "NewDiscoveredIPs_ddos.csv"        # CategoryDDoS: settings["CategoryDDoS"]
-        self.out_phishing_filename     = "NewDiscoveredIPs_phishing.csv"    # CategoryPhishing: settings["CategoryPhishing"]
-        self.out_benign_filename       = "NewDiscoveredIPs_benign.csv"      
-        self.out_benign_auto1_filename = "NewDiscoveredIPs_benign_auto_verdict1.csv"
-        self.out_benign_auto2_filename = "NewDiscoveredIPs_benign_auto_verdict2.csv"
-        self.out_benign_auto3_filename = "NewDiscoveredIPs_benign_auto_verdict3.csv"
-        
+        # Categories
+        self.cat_malicious = settings.get("CategoryMalicious", "20")
+        self.cat_ddos = settings.get("CategoryDDoS", "18")
+        self.cat_phishing = settings.get("CategoryPhishing", "7")
+        # Output filenames
+        self.out_bulk_csv = settings.get("OutputFile", "BulkReport.csv")
+        self.out_whitelist_csv = settings.get("WhiteListOutputFile", "WhitelistReport.csv")
+
         self.my_public_ip = None
         self.all_known_ips = set()
         self.processed_set = set()
@@ -174,12 +146,78 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
 
+        # Initialize CSV splitting variables
+        self.bulk_file_index = 0
+        self.whitelist_file_index = 0
+        self.bulk_line_count = 0
+        self.whitelist_line_count = 0
+        self.bulk_file = None
+        self.whitelist_file = None
+
     def log(self, message):
+        # Emit to GUI and also log to file via logging module.
         self.log_signal.emit(message)
-        print(message)
+        logging.info(message)
 
     def update_progress(self):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
+
+    def open_csv_files(self):
+        self.bulk_file_index = 0
+        self.whitelist_file_index = 0
+        self.bulk_line_count = 1  # include header
+        self.whitelist_line_count = 1
+        self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
+        self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
+        header = "IP,Categories,ReportDate,Comment\n"
+        self.bulk_file.write(header)
+        self.whitelist_file.write(header)
+
+    def close_csv_files(self):
+        if self.bulk_file:
+            self.bulk_file.close()
+        if self.whitelist_file:
+            self.whitelist_file.close()
+
+    def write_bulk_line(self, line):
+        with self.lock:
+            if self.csv_max_lines == 10000:
+                if self.bulk_line_count >= self.csv_max_lines:
+                    self.log("Bulk CSV limit reached (10000 lines), stopping scan.")
+                    self.cancelled = True
+                    return
+            else:
+                if self.bulk_line_count >= self.csv_max_lines:
+                    self.bulk_file.close()
+                    self.bulk_file_index += 1
+                    base, ext = os.path.splitext(self.out_bulk_csv)
+                    new_filename = f"{base}_{self.bulk_file_index}{ext}"
+                    self.bulk_file = open(new_filename, "w", encoding="utf-8")
+                    self.bulk_file.write("IP,Categories,ReportDate,Comment\n")
+                    self.bulk_line_count = 1
+            self.bulk_file.write(line)
+            self.bulk_file.flush()
+            self.bulk_line_count += 1
+
+    def write_whitelist_line(self, line):
+        with self.lock:
+            if self.csv_max_lines == 10000:
+                if self.whitelist_line_count >= self.csv_max_lines:
+                    self.log("Whitelist CSV limit reached (10000 lines), stopping scan.")
+                    self.cancelled = True
+                    return
+            else:
+                if self.whitelist_line_count >= self.csv_max_lines:
+                    self.whitelist_file.close()
+                    self.whitelist_file_index += 1
+                    base, ext = os.path.splitext(self.out_whitelist_csv)
+                    new_filename = f"{base}_{self.whitelist_file_index}{ext}"
+                    self.whitelist_file = open(new_filename, "w", encoding="utf-8")
+                    self.whitelist_file.write("IP,Categories,ReportDate,Comment\n")
+                    self.whitelist_line_count = 1
+            self.whitelist_file.write(line)
+            self.whitelist_file.flush()
+            self.whitelist_line_count += 1
 
     def run_scan(self):
         self.log("Starting scan...")
@@ -193,18 +231,7 @@ class ScannerWorker(QObject):
         self.total_seeds = len(seeds)
         self.log(f"Enqueued initial seeds: {len(seeds)}")
 
-        # Open CSV output files
-        out_malicious    = open(self.out_malicious_filename, "w", encoding="utf-8")
-        out_ddos         = open(self.out_ddos_filename, "w", encoding="utf-8")
-        out_phishing     = open(self.out_phishing_filename, "w", encoding="utf-8")
-        out_benign       = open(self.out_benign_filename, "w", encoding="utf-8")
-        out_benign_auto1 = open(self.out_benign_auto1_filename, "w", encoding="utf-8")
-        out_benign_auto2 = open(self.out_benign_auto2_filename, "w", encoding="utf-8")
-        out_benign_auto3 = open(self.out_benign_auto3_filename, "w", encoding="utf-8")
-
-        header = "IP,Categories,ReportDate,Comment\n"
-        for f in [out_malicious, out_ddos, out_phishing, out_benign, out_benign_auto1, out_benign_auto2, out_benign_auto3]:
-            f.write(header)
+        self.open_csv_files()
 
         seed_queue = Queue()
         for seed in seeds:
@@ -212,39 +239,24 @@ class ScannerWorker(QObject):
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             for _ in range(self.max_workers):
-                executor.submit(
-                    self.worker_thread,
-                    seed_queue,
-                    out_malicious,
-                    out_ddos,
-                    out_phishing,
-                    out_benign,
-                    out_benign_auto1,
-                    out_benign_auto2,
-                    out_benign_auto3,
-                )
+                executor.submit(self.worker_thread, seed_queue)
             seed_queue.join()
 
-        for f in [out_malicious, out_ddos, out_phishing, out_benign, out_benign_auto1, out_benign_auto2, out_benign_auto3]:
-            f.close()
+        self.close_csv_files()
 
         self.log("Scan completed.")
         self.finished_signal.emit()
 
-    def worker_thread(self, seed_queue, out_malicious, out_ddos, out_phishing, out_benign, out_benign_auto1, out_benign_auto2, out_benign_auto3):
+    def worker_thread(self, seed_queue):
         while not self.cancelled:
             try:
                 seed = seed_queue.get(timeout=5)
             except Empty:
                 break
-            self.process_seed_worker(seed, seed_queue,
-                                     out_malicious, out_ddos, out_phishing, out_benign,
-                                     out_benign_auto1, out_benign_auto2, out_benign_auto3)
+            self.process_seed_worker(seed, seed_queue)
             seed_queue.task_done()
 
-    def process_seed_worker(self, seed, seed_queue,
-                              out_malicious, out_ddos, out_phishing, out_benign,
-                              out_benign_auto1, out_benign_auto2, out_benign_auto3):
+    def process_seed_worker(self, seed, seed_queue):
         if self.cancelled:
             return
         with self.lock:
@@ -281,19 +293,11 @@ class ScannerWorker(QObject):
                     if ip in self.all_known_ips or ip in self.processed_set:
                         continue
 
-                # Apply benign auto verdict logic:
-                # - For non-benign seeds (malicious, ddos, phishing): if not active, mark as "benign (auto verdict 1)"
-                # - For seeds already benign: if active, mark as "benign (auto verdict 2)", else "benign (auto verdict 3)"
-                if seed.source_type.startswith("benign"):
-                    if self.is_active_and_static(ip, port):
-                        new_source_type = "benign (auto verdict 2)"
-                    else:
-                        new_source_type = "benign (auto verdict 3)"
+                # Auto verdict logic:
+                if seed.source_type.lower() == "benign":
+                    new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
                 else:
-                    if not self.is_active_and_static(ip, port):
-                        new_source_type = "benign (auto verdict 1)"
-                    else:
-                        new_source_type = seed.source_type
+                    new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
 
                 report_date = datetime.now(timezone.utc).isoformat()
                 new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
@@ -306,36 +310,19 @@ class ScannerWorker(QObject):
                 )
                 comment = comment[:1024]
 
-                # Determine CSV output file and category code based on new_source_type
-                if new_source_type == "malicious":
-                    category = self.settings.get("CategoryMalicious", "20")
-                    out_file = out_malicious
-                elif new_source_type == "ddos":
-                    category = self.settings.get("CategoryDDoS", "18")
-                    out_file = out_ddos
-                elif new_source_type == "phishing":
-                    category = self.settings.get("CategoryPhishing", "7")
-                    out_file = out_phishing
-                elif new_source_type == "benign (auto verdict 1)":
+                if new_source_type.lower().startswith("benign"):
                     category = ""
-                    out_file = out_benign_auto1
-                elif new_source_type == "benign (auto verdict 2)":
-                    category = ""
-                    out_file = out_benign_auto2
-                elif new_source_type == "benign (auto verdict 3)":
-                    category = ""
-                    out_file = out_benign_auto3
-                elif new_source_type == "benign":
-                    category = ""
-                    out_file = out_benign
+                    self.write_whitelist_line(f'{ip},"{category}",{report_date},"{comment}"\n')
                 else:
-                    category = ""
-                    out_file = out_benign
-
-                csv_line = f'{ip},"{category}",{report_date},"{comment}"\n'
-                with self.lock:
-                    out_file.write(csv_line)
-                    out_file.flush()
+                    if new_source_type.lower() == "malicious":
+                        category = self.cat_malicious
+                    elif new_source_type.lower() == "ddos":
+                        category = self.cat_ddos
+                    elif new_source_type.lower() == "phishing":
+                        category = self.cat_phishing
+                    else:
+                        category = ""
+                    self.write_bulk_line(f'{ip},"{category}",{report_date},"{comment}"\n')
 
                 new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=seed.depth + 1, source_url=final_url)
                 seed_queue.put(new_seed)
@@ -395,7 +382,6 @@ class ScannerWorker(QObject):
         ipv6_pattern = re.compile(
             r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b'
         )
-
         for match in ipv6_bracket_pattern.finditer(text):
             ip = match.group("ip")
             port_str = match.group("port")
@@ -441,35 +427,36 @@ class ScannerWorker(QObject):
 
     def load_seeds(self):
         seeds = []
-        # Load seeds from each file list in settings
-        for file in self.malware_files_ipv4:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
-        for file in self.malware_files_ipv6:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "malicious", "ipv6", depth=0))
-        for file in self.ddos_files_ipv4:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "ddos", "ipv4", depth=0))
-        for file in self.ddos_files_ipv6:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "ddos", "ipv6", depth=0))
-        for file in self.phishing_files_ipv4:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
-        for file in self.phishing_files_ipv6:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "phishing", "ipv6", depth=0))
+        # Order: whitelist first, then phishing, then ddos, then malicious.
         for file in self.whitelist_files_ipv4:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "benign", "ipv4", depth=0))
         for file in self.whitelist_files_ipv6:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "benign", "ipv6", depth=0))
-        # Build the set of all known IPs to avoid duplicates
+        for file in self.phishing_files_ipv4:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
+        for file in self.phishing_files_ipv6:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "phishing", "ipv6", depth=0))
+        for file in self.ddos_files_ipv4:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "ddos", "ipv4", depth=0))
+        for file in self.ddos_files_ipv6:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "ddos", "ipv6", depth=0))
+        for file in self.malware_files_ipv4:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
+        for file in self.malware_files_ipv6:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "malicious", "ipv6", depth=0))
         self.all_known_ips = set()
-        for file_list in [self.malware_files_ipv4, self.malware_files_ipv6, self.ddos_files_ipv4, self.ddos_files_ipv6,
-                          self.phishing_files_ipv4, self.phishing_files_ipv6, self.whitelist_files_ipv4, self.whitelist_files_ipv6]:
+        for file_list in [self.whitelist_files_ipv4, self.whitelist_files_ipv6,
+                          self.phishing_files_ipv4, self.phishing_files_ipv6,
+                          self.ddos_files_ipv4, self.ddos_files_ipv6,
+                          self.malware_files_ipv4, self.malware_files_ipv6]:
             for file in file_list:
                 self.all_known_ips |= self.load_lines(file)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
@@ -477,7 +464,7 @@ class ScannerWorker(QObject):
         return seeds
 
 # -----------------------------
-# PySide6 GUI with JSON Settings
+# MainWindow: Manual Settings GUI
 # -----------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -485,107 +472,136 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Hydra Dragon Antivirus Search Engine")
         self.worker = None
         self.thread = None
-        self.settings = None
         self.setup_ui()
 
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
+        main_layout = QVBoxLayout(central_widget)
 
-        # Settings file selection
-        settings_layout = QHBoxLayout()
-        self.settings_edit = QLineEdit()
-        self.settings_edit.setPlaceholderText("Select JSON settings file")
-        self.settings_button = QPushButton("Load Settings")
-        self.settings_button.clicked.connect(self.load_settings)
-        settings_layout.addWidget(QLabel("Settings File:"))
-        settings_layout.addWidget(self.settings_edit)
-        settings_layout.addWidget(self.settings_button)
-        layout.addLayout(settings_layout)
+        # Settings Group (manually edited fields)
+        settings_group = QWidget()
+        settings_layout = QGridLayout(settings_group)
+        row = 0
+        self.fields = {}
 
-        # Seed folder selection (optional if files are fully specified in settings)
-        form_layout = QHBoxLayout()
-        self.seed_dir_edit = QLineEdit()
-        self.seed_dir_edit.setPlaceholderText("(Optional) Folder for seed files")
-        self.browse_button = QPushButton("Browse")
-        self.browse_button.clicked.connect(self.browse_folder)
-        form_layout.addWidget(QLabel("Seed Folder:"))
-        form_layout.addWidget(self.seed_dir_edit)
-        form_layout.addWidget(self.browse_button)
-        layout.addLayout(form_layout)
+        def add_field(label_text, key, default=""):
+            nonlocal row
+            lbl = QLabel(label_text)
+            le = QLineEdit(str(default))
+            settings_layout.addWidget(lbl, row, 0)
+            settings_layout.addWidget(le, row, 1)
+            self.fields[key] = le
+            row += 1
 
-        # Parameters: Max Depth and Max Threads (overridable via settings)
-        form_layout2 = QHBoxLayout()
-        self.max_depth_edit = QLineEdit("10")
-        self.max_workers_edit = QLineEdit("20")
-        form_layout2.addWidget(QLabel("Max Depth:"))
-        form_layout2.addWidget(self.max_depth_edit)
-        form_layout2.addWidget(QLabel("Max Threads:"))
-        form_layout2.addWidget(self.max_workers_edit)
-        layout.addLayout(form_layout2)
+        add_field("Max Depth:", "MaxDepth", 10)
+        add_field("Max Threads:", "MaxThreads", 20)
+        add_field("CsvMaxLines:", "CsvMaxLines", 10000)
+        add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
+        add_field("Bulk Report File:", "OutputFile", "BulkReport.csv")
+        add_field("Whitelist Report File:", "WhiteListOutputFile", "WhitelistReport.csv")
+        add_field("Category Malicious:", "CategoryMalicious", "20")
+        add_field("Category Phishing:", "CategoryPhishing", "7")
+        add_field("Category DDoS:", "CategoryDDoS", "18")
+        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})")
+        add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
+        add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
+        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
+        add_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "")
+        add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
+        add_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
+        add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
+        add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
+        add_field("MalwarePath:", "MalwarePath", "website")
+        add_field("DDoSPath:", "DDoSPath", "website")
+        add_field("PhishingPath:", "PhishingPath", "website")
+        add_field("WhiteListPath:", "WhiteListPath", "website")
+        add_field("ScanKnownActive (true/false):", "ScanKnownActive", "false")
+        add_field("AllowAutoVerdict (true/false):", "AllowAutoVerdict", "true")
 
-        # Start/Stop buttons
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(settings_group)
+        main_layout.addWidget(scroll)
+
         btn_layout = QHBoxLayout()
+        self.load_btn = QPushButton("Load Settings")
+        self.load_btn.clicked.connect(self.load_settings)
+        self.save_btn = QPushButton("Save Settings")
+        self.save_btn.clicked.connect(self.save_settings)
+        btn_layout.addWidget(self.load_btn)
+        btn_layout.addWidget(self.save_btn)
+        main_layout.addLayout(btn_layout)
+
+        scan_btn_layout = QHBoxLayout()
         self.start_button = QPushButton("Start Scan")
         self.start_button.clicked.connect(self.start_scan)
         self.stop_button = QPushButton("Stop Scan")
         self.stop_button.clicked.connect(self.stop_scan)
         self.stop_button.setEnabled(False)
-        btn_layout.addWidget(self.start_button)
-        btn_layout.addWidget(self.stop_button)
-        layout.addLayout(btn_layout)
+        scan_btn_layout.addWidget(self.start_button)
+        scan_btn_layout.addWidget(self.stop_button)
+        main_layout.addLayout(scan_btn_layout)
 
-        # Progress bar
         self.progress_bar = QProgressBar()
-        layout.addWidget(self.progress_bar)
+        main_layout.addWidget(self.progress_bar)
 
-        # Log text area
-        self.log_text = QTextEdit()
+        self.log_text = QLineEdit()
         self.log_text.setReadOnly(True)
-        layout.addWidget(self.log_text)
+        main_layout.addWidget(QLabel("Log:"))
+        self.log_text = QLineEdit()
+        self.log_text.setReadOnly(True)
+        main_layout.addWidget(self.log_text)
+
+    def get_settings_from_fields(self):
+        settings = {}
+        for key, le in self.fields.items():
+            value = le.text().strip()
+            if key in ("MaxDepth", "MaxThreads", "CsvMaxLines", "CsvMaxSize"):
+                try:
+                    value = int(value)
+                except:
+                    value = 0
+            if key in ("ScanKnownActive", "AllowAutoVerdict"):
+                value = value.lower() == "true"
+            settings[key] = value
+        return settings
 
     def load_settings(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open JSON Settings File", os.getcwd(), "JSON Files (*.json)")
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open Settings JSON", os.getcwd(), "JSON Files (*.json)")
         if file_path:
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                    self.settings = json.load(f)
-                self.settings_edit.setText(file_path)
+                    settings = json.load(f)
+                for key, value in settings.items():
+                    if key in self.fields:
+                        self.fields[key].setText(str(value))
                 self.append_log("Settings loaded successfully.")
-                # Optionally, update UI fields from settings
-                self.max_depth_edit.setText(str(self.settings.get("MaxDepth", 10)))
-                self.max_workers_edit.setText(str(self.settings.get("MaxThreads", 20)))
             except Exception as e:
                 self.append_log(f"Failed to load settings: {e}")
 
-    def browse_folder(self):
-        folder = QFileDialog.getExistingDirectory(self, "Select Seed Folder", os.getcwd())
-        if folder:
-            self.seed_dir_edit.setText(folder)
+    def save_settings(self):
+        settings = self.get_settings_from_fields()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Settings JSON", os.getcwd(), "JSON Files (*.json)")
+        if file_path:
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=4)
+                self.append_log("Settings saved successfully.")
+            except Exception as e:
+                self.append_log(f"Failed to save settings: {e}")
 
     def start_scan(self):
-        if not self.settings:
-            self.append_log("Please load a JSON settings file first.")
-            return
-        # Optionally override settings with UI values
-        try:
-            self.settings["MaxDepth"] = int(self.max_depth_edit.text())
-            self.settings["MaxThreads"] = int(self.max_workers_edit.text())
-        except ValueError:
-            self.append_log("Max Depth and Max Threads must be integers.")
-            return
-
+        settings = self.get_settings_from_fields()
+        self.settings = settings
         self.start_button.setEnabled(False)
         self.stop_button.setEnabled(True)
         self.append_log("Starting scan...")
-
-        self.worker = ScannerWorker(self.settings)
+        self.worker = ScannerWorker(settings)
         self.worker.log_signal.connect(self.append_log)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.finished_signal.connect(self.scan_finished)
         self.worker.failure.connect(self.append_log)
-
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run_scan)
@@ -598,7 +614,7 @@ class MainWindow(QMainWindow):
             self.stop_button.setEnabled(False)
 
     def append_log(self, message):
-        self.log_text.append(message)
+        self.log_text.setText(message)
 
     def update_progress(self, processed, total):
         self.progress_bar.setMaximum(total)

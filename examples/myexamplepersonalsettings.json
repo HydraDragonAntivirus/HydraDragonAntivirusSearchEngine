@@ -1,41 +1,26 @@
 {
-  "MaxDepth": 10,
-  "MaxThreads": 20,
-  "CsvMaxLines": 10000,
-  "CsvMaxSize": 2097152,
-  "OutputFile": "output\\BulkReport.csv",
-  "WhiteListOutputFile": "output\\WhitelistReport.csv",
-  "CategoryMalicious": "20",
-  "CategoryPhishing": "7",
-  "CategoryDDoS": "18",
-  "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})",
-  "RealTimeSave": true,
-  "RealTimeFile": "output\\log.txt",
-  "ScanKnownActive": false,
-  "AllowAutoVerdict": true,
-  "MalwarePath": "website",
-  "DDoSPath": "website",
-  "PhishingPath": "website",
-  "WhiteListPath": "website",
-  "MalwareFilesIPv4": [
-    "website\\IPv4Malware.txt"
-  ],
-  "MalwareFilesIPv6": [
-    "website\\IPv6Malware.txt"
-  ],
-  "DDoSFilesIPv4": [
-    "website\\IPv4DDoS.txt"
-  ],
-  "DDoSFilesIPv6": [],
-  "PhishingFilesIPv4": [
-    "website\\IPv4PhishingActive.txt",
-    "website\\IPv4PhishingInActive.txt"
-  ],
-  "PhishingFilesIPv6": [],
-  "WhiteListFilesIPv4": [
-    "website\\IPv4WhiteList.txt"
-  ],
-  "WhiteListFilesIPv6": [
-    "website\\IPv6WhiteList.txt"
-  ]
+    "MaxDepth": 10,
+    "MaxThreads": 20,
+    "CsvMaxLines": 10000,
+    "CsvMaxSize": 2097152,
+    "OutputFile": "output\\BulkReport.csv",
+    "WhiteListOutputFile": "output\\WhitelistReport.csv",
+    "CategoryMalicious": "20",
+    "CategoryPhishing": "7",
+    "CategoryDDoS": "18",
+    "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})",
+    "MalwareFilesIPv4": "website\\IPv4Malware.txt",
+    "MalwareFilesIPv6": "website\\IPv6Malware.txt",
+    "DDoSFilesIPv4": "website\\IPv4DDoS.txt",
+    "DDoSFilesIPv6": "",
+    "PhishingFilesIPv4": "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt",
+    "PhishingFilesIPv6": "",
+    "WhiteListFilesIPv4": "website\\IPv4WhiteList.txt",
+    "WhiteListFilesIPv6": "website\\IPv6WhiteList.txt",
+    "MalwarePath": "website",
+    "DDoSPath": "website",
+    "PhishingPath": "website",
+    "WhiteListPath": "website",
+    "ScanKnownActive": false,
+    "AllowAutoVerdict": true
 }
