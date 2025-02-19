@@ -28,8 +28,8 @@ from PySide6.QtWidgets import (
 )
 
 script_dir = os.getcwd()
-output_dir = os.path.join(script_dir, "output")
-os.makedirs(output_dir, exist_ok=True)
+log_dir = os.path.join(script_dir, "log")
+os.makedirs(log_dir, exist_ok=True)
 
 # -----------------------------
 # Configure Logging: Redirect logs to output\log.txt
@@ -37,7 +37,7 @@ os.makedirs(output_dir, exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s: %(message)s",
-    filename=os.path.join(output_dir, "log.txt"),
+    filename=os.path.join(log_dir, "log.txt"),
     filemode="a"
 )
 
@@ -165,6 +165,13 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
+        # Create directories for output files if they don't exist.
+        bulk_dir = os.path.dirname(self.out_bulk_csv)
+        if bulk_dir and not os.path.exists(bulk_dir):
+            os.makedirs(bulk_dir, exist_ok=True)
+        whitelist_dir = os.path.dirname(self.out_whitelist_csv)
+        if whitelist_dir and not os.path.exists(whitelist_dir):
+            os.makedirs(whitelist_dir, exist_ok=True)
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
         self.bulk_line_count = 1  # include header

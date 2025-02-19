@@ -1,5 +1,8 @@
 # Hydra Dragon Antivirus Search Engine
 
+## WARNING
+This program displays your public IP address. Be aware that when running this tool, your public IP will be queried and shown in the logs. Use this program only in secure environments.
+
 ## Overview
 
 **Hydra Dragon Antivirus Search Engine** is a specialized tool designed to find **zero-day malicious IP addresses** on the web. It's not a full antivirus product, but instead, it uses databases to extract **related unknown IP addresses**. It doesn’t scan IP address content with traditional antivirus engines; rather, it searches for patterns and connections to help identify malicious activity.
