@@ -345,7 +345,7 @@ class ScannerWorker(QObject):
                     source_url=final_url,
                     discovered_url=new_ip_url,
                     verdict=new_source_type,
-                    depth=seed.depth
+                    depth=seed.depth + 1
                 )
                 comment = comment[:1024]
 
