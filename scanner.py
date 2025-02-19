@@ -28,6 +28,8 @@ from PySide6.QtWidgets import (
 )
 
 script_dir = os.getcwd()
+output_dir = os.path.join(script_dir, "output")
+os.makedirs(output_dir, exist_ok=True)
 
 # -----------------------------
 # Configure Logging: Redirect logs to output\log.txt
@@ -35,7 +37,7 @@ script_dir = os.getcwd()
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s: %(message)s",
-    filename=os.path.join(script_dir, "output", "log.txt"),
+    filename=os.path.join(output_dir, "log.txt"),
     filemode="a"
 )
 
