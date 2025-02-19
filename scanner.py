@@ -113,7 +113,7 @@ class ScannerWorker(QObject):
         super().__init__(parent)
         self.settings = settings
         self.max_depth = int(settings.get("MaxDepth", 10))
-        self.max_workers = int(settings.get("MaxThreads", 20))
+        self.max_workers = int(settings.get("MaxThreads", 100))
         self.csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.comment_template = settings.get("CommentTemplate", "")
         self.scan_known_active = settings.get("ScanKnownActive", False)
@@ -148,13 +148,17 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
 
-        # Initialize CSV splitting variables
+        # CSV splitting variables
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
         self.bulk_line_count = 0
         self.whitelist_line_count = 0
         self.bulk_file = None
         self.whitelist_file = None
+
+        # Pause/Resume event; set means "not paused"
+        self.pause_event = threading.Event()
+        self.pause_event.set()
 
     def log(self, message):
         self.log_signal.emit(message)
@@ -238,7 +242,6 @@ class ScannerWorker(QObject):
 
         self.total_seeds = len(seeds)
         self.log(f"Enqueued initial seeds: {len(seeds)}")
-
         self.open_csv_files()
 
         seed_queue = Queue()
@@ -251,12 +254,13 @@ class ScannerWorker(QObject):
             seed_queue.join()
 
         self.close_csv_files()
-
         self.log("Scan completed.")
         self.finished_signal.emit()
 
     def worker_thread(self, seed_queue):
         while not self.cancelled:
+            # Wait here if paused
+            self.pause_event.wait()
             try:
                 seed = seed_queue.get(timeout=5)
             except Empty:
@@ -470,6 +474,15 @@ class ScannerWorker(QObject):
         self.log(f"Total known IPs: {len(self.all_known_ips)}")
         return seeds
 
+    # Methods to control pausing/resuming the scan
+    def pause(self):
+        self.pause_event.clear()
+        self.log("Scan paused.")
+
+    def resume(self):
+        self.pause_event.set()
+        self.log("Scan resumed.")
+
 # -----------------------------
 # MainWindow: Manual Settings GUI
 # -----------------------------
@@ -479,6 +492,8 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Hydra Dragon Antivirus Search Engine")
         self.worker = None
         self.thread = None
+        self.is_scanning = False  # Tracks whether a scan is running
+        self.is_paused = False    # Tracks whether the scan is currently paused
         self.setup_ui()
 
     def setup_ui(self):
@@ -540,15 +555,18 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.save_btn)
         main_layout.addLayout(btn_layout)
 
-        scan_btn_layout = QHBoxLayout()
-        self.start_button = QPushButton("Start Scan")
-        self.start_button.clicked.connect(self.start_scan)
-        self.stop_button = QPushButton("Stop Scan")
-        self.stop_button.clicked.connect(self.stop_scan)
-        self.stop_button.setEnabled(False)
-        scan_btn_layout.addWidget(self.start_button)
-        scan_btn_layout.addWidget(self.stop_button)
-        main_layout.addLayout(scan_btn_layout)
+        # Two buttons: one to start/stop the scan, one to pause/resume.
+        control_layout = QHBoxLayout()
+        self.start_stop_button = QPushButton("Start Scan")
+        self.start_stop_button.clicked.connect(self.toggle_scan)
+        control_layout.addWidget(self.start_stop_button)
+
+        self.pause_button = QPushButton("Pause Scan")
+        self.pause_button.clicked.connect(self.toggle_pause)
+        # Hide pause button initially; it will be shown once the scan starts.
+        self.pause_button.setVisible(False)
+        control_layout.addWidget(self.pause_button)
+        main_layout.addLayout(control_layout)
 
         self.progress_bar = QProgressBar()
         main_layout.addWidget(self.progress_bar)
@@ -598,11 +616,35 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self.append_log(f"Failed to save settings: {e}")
 
+    def toggle_scan(self):
+        if not self.is_scanning:
+            self.start_scan()
+            self.start_stop_button.setText("Stop Scan")
+            self.pause_button.setVisible(True)
+            self.pause_button.setText("Pause Scan")
+            self.is_scanning = True
+        else:
+            self.stop_scan()
+            self.start_stop_button.setText("Start Scan")
+            self.pause_button.setVisible(False)
+            self.is_scanning = False
+            self.is_paused = False
+
+    def toggle_pause(self):
+        if not self.is_scanning or not self.worker:
+            return
+        if not self.is_paused:
+            self.worker.pause()
+            self.pause_button.setText("Resume Scan")
+            self.is_paused = True
+        else:
+            self.worker.resume()
+            self.pause_button.setText("Pause Scan")
+            self.is_paused = False
+
     def start_scan(self):
         settings = self.get_settings_from_fields()
         self.settings = settings
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(True)
         self.append_log("Starting scan...")
         self.worker = ScannerWorker(settings)
         self.worker.log_signal.connect(self.append_log)
@@ -618,7 +660,6 @@ class MainWindow(QMainWindow):
         if self.worker:
             self.worker.cancelled = True
             self.append_log("Scan cancellation requested.")
-            self.stop_button.setEnabled(False)
 
     def append_log(self, message):
         self.log_text.setText(message)
@@ -629,8 +670,10 @@ class MainWindow(QMainWindow):
 
     def scan_finished(self):
         self.append_log("Scan finished.")
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
+        self.start_stop_button.setText("Start Scan")
+        self.pause_button.setVisible(False)
+        self.is_scanning = False
+        self.is_paused = False
         if self.thread:
             self.thread.quit()
             self.thread.wait()

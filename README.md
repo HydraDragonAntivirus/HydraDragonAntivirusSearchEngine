@@ -128,7 +128,6 @@ The tool ensures that even the most **obscure and hidden malicious IPs** are ide
 - **HydraDragonAntivirus** (main developer, repo owner, Python developer, designer)
 
 ## TODO
-- Add the ability to **pause the scan** for more control during long-running processes.
 - Implement scanning from different locations to collect more data.
 
 ## License
