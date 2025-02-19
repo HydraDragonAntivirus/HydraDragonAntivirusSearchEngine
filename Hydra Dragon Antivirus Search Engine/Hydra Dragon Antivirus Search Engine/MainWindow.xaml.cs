@@ -1,24 +1,16 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Timers;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
 using IOPath = System.IO.Path;
 using log4net;
 using log4net.Config;
-using System.Net.NetworkInformation;
 
 namespace Hydra_Dragon_Antivirus_Search_Engine
 {
@@ -623,12 +615,12 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                 }
             }
         }
-        public class ScanStatus
-        {
-            public string Time { get; set; }
-            public string Status { get; set; }
-            public string Details { get; set; }
+        public class ScanStatus { 
+            public string Time { get; set; } = string.Empty; 
+            public string Status { get; set; } = string.Empty; 
+            public string Details { get; set; } = string.Empty; 
         }
+
         private void UpdateCurrentFileMessage(string message)
         {
             if (listViewScanStatus.Dispatcher.CheckAccess())
@@ -1099,7 +1091,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             private readonly bool scanKnownActiveHarmful;
             private readonly bool allowAutoVerdict;
             private readonly object bulkCsvLock = new();
-            private readonly ConcurrentDictionary<string, bool> ipStatus = new ConcurrentDictionary<string, bool>();
+            private readonly ConcurrentDictionary<string, bool> ipStatus = new();
             public Scanner(
                 List<string> malwareFiles,
                 List<string> DDoSFiles,
@@ -1382,7 +1374,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                     return;
                 processedIPs[ip] = currentDepth;
 
-                await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth, file, trimmed), ip, port, version, trimmed, token);
+                await ProcessIPAsync(new Seed(ip, defaultSourceType, version, port, currentDepth + 1, file, trimmed), ip, port, version, trimmed, token);
             }
 
             private static string ConvertToUrl(string? url, string? baseUrl = "")
