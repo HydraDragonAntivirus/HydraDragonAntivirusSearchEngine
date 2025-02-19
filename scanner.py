@@ -118,7 +118,7 @@ class ScannerWorker(QObject):
         self.comment_template = settings.get("CommentTemplate", "")
         self.scan_known_active = settings.get("ScanKnownActive", False)
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
-        # File lists (comma‑separated strings converted to lists)
+        # File lists (comma-separated strings converted to lists)
         self.malware_files_ipv4 = [x.strip() for x in settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]
         self.malware_files_ipv6 = [x.strip() for x in settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]
         self.ddos_files_ipv4 = [x.strip() for x in settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]
@@ -157,7 +157,6 @@ class ScannerWorker(QObject):
         self.whitelist_file = None
 
     def log(self, message):
-        # Emit to GUI and also log to file via logging module.
         self.log_signal.emit(message)
         logging.info(message)
 
@@ -302,7 +301,6 @@ class ScannerWorker(QObject):
                     if ip in self.all_known_ips or ip in self.processed_set:
                         continue
 
-                # Auto verdict logic:
                 if seed.source_type.lower() == "benign":
                     new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
                 else:
@@ -436,36 +434,36 @@ class ScannerWorker(QObject):
 
     def load_seeds(self):
         seeds = []
-        # Order: whitelist first, then phishing, then ddos, then malicious.
-        for file in self.whitelist_files_ipv4:
-            for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "benign", "ipv4", depth=0))
+        # Order: whitelist (IPv6 then IPv4), then phishing (IPv6 then IPv4), then ddos (IPv6 then IPv4), then malicious (IPv6 then IPv4)
         for file in self.whitelist_files_ipv6:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "benign", "ipv6", depth=0))
-        for file in self.phishing_files_ipv4:
+        for file in self.whitelist_files_ipv4:
             for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
+                seeds.append(Seed(ip, "benign", "ipv4", depth=0))
         for file in self.phishing_files_ipv6:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "phishing", "ipv6", depth=0))
-        for file in self.ddos_files_ipv4:
+        for file in self.phishing_files_ipv4:
             for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "ddos", "ipv4", depth=0))
+                seeds.append(Seed(ip, "phishing", "ipv4", depth=0))
         for file in self.ddos_files_ipv6:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "ddos", "ipv6", depth=0))
-        for file in self.malware_files_ipv4:
+        for file in self.ddos_files_ipv4:
             for ip in self.load_lines(file):
-                seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
+                seeds.append(Seed(ip, "ddos", "ipv4", depth=0))
         for file in self.malware_files_ipv6:
             for ip in self.load_lines(file):
                 seeds.append(Seed(ip, "malicious", "ipv6", depth=0))
+        for file in self.malware_files_ipv4:
+            for ip in self.load_lines(file):
+                seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
         self.all_known_ips = set()
-        for file_list in [self.whitelist_files_ipv4, self.whitelist_files_ipv6,
-                          self.phishing_files_ipv4, self.phishing_files_ipv6,
-                          self.ddos_files_ipv4, self.ddos_files_ipv6,
-                          self.malware_files_ipv4, self.malware_files_ipv6]:
+        for file_list in [self.whitelist_files_ipv6, self.whitelist_files_ipv4,
+                          self.phishing_files_ipv6, self.phishing_files_ipv4,
+                          self.ddos_files_ipv6, self.ddos_files_ipv4,
+                          self.malware_files_ipv6, self.malware_files_ipv4]:
             for file in file_list:
                 self.all_known_ips |= self.load_lines(file)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
@@ -513,14 +511,14 @@ class MainWindow(QMainWindow):
         add_field("Category Phishing:", "CategoryPhishing", "7")
         add_field("Category DDoS:", "CategoryDDoS", "18")
         add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})")
-        add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
-        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
+        add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "")
-        add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
+        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
         add_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
-        add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
+        add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
         add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
+        add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
         add_field("MalwarePath:", "MalwarePath", "website")
         add_field("DDoSPath:", "DDoSPath", "website")
         add_field("PhishingPath:", "PhishingPath", "website")
