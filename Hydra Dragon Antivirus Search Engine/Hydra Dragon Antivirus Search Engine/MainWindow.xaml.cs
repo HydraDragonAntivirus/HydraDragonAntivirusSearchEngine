@@ -1090,7 +1090,6 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
             // scanKnownActiveHarmful applies only to harmful seeds.
             private readonly bool scanKnownActiveHarmful;
             private readonly bool allowAutoVerdict;
-            private readonly object bulkCsvLock = new();
             private readonly ConcurrentDictionary<string, bool> ipStatus = new();
             public Scanner(
                 List<string> malwareFiles,
@@ -1332,10 +1331,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         (scanKnownActiveHarmful || seed.Depth > 0))
                     {
                         string csvLine = $"{seed.IP},\"{category}\",{reportDate},\"{EscapeCsvField(comment)}\"";
-                        lock (bulkCsvLock)
-                        {
-                            BulkCsvLines.Add(csvLine);
-                        }
+                        BulkCsvLines.Add(csvLine);
                         await realTimeBulkCsvCallback(csvLine);
                     }
 
@@ -1486,11 +1482,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         .Replace("{verdict}", "WhiteList")
                         .Replace("{depth}", depthText);
                     string csvLine = $"{ip},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
-                    lock (WhiteListCsvLines)
-                    {
-                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                     if (WhiteListCsvLines.Count < csvMaxLines + 1)
                             WhiteListCsvLines.Add(csvLine);
-                    }
                     await realTimeWhiteListCsvCallback(csvLine);
                     return;
                 }
@@ -1505,10 +1498,7 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                         .Replace("{verdict}", seed.SourceType)
                         .Replace("{depth}", depthText);
                     string csvLine = $"{discoveredUrl},\"{seed.SourceType}\",{DateTime.UtcNow:O},\"{EscapeCsvField(harmfulComment)}\"";
-                    lock (bulkCsvLock)
-                    {
-                        BulkCsvLines.Add(csvLine);
-                    }
+                    BulkCsvLines.Add(csvLine);
                     await realTimeBulkCsvCallback(csvLine);
                 }
 
@@ -1572,11 +1562,8 @@ namespace Hydra_Dragon_Antivirus_Search_Engine
                             .Replace("{verdict}", "WhiteList")
                             .Replace("{depth}", depthText);
                         string csvLine = $"{host},\"WhiteList\",{DateTime.UtcNow:O},\"{EscapeCsvField(whitelistComment)}\"";
-                        lock (WhiteListCsvLines)
-                        {
-                            if (WhiteListCsvLines.Count < csvMaxLines + 1)
-                                WhiteListCsvLines.Add(csvLine);
-                        }
+                        if (WhiteListCsvLines.Count < csvMaxLines + 1)
+                            WhiteListCsvLines.Add(csvLine);
                         await realTimeWhiteListCsvCallback(csvLine);
                     }
                 }
