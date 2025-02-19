@@ -30,10 +30,12 @@ from PySide6.QtWidgets import (
 
 script_dir = os.getcwd()
 log_dir = os.path.join(script_dir, "log")
+output_dir = os.path.join(script_dir, "log")
 os.makedirs(log_dir, exist_ok=True)
+os.makedirs(output_dir, exist_ok=True)
 
 # -----------------------------
-# Configure Logging: Redirect logs to output\log.txt
+# Configure Logging: Redirect logs log\log.txt
 # -----------------------------
 logging.basicConfig(
     level=logging.INFO,
@@ -167,7 +169,7 @@ class ScannerWorker(QObject):
 
     def update_progress(self):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
-
+ 
     def open_csv_files(self):
         # Create directories for output files if they don't exist.
         bulk_dir = os.path.dirname(self.out_bulk_csv)
@@ -679,6 +681,7 @@ class MainWindow(QMainWindow):
     def update_progress(self, processed, total):
         self.progress_bar.setMaximum(total)
         self.progress_bar.setValue(processed)
+        self.progress_bar.setFormat(f"{processed}/{total}")
 
     def scan_finished(self):
         self.append_log("Scan finished.")
