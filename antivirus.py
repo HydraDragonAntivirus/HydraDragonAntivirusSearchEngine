@@ -166,7 +166,7 @@ class ScannerWorker(QObject):
         self.whitelist_line_count = 0
         self.bulk_file = None
         self.whitelist_file = None
-        # We'll also track the current file sizes in bytes
+        # Track current file sizes in bytes
         self.bulk_file_size = 0
         self.whitelist_file_size = 0
 
@@ -200,7 +200,7 @@ class ScannerWorker(QObject):
         self.whitelist_file.write(header)
         self.bulk_file.flush()
         self.whitelist_file.flush()
-        # Initialize size counters using the header's byte-length
+        # Initialize size counters from header
         self.bulk_file_size = len(header.encode("utf-8"))
         self.whitelist_file_size = len(header.encode("utf-8"))
 
@@ -295,33 +295,33 @@ class ScannerWorker(QObject):
             if seed.ip in self.processed_set:
                 return
             self.processed_set.add(seed.ip)
-        url = seed.get_url()
-        self.log(f"Visiting (depth {seed.depth}): {url}")
+        self.log(f"Visiting (depth {seed.depth}): {seed.get_url()}")
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(seed.get_url(), timeout=10)
             final_url = response.url
         except Exception as e:
-            self.log(f"Error visiting {url}: {e}")
-            self.failure.emit(f"Error visiting {url}: {e}")
+            self.log(f"Error visiting {seed.get_url()}: {e}")
+            self.failure.emit(f"Error visiting {seed.get_url()}: {e}")
             with self.lock:
                 self.processed_count += 1
                 self.update_progress()
             return
         if response.status_code != 200:
-            self.log(f"Non-OK status {response.status_code} for {url}")
+            self.log(f"Non-OK status {response.status_code} for {seed.get_url()}")
             with self.lock:
                 self.processed_count += 1
                 self.update_progress()
             return
         content = response.text
         if not content:
-            self.log(f"No content from {url}")
+            self.log(f"No content from {seed.get_url()}")
             with self.lock:
                 self.processed_count += 1
                 self.update_progress()
             return
-        self.log(f"Visited: {url}")
+        self.log(f"Visited: {seed.get_url()}")
 
+        # Only extract further IPs if within allowed depth.
         if seed.depth < self.max_depth:
             found_ips = self.extract_ip_and_port(content)
             for ip, port, ip_version in found_ips:
@@ -333,6 +333,9 @@ class ScannerWorker(QObject):
                 with self.lock:
                     if ip in self.all_known_ips or ip in self.processed_set:
                         continue
+                    # Immediately add to global set to avoid duplicates
+                    self.all_known_ips.add(ip)
+                # Determine new source type
                 if seed.source_type.lower() == "benign":
                     new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
                 else:
@@ -340,12 +343,14 @@ class ScannerWorker(QObject):
 
                 report_date = datetime.now(timezone.utc).isoformat()
                 new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
+                new_depth = seed.depth + 1
+                # Use the original comment template without appending new tags.
                 comment = self.comment_template.format(
                     ip=seed.ip,
                     source_url=final_url,
                     discovered_url=new_ip_url,
                     verdict=new_source_type,
-                    depth=seed.depth + 1
+                    depth=new_depth
                 )
                 comment = comment[:1024]
 
@@ -363,7 +368,7 @@ class ScannerWorker(QObject):
                         category = ""
                     self.write_bulk_line(f'{ip},"{category}",{report_date},"{comment}"\n')
 
-                new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=seed.depth + 1, source_url=final_url)
+                new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=new_depth, source_url=final_url)
                 seed_queue.put(new_seed)
                 with self.lock:
                     self.total_seeds += 1
