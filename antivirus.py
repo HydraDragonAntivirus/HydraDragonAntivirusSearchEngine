@@ -497,6 +497,7 @@ class ScannerWorker(QObject):
         # Process discovered IP addresses from the content
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
+            # Skip own public IP and source URL match.
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
@@ -505,11 +506,19 @@ class ScannerWorker(QObject):
             if ip == seed.ip or (final_hostname and ip == final_hostname):
                 self.log(f"Skipping discovered IP {ip} because it matches the source.")
                 continue
+            # Check if this discovered IP has already been processed.
+            with self.lock:
+                if ip in self.visited_ips:
+                    self.log(f"Skipping discovered IP {ip} because it is already processed.")
+                    continue
 
+            # Determine new source type.
             if seed.source_type.lower() == "benign":
-                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
+                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
+                                                                                         port) else "benign (auto verdict 3)"
             else:
-                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
+                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
+                                                                                             port) else seed.source_type
 
             report_date = datetime.now(timezone.utc).isoformat()
             new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
@@ -520,30 +529,13 @@ class ScannerWorker(QObject):
                 verdict=new_source_type
             )[:1024]
 
-            if not duplicate:
-                if new_source_type.lower().startswith("benign"):
-                    category = ""
-                    self.write_whitelist_line(f'{ip},"{category}",{report_date},"{comment}"\n')
-                else:
-                    if new_source_type.lower() == "malicious":
-                        category = self.cat_malicious
-                    elif new_source_type.lower() == "ddos":
-                        category = self.cat_ddos
-                    elif new_source_type.lower() == "phishing":
-                        category = self.cat_phishing
-                    else:
-                        category = ""
-                    self.write_bulk_line(f'{ip},"{category}",{report_date},"{comment}"\n')
-
             with self.lock:
                 self.total_seeds += 1
+
             new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            self.process_seed(new_seed)
-
-        with self.lock:
-            self.processed_count += 1
-            self.update_progress()
+            # Submit the new seed to the QThreadPool for concurrent processing.
+            self.threadpool.start(SeedRunnable(new_seed, self))
 
     def get_my_public_ip(self):
         try:
