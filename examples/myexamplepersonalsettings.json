@@ -22,5 +22,6 @@
     "PhishingPath": "website",
     "WhiteListPath": "website",
     "ScanKnownActive": false,
-    "AllowAutoVerdict": true
+    "AllowAutoVerdict": true,
+    "RequestTimeout": "10"
 }
