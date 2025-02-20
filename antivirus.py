@@ -286,9 +286,14 @@ class ScannerWorker(QObject):
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
 
-        # Process each seed sequentially
-        for seed in seeds:
-            self.process_seed(seed)
+        # Use a ThreadPoolExecutor to process seeds concurrently.
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = []
+            for seed in seeds:
+                futures.append(executor.submit(self.process_seed, seed, executor))
+            # Wait for all tasks to complete.
+            for future in futures:
+                future.result()
 
         self.close_csv_files()
         self.log("Scan completed.")
