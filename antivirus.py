@@ -337,7 +337,7 @@ class ScannerWorker(QObject):
 
         # Use a lock to ensure atomic check-and-add on the duplicate lists:
         with self.lock:
-            if "benign" in stype:  # Whitelist
+            if stype.startswith("benign"): # Whitelist
                 if seed.version == "ipv4":
                     if not self.allow_duplicate_whitelist_ipv4:
                         if seed.ip in self.seen_whitelist_ipv4:
@@ -477,6 +477,12 @@ class ScannerWorker(QObject):
                 # Skip if the discovered IP is our public IP.
                 if self.my_public_ip and ip == self.my_public_ip:
                     self.log(f"Skipping my own public IP: {ip}")
+                    continue
+
+                final_hostname = urlparse(final_url).hostname
+
+                if ip == seed.ip or (final_hostname and ip == final_hostname):
+                    self.log(f"Skipping discovered IP {ip} because it matches the source.")
                     continue
 
                 new_depth = seed.depth + 1
