@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 
-from PySide6.QtCore import QObject, Signal, QThread
+from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable, QTextCursor
 from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
@@ -103,6 +103,18 @@ class Seed:
 
     def get_url(self):
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
+
+# -----------------------------
+# SeedRunnable: A QRunnable that calls process_seed
+# -----------------------------
+class SeedRunnable(QRunnable):
+    def __init__(self, seed, worker):
+        super().__init__()
+        self.seed = seed
+        self.worker = worker
+
+    def run(self):
+        self.worker.process_seed(self.seed)
 
 # -----------------------------
 # ScannerWorker using settings
@@ -206,6 +218,10 @@ class ScannerWorker(QObject):
         self.pause_event = threading.Event()
         self.pause_event.set()
 
+        # Create a QThreadPool to run tasks concurrently.
+        self.threadpool = QThreadPool()
+        self.threadpool.setMaxThreadCount(self.max_workers)
+
     def log(self, message):
         self.log_signal.emit(message)
         logging.info(message)
@@ -286,14 +302,11 @@ class ScannerWorker(QObject):
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
 
-        # Use a ThreadPoolExecutor to process seeds concurrently.
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = []
-            for seed in seeds:
-                futures.append(executor.submit(self.process_seed, seed, executor))
-            # Wait for all tasks to complete.
-            for future in futures:
-                future.result()
+        # Submit initial seeds to the QThreadPool.
+        for seed in seeds:
+            self.threadpool.start(SeedRunnable(seed, self))
+        # Wait for all tasks to complete.
+        self.threadpool.waitForDone()
 
         self.close_csv_files()
         self.log("Scan completed.")
