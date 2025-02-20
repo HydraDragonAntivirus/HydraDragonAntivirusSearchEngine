@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Antivirus Report</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f5f5f5;
+      padding: 20px;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 30px;
+    }
+    th, td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #eee;
+    }
+  </style>
+</head>
+<body>
+  <h1>Antivirus Report</h1>
+  
+  <div id="whitelist-section">
+    <h2>Whitelist (Benign)</h2>
+    <table id="whitelist-table">
+      <thead>
+        <tr>
+          <th>IP</th>
+          <th>Category</th>
+          <th>Report Date</th>
+          <th>Comment</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  
+  <div id="bulk-section">
+    <h2>Bulk Report (Non-Benign)</h2>
+    <table id="bulk-table">
+      <thead>
+        <tr>
+          <th>IP</th>
+          <th>Category</th>
+          <th>Report Date</th>
+          <th>Comment</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <script>
+    // Simple CSV parser assuming no embedded commas in fields
+    function parseCSV(text) {
+      const lines = text.trim().split("\n");
+      const rows = [];
+      for (let line of lines) {
+        // Split on commas that are not inside quotes
+        const values = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+        rows.push(values.map(v => v.replace(/^"|"$/g, '').trim()));
+      }
+      return rows;
+    }
+    
+    // Load a CSV file and fill the table with the given ID
+    function loadCSV(filename, tableId) {
+      fetch(filename)
+        .then(response => response.text())
+        .then(text => {
+          const data = parseCSV(text);
+          // Assume first row is header; skip it
+          const tbody = document.getElementById(tableId).querySelector("tbody");
+          for (let i = 1; i < data.length; i++) {
+            const row = data[i];
+            if (row.length < 4) continue;
+            let ip = row[0];
+            const category = row[1];
+            const reportDate = row[2];
+            const comment = row[3];
+            // If the category is non-empty (i.e. not benign), prepend the marker "[.]"
+            if (category && category !== "") {
+              ip = "[.]" + ip;
+            }
+            const tr = document.createElement("tr");
+            tr.innerHTML = `<td>${ip}</td><td>${category}</td><td>${reportDate}</td><td>${comment}</td>`;
+            tbody.appendChild(tr);
+          }
+        })
+        .catch(err => console.error("Error loading " + filename, err));
+    }
+    
+    // Load both CSV files
+    loadCSV("WhitelistReport.csv", "whitelist-table");
+    loadCSV("BulkReport.csv", "bulk-table");
+  </script>
+</body>
+</html>
