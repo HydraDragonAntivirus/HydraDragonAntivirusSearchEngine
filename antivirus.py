@@ -233,23 +233,11 @@ class ScannerWorker(QObject):
 
     def write_whitelist_line(self, line):
         with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.whitelist_line_count >= self.csv_max_lines or (self.whitelist_file_size + line_bytes) >= self.csv_max_size:
-                self.whitelist_file.close()
-                self.whitelist_file_index += 1
-                base, ext = os.path.splitext(self.out_whitelist_csv)
-                new_filename = f"{base}_{self.whitelist_file_index}{ext}"
-                self.whitelist_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.whitelist_file.write(header)
-                self.whitelist_file.flush()
-                self.whitelist_line_count = 1
-                self.whitelist_file_size = len(header.encode("utf-8"))
-                self.log(f"Whitelist file size or line limit reached; switching to file: {new_filename}")
+            # Simply write the line without checking for csv_max_lines
             self.whitelist_file.write(line)
             self.whitelist_file.flush()
             self.whitelist_line_count += 1
-            self.whitelist_file_size += line_bytes
+            self.whitelist_file_size += len(line.encode("utf-8"))
 
     def run_scan(self):
         self.log("Starting scan...")
