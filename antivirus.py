@@ -127,7 +127,7 @@ class ScannerWorker(QObject):
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but will be enforced as 10,000 per file due to AbuseIPDB limits.")
         self.comment_template = settings.get("CommentTemplate", "")
-        self.scan_known_active = settings.get("ScanKnownActive", False)
+        self.allow_duplicate = settings.get("AllowDuplicate", False)
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         # File lists (comma-separated strings converted to lists)
@@ -270,6 +270,13 @@ class ScannerWorker(QObject):
         if seed.depth >= self.max_depth:
             self.log(f"Max depth reached for {seed.get_url()}")
             return
+
+        # Duplicate check based on AllowDuplicate setting:
+        if not self.allow_duplicate:
+            if seed.ip in self.seen_ips:
+                self.log(f"Skipping duplicate IP: {seed.ip}")
+                return
+            self.seen_ips.add(seed.ip)
 
         self.log(f"Visiting (depth {seed.depth}): {seed.get_url()}")
         try:
@@ -498,6 +505,8 @@ class ScannerWorker(QObject):
                           self.malware_files_ipv6, self.malware_files_ipv4]:
             for file in file_list:
                 self.all_known_ips |= get_ips_from_file(file)
+        # Initialize seen_ips with the known IPs
+        self.seen_ips = self.all_known_ips.copy()
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         self.log(f"Total known IPs: {len(self.all_known_ips)}")
         return seeds
@@ -567,7 +576,7 @@ class MainWindow(QMainWindow):
         add_field("DDoSPath:", "DDoSPath", "website")
         add_field("PhishingPath:", "PhishingPath", "website")
         add_field("WhiteListPath:", "WhiteListPath", "website")
-        add_field("ScanKnownActive (true/false):", "ScanKnownActive", "false")
+        add_field("AllowDuplicate (true/false):", "AllowDuplicate", "false")
         add_field("AllowAutoVerdict (true/false):", "AllowAutoVerdict", "true")
         add_field("Request Timeout (seconds):", "RequestTimeout", 10)
 
@@ -629,7 +638,7 @@ class MainWindow(QMainWindow):
                     value = int(value)
                 except:
                     value = 0
-            if key in ("ScanKnownActive", "AllowAutoVerdict"):
+            if key in ("AllowDuplicate", "AllowAutoVerdict"):
                 value = value.lower() == "true"
             settings[key] = value
         return settings
