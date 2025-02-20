@@ -11,7 +11,7 @@ from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 
-from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable, QTextCursor
+from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
 from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
