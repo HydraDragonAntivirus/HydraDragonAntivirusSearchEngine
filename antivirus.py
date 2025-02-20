@@ -153,7 +153,6 @@ class ScannerWorker(QObject):
 
         self.my_public_ip = None
         self.all_known_ips = set()
-        self.processed_set = set()
         self.processed_count = 0
         self.total_seeds = 0
         self.lock = threading.Lock()
@@ -280,9 +279,11 @@ class ScannerWorker(QObject):
         if self.cancelled:
             return
         with self.lock:
-            if seed.ip in self.processed_set:
+            # Allow re-scanning the same IP if the new depth is higher.
+            if seed.ip in self.processed_depths and self.processed_depths[seed.ip] >= seed.depth:
                 return
-            self.processed_set.add(seed.ip)
+            self.processed_depths[seed.ip] = seed.depth
+
         self.log(f"Visiting (depth {seed.depth}): {seed.get_url()}")
         try:
             response = requests.get(seed.get_url(), timeout=10)
@@ -294,12 +295,14 @@ class ScannerWorker(QObject):
                 self.processed_count += 1
                 self.update_progress()
             return
+
         if response.status_code != 200:
             self.log(f"Non-OK status {response.status_code} for {seed.get_url()}")
             with self.lock:
                 self.processed_count += 1
                 self.update_progress()
             return
+
         content = response.text
         if not content:
             self.log(f"No content from {seed.get_url()}")
@@ -307,9 +310,10 @@ class ScannerWorker(QObject):
                 self.processed_count += 1
                 self.update_progress()
             return
+
         self.log(f"Visited: {seed.get_url()}")
 
-        # Only extract further IPs if within allowed depth.
+        # If the seed's current depth is below the maximum, scan its content.
         if seed.depth < self.max_depth:
             found_ips = self.extract_ip_and_port(content)
             for ip, port, ip_version in found_ips:
@@ -318,12 +322,15 @@ class ScannerWorker(QObject):
                 if self.my_public_ip and ip == self.my_public_ip:
                     self.log(f"Skipping my own public IP: {ip}")
                     continue
+
+                new_depth = seed.depth + 1
                 with self.lock:
-                    if ip in self.all_known_ips or ip in self.processed_set:
+                    # Only add if this IP hasn't been scanned at a higher or equal depth.
+                    if ip in self.processed_depths and self.processed_depths[ip] >= new_depth:
                         continue
-                    # Immediately add to global set to avoid duplicates
-                    self.all_known_ips.add(ip)
-                # Determine new source type
+                    self.processed_depths[ip] = new_depth
+
+                # Determine the new source type based on active/static check.
                 if seed.source_type.lower() == "benign":
                     new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
                 else:
@@ -331,16 +338,13 @@ class ScannerWorker(QObject):
 
                 report_date = datetime.now(timezone.utc).isoformat()
                 new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
-                new_depth = seed.depth + 1
-                # Use the original comment template without appending new tags.
                 comment = self.comment_template.format(
                     ip=seed.ip,
                     source_url=final_url,
                     discovered_url=new_ip_url,
                     verdict=new_source_type,
                     depth=new_depth
-                )
-                comment = comment[:1024]
+                )[:1024]
 
                 if new_source_type.lower().startswith("benign"):
                     category = ""
@@ -359,10 +363,20 @@ class ScannerWorker(QObject):
                 new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=new_depth, source_url=final_url)
                 seed_queue.put(new_seed)
                 with self.lock:
-                    self.total_seeds += 1
+                     self.total_seeds += 1
+                self.log(f"Enqueued new seed: {new_seed.get_url()} with depth {new_seed.depth}")
+
         with self.lock:
             self.processed_count += 1
             self.update_progress()
+
+        # Re-enqueue the current seed for a re-scan with increased depth (if we haven't reached max depth).
+        if seed.depth < self.max_depth:
+            new_seed = Seed(seed.ip, seed.source_type, seed.version, port=seed.port, depth=seed.depth + 1, source_url=final_url)
+            seed_queue.put(new_seed)
+            with self.lock:
+                 self.total_seeds += 1
+            self.log(f"Re-enqueued {new_seed.get_url()} for re-scan with increased depth {new_seed.depth}")
 
     def get_my_public_ip(self):
         try:
