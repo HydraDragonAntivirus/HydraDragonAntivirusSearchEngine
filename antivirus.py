@@ -129,6 +129,7 @@ class ScannerWorker(QObject):
         self.comment_template = settings.get("CommentTemplate", "")
         self.scan_known_active = settings.get("ScanKnownActive", False)
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
+        self.request_timeout = int(settings.get("RequestTimeout", 10))
         # File lists (comma-separated strings converted to lists)
         self.malware_files_ipv4 = [x.strip() for x in settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]
         self.malware_files_ipv6 = [x.strip() for x in settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]
@@ -252,28 +253,16 @@ class ScannerWorker(QObject):
         self.log(f"Enqueued initial seeds: {len(seeds)}")
         self.open_csv_files()
 
-        seed_queue = Queue()
-        for seed in seeds:
-            seed_queue.put(seed)
-
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            for _ in range(self.max_workers):
-                executor.submit(self.worker_thread, seed_queue)
-            seed_queue.join()
+            # Submit each seed directly to the executor
+            futures = [executor.submit(self.process_seed_recursive, seed) for seed in seeds]
+            # Wait for all tasks to complete
+            for future in futures:
+                future.result()
 
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
-
-    def worker_thread(self, seed_queue):
-        while not self.cancelled:
-            self.pause_event.wait()
-            try:
-                seed = seed_queue.get(timeout=5)
-            except Empty:
-                break
-            self.process_seed_recursive(seed, seed_queue)
-            seed_queue.task_done()
 
     def process_seed_recursive(self, seed):
         if self.cancelled:
@@ -284,12 +273,11 @@ class ScannerWorker(QObject):
 
         self.log(f"Visiting (depth {seed.depth}): {seed.get_url()}")
         try:
-            response = requests.get(seed.get_url(), timeout=10)
+            response = requests.get(seed.get_url(), timeout=self.request_timeout)
             final_url = response.url
         except Exception as e:
             self.log(f"Error visiting {seed.get_url()}: {e}")
             final_url = seed.source_url  # fallback; may be empty
-            # Even on error, we still try to re-scan with increased depth
             new_seed = Seed(seed.ip, seed.source_type, seed.version, port=seed.port, depth=seed.depth + 1,
                             source_url=final_url)
             self.log(f"Recursively re-scanning {seed.get_url()} (error branch) with depth {new_seed.depth}")
@@ -376,7 +364,7 @@ class ScannerWorker(QObject):
 
     def get_my_public_ip(self):
         try:
-            response = requests.get("https://api.ipify.org", timeout=5)
+            response = requests.get("https://api.ipify.org", timeout=self.request_timeout)
             ip = response.text.strip()
             self.log(f"My public IP is {ip}")
             return ip
@@ -385,7 +373,9 @@ class ScannerWorker(QObject):
             self.failure.emit(f"Could not determine public IP: {e}")
             return None
 
-    def is_active_and_static(self, ip, port, timeout=5):
+    def is_active_and_static(self, ip, port, timeout=None):
+        if timeout is None:
+            timeout = self.request_timeout
         url = f"http://{ip}" + (f":{port}" if port else "")
         try:
             response = requests.get(url, timeout=timeout, allow_redirects=True)
@@ -579,6 +569,7 @@ class MainWindow(QMainWindow):
         add_field("WhiteListPath:", "WhiteListPath", "website")
         add_field("ScanKnownActive (true/false):", "ScanKnownActive", "false")
         add_field("AllowAutoVerdict (true/false):", "AllowAutoVerdict", "true")
+        add_field("Request Timeout (seconds):", "RequestTimeout", 10)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
