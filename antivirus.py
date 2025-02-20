@@ -334,107 +334,109 @@ class ScannerWorker(QObject):
             return
 
         stype = seed.source_type.lower()
-        # Duplicate checking per category and IP version:
-        if "benign" in stype:  # Whitelist
-            if seed.version == "ipv4":
-                if not self.allow_duplicate_whitelist_ipv4:
-                    if seed.ip in self.seen_whitelist_ipv4:
-                        self.log(f"Skipping duplicate whitelist IPv4 IP: {seed.ip}")
-                        return
-                    self.seen_whitelist_ipv4.add(seed.ip)
-                else:  # Duplicates allowed
-                    if seed.ip in self.seen_whitelist_ipv4:
-                        self.log(f"Duplicate whitelist IPv4 IP allowed: {seed.ip}")
-                        self.handle_duplicate("whitelist_ipv4", seed)
-                    else:
+
+        # Use a lock to ensure atomic check-and-add on the duplicate lists:
+        with self.lock:
+            if "benign" in stype:  # Whitelist
+                if seed.version == "ipv4":
+                    if not self.allow_duplicate_whitelist_ipv4:
+                        if seed.ip in self.seen_whitelist_ipv4:
+                            self.log(f"Skipping duplicate whitelist IPv4 IP: {seed.ip}")
+                            return
                         self.seen_whitelist_ipv4.add(seed.ip)
-            else:  # ipv6
-                if not self.allow_duplicate_whitelist_ipv6:
-                    if seed.ip in self.seen_whitelist_ipv6:
-                        self.log(f"Skipping duplicate whitelist IPv6 IP: {seed.ip}")
-                        return
-                    self.seen_whitelist_ipv6.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_whitelist_ipv6:
-                        self.log(f"Duplicate whitelist IPv6 IP allowed: {seed.ip}")
-                        self.handle_duplicate("whitelist_ipv6", seed)
                     else:
+                        if seed.ip in self.seen_whitelist_ipv4:
+                            self.log(f"Duplicate whitelist IPv4 IP allowed: {seed.ip}")
+                            self.handle_duplicate("whitelist_ipv4", seed)
+                        else:
+                            self.seen_whitelist_ipv4.add(seed.ip)
+                else:  # IPv6
+                    if not self.allow_duplicate_whitelist_ipv6:
+                        if seed.ip in self.seen_whitelist_ipv6:
+                            self.log(f"Skipping duplicate whitelist IPv6 IP: {seed.ip}")
+                            return
                         self.seen_whitelist_ipv6.add(seed.ip)
-        elif "phishing" in stype:
-            if seed.version == "ipv4":
-                if not self.allow_duplicate_phishing_ipv4:
-                    if seed.ip in self.seen_phishing_ipv4:
-                        self.log(f"Skipping duplicate phishing IPv4 IP: {seed.ip}")
-                        return
-                    self.seen_phishing_ipv4.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_phishing_ipv4:
-                        self.log(f"Duplicate phishing IPv4 IP allowed: {seed.ip}")
-                        self.handle_duplicate("phishing_ipv4", seed)
                     else:
+                        if seed.ip in self.seen_whitelist_ipv6:
+                            self.log(f"Duplicate whitelist IPv6 IP allowed: {seed.ip}")
+                            self.handle_duplicate("whitelist_ipv6", seed)
+                        else:
+                            self.seen_whitelist_ipv6.add(seed.ip)
+            elif "phishing" in stype:
+                if seed.version == "ipv4":
+                    if not self.allow_duplicate_phishing_ipv4:
+                        if seed.ip in self.seen_phishing_ipv4:
+                            self.log(f"Skipping duplicate phishing IPv4 IP: {seed.ip}")
+                            return
                         self.seen_phishing_ipv4.add(seed.ip)
-            else:
-                if not self.allow_duplicate_phishing_ipv6:
-                    if seed.ip in self.seen_phishing_ipv6:
-                        self.log(f"Skipping duplicate phishing IPv6 IP: {seed.ip}")
-                        return
-                    self.seen_phishing_ipv6.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_phishing_ipv6:
-                        self.log(f"Duplicate phishing IPv6 IP allowed: {seed.ip}")
-                        self.handle_duplicate("phishing_ipv6", seed)
                     else:
+                        if seed.ip in self.seen_phishing_ipv4:
+                            self.log(f"Duplicate phishing IPv4 IP allowed: {seed.ip}")
+                            self.handle_duplicate("phishing_ipv4", seed)
+                        else:
+                            self.seen_phishing_ipv4.add(seed.ip)
+                else:
+                    if not self.allow_duplicate_phishing_ipv6:
+                        if seed.ip in self.seen_phishing_ipv6:
+                            self.log(f"Skipping duplicate phishing IPv6 IP: {seed.ip}")
+                            return
                         self.seen_phishing_ipv6.add(seed.ip)
-        elif "ddos" in stype:
-            if seed.version == "ipv4":
-                if not self.allow_duplicate_ddos_ipv4:
-                    if seed.ip in self.seen_ddos_ipv4:
-                        self.log(f"Skipping duplicate ddos IPv4 IP: {seed.ip}")
-                        return
-                    self.seen_ddos_ipv4.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_ddos_ipv4:
-                        self.log(f"Duplicate ddos IPv4 IP allowed: {seed.ip}")
-                        self.handle_duplicate("ddos_ipv4", seed)
                     else:
+                        if seed.ip in self.seen_phishing_ipv6:
+                            self.log(f"Duplicate phishing IPv6 IP allowed: {seed.ip}")
+                            self.handle_duplicate("phishing_ipv6", seed)
+                        else:
+                            self.seen_phishing_ipv6.add(seed.ip)
+            elif "ddos" in stype:
+                if seed.version == "ipv4":
+                    if not self.allow_duplicate_ddos_ipv4:
+                        if seed.ip in self.seen_ddos_ipv4:
+                            self.log(f"Skipping duplicate ddos IPv4 IP: {seed.ip}")
+                            return
                         self.seen_ddos_ipv4.add(seed.ip)
-            else:
-                if not self.allow_duplicate_ddos_ipv6:
-                    if seed.ip in self.seen_ddos_ipv6:
-                        self.log(f"Skipping duplicate ddos IPv6 IP: {seed.ip}")
-                        return
-                    self.seen_ddos_ipv6.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_ddos_ipv6:
-                        self.log(f"Duplicate ddos IPv6 IP allowed: {seed.ip}")
-                        self.handle_duplicate("ddos_ipv6", seed)
                     else:
+                        if seed.ip in self.seen_ddos_ipv4:
+                            self.log(f"Duplicate ddos IPv4 IP allowed: {seed.ip}")
+                            self.handle_duplicate("ddos_ipv4", seed)
+                        else:
+                            self.seen_ddos_ipv4.add(seed.ip)
+                else:
+                    if not self.allow_duplicate_ddos_ipv6:
+                        if seed.ip in self.seen_ddos_ipv6:
+                            self.log(f"Skipping duplicate ddos IPv6 IP: {seed.ip}")
+                            return
                         self.seen_ddos_ipv6.add(seed.ip)
-        elif "malicious" in stype:
-            if seed.version == "ipv4":
-                if not self.allow_duplicate_malicious_ipv4:
-                    if seed.ip in self.seen_malicious_ipv4:
-                        self.log(f"Skipping duplicate malicious IPv4 IP: {seed.ip}")
-                        return
-                    self.seen_malicious_ipv4.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_malicious_ipv4:
-                        self.log(f"Duplicate malicious IPv4 IP allowed: {seed.ip}")
-                        self.handle_duplicate("malicious_ipv4", seed)
                     else:
+                        if seed.ip in self.seen_ddos_ipv6:
+                            self.log(f"Duplicate ddos IPv6 IP allowed: {seed.ip}")
+                            self.handle_duplicate("ddos_ipv6", seed)
+                        else:
+                            self.seen_ddos_ipv6.add(seed.ip)
+            elif "malicious" in stype:
+                if seed.version == "ipv4":
+                    if not self.allow_duplicate_malicious_ipv4:
+                        if seed.ip in self.seen_malicious_ipv4:
+                            self.log(f"Skipping duplicate malicious IPv4 IP: {seed.ip}")
+                            return
                         self.seen_malicious_ipv4.add(seed.ip)
-            else:
-                if not self.allow_duplicate_malicious_ipv6:
-                    if seed.ip in self.seen_malicious_ipv6:
-                        self.log(f"Skipping duplicate malicious IPv6 IP: {seed.ip}")
-                        return
-                    self.seen_malicious_ipv6.add(seed.ip)
-                else:
-                    if seed.ip in self.seen_malicious_ipv6:
-                        self.log(f"Duplicate malicious IPv6 IP allowed: {seed.ip}")
-                        self.handle_duplicate("malicious_ipv6", seed)
                     else:
+                        if seed.ip in self.seen_malicious_ipv4:
+                            self.log(f"Duplicate malicious IPv4 IP allowed: {seed.ip}")
+                            self.handle_duplicate("malicious_ipv4", seed)
+                        else:
+                            self.seen_malicious_ipv4.add(seed.ip)
+                else:
+                    if not self.allow_duplicate_malicious_ipv6:
+                        if seed.ip in self.seen_malicious_ipv6:
+                            self.log(f"Skipping duplicate malicious IPv6 IP: {seed.ip}")
+                            return
                         self.seen_malicious_ipv6.add(seed.ip)
+                    else:
+                        if seed.ip in self.seen_malicious_ipv6:
+                            self.log(f"Duplicate malicious IPv6 IP allowed: {seed.ip}")
+                            self.handle_duplicate("malicious_ipv6", seed)
+                        else:
+                            self.seen_malicious_ipv6.add(seed.ip)
 
         self.log(f"Visiting (depth {seed.depth}): {seed.get_url()}")
         try:
@@ -742,15 +744,15 @@ class MainWindow(QMainWindow):
         add_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "false")
         add_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "false")
 
-        # Duplicate file path fields (if you want to store duplicates separately)
-        add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "website\\whitelist_ipv4_duplicates.csv")
-        add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "website\\whitelist_ipv6_duplicates.csv")
-        add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "website\\phishing_ipv4_duplicates.csv")
-        add_field("Duplicate Phishing File IPv6:", "DuplicatePhishingFileIPv6", "website\\phishing_ipv6_duplicates.csv")
-        add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "website\\ddos_ipv4_duplicates.csv")
-        add_field("Duplicate DDoS File IPv6:", "DuplicateDDoSFileIPv6", "website\\ddos_ipv6_duplicates.csv")
-        add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "website\\malicious_ipv4_duplicates.csv")
-        add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "website\\malicious_ipv6_duplicates.csv")
+        # Duplicate file path fields
+        add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
+        add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
+        add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
+        add_field("Duplicate Phishing File IPv6:", "DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
+        add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
+        add_field("Duplicate DDoS File IPv6:", "DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
+        add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
+        add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -800,6 +802,12 @@ class MainWindow(QMainWindow):
 
     def get_settings_from_fields(self):
         settings = {}
+        # List all keys that should be interpreted as booleans
+        bool_keys = ("AllowDuplicate", "AllowAutoVerdict",
+                     "AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
+                     "AllowDuplicatePhishingIPv4", "AllowDuplicatePhishingIPv6",
+                     "AllowDuplicateDDoSIPv4", "AllowDuplicateDDoSIPv6",
+                     "AllowDuplicateMaliciousIPv4", "AllowDuplicateMaliciousIPv6")
         for key, le in self.fields.items():
             value = le.text().strip()
             if key in ("MaxDepth", "MaxThreads", "CsvMaxLines", "CsvMaxSize"):
@@ -807,7 +815,7 @@ class MainWindow(QMainWindow):
                     value = int(value)
                 except:
                     value = 0
-            if key in ("AllowDuplicate", "AllowAutoVerdict"):
+            if key in bool_keys:
                 value = value.lower() == "true"
             settings[key] = value
         return settings
