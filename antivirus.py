@@ -152,7 +152,7 @@ class ScannerWorker(QObject):
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
 
         self.my_public_ip = None
-        self.all_known_ips = {}
+        self.all_known_ips = set()
         self.processed_depths = {} 
         self.processed_count = 0
         self.total_seeds = 0
@@ -456,7 +456,7 @@ class ScannerWorker(QObject):
         return found_ips
 
     def load_lines(self, path):
-        s = {}
+        s = set()
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -506,7 +506,7 @@ class ScannerWorker(QObject):
             for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
 
-        self.all_known_ips = {}
+        self.all_known_ips = set()
         for file_list in [self.whitelist_files_ipv6, self.whitelist_files_ipv4,
                           self.phishing_files_ipv6, self.phishing_files_ipv4,
                           self.ddos_files_ipv6, self.ddos_files_ipv4,
