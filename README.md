@@ -15,6 +15,7 @@ If you detect malware with your original IP, it's highly recommended to remove i
 - **Logs Tab**: You will need to check the **Logs tab** in the application to view the latest scan results.
 - **AbuseIPDB Integration**: This tool is specifically designed to help improve the **AbuseIPDB** database by detecting malicious IPs that are not yet flagged.
 - **Example JSON Configuration**: You can use the example folder to load settings for the scan.
+- **GoodByeDPI**: To avoid country bans, use [GoodByeDPI](https://github.com/ValdikSS/GoodbyeDPI).
 
 ### **What this Tool Does**:
 - **Malicious IP Finder**: It helps identify potentially malicious or unknown IPs (both IPv4 and IPv6).
