@@ -172,7 +172,7 @@ class ScannerWorker(QObject):
 
         # Pause/Resume event; set means "not paused"
         self.pause_event = threading.Event()
-        self.pause_event.{}
+        self.pause_event.set()
 
     def log(self, message):
         self.log_signal.emit(message)
@@ -523,7 +523,7 @@ class ScannerWorker(QObject):
         self.log("Scan paused.")
 
     def resume(self):
-        self.pause_event.{}
+        self.pause_event.set()
         self.log("Scan resumed.")
 
 # -----------------------------
