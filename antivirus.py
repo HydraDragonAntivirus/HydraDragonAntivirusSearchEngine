@@ -272,11 +272,10 @@ class ScannerWorker(QObject):
                 seed = seed_queue.get(timeout=5)
             except Empty:
                 break
-            self.process_seed_worker(seed, seed_queue)
+            self.process_seed_recursive(seed, seed_queue)
             seed_queue.task_done()
 
     def process_seed_recursive(self, seed):
-        # Base-case: stop if cancelled or max depth reached.
         if self.cancelled:
             return
         if seed.depth >= self.max_depth:
@@ -289,9 +288,10 @@ class ScannerWorker(QObject):
             final_url = response.url
         except Exception as e:
             self.log(f"Error visiting {seed.get_url()}: {e}")
-            # Even on error, re-call with increased depth.
+            final_url = seed.source_url  # fallback; may be empty
+            # Even on error, we still try to re-scan with increased depth
             new_seed = Seed(seed.ip, seed.source_type, seed.version, port=seed.port, depth=seed.depth + 1,
-                            source_url=seed.source_url)
+                            source_url=final_url)
             self.log(f"Recursively re-scanning {seed.get_url()} (error branch) with depth {new_seed.depth}")
             self.process_seed_recursive(new_seed)
             return
@@ -315,19 +315,21 @@ class ScannerWorker(QObject):
 
         self.log(f"Visited: {seed.get_url()}")
 
-        # Process discovered IPs from the content.
+        # Process discovered IPs in the content.
         if seed.depth < self.max_depth:
             found_ips = self.extract_ip_and_port(content)
             for ip, port, ip_version in found_ips:
+                # Skip if the discovered IP is our public IP.
                 if self.my_public_ip and ip == self.my_public_ip:
                     self.log(f"Skipping my own public IP: {ip}")
                     continue
 
                 new_depth = seed.depth + 1
+                # Ensure we don't exceed the maximum depth.
                 if new_depth >= self.max_depth:
                     continue
 
-                # Determine new source type based on the active/static check.
+                # Determine the new source type.
                 if seed.source_type.lower() == "benign":
                     new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
                                                                                              port) else "benign (auto verdict 3)"
@@ -345,6 +347,7 @@ class ScannerWorker(QObject):
                     depth=new_depth
                 )[:1024]
 
+                # Write to the appropriate CSV.
                 if new_source_type.lower().startswith("benign"):
                     category = ""
                     self.write_whitelist_line(f'{ip},"{category}",{report_date},"{comment}"\n')
@@ -363,7 +366,7 @@ class ScannerWorker(QObject):
                 self.log(f"Recursively processing new seed: {new_seed.get_url()} with depth {new_seed.depth}")
                 self.process_seed_recursive(new_seed)
 
-        # Finally, re-scan the current seed with increased depth.
+        # Finally, re-scan the current seed with an increased depth.
         if seed.depth < self.max_depth:
             new_seed_same = Seed(seed.ip, seed.source_type, seed.version, port=seed.port, depth=seed.depth + 1,
                                  source_url=final_url)
