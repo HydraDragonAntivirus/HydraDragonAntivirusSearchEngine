@@ -345,126 +345,41 @@ class ScannerWorker(QObject):
         if self.cancelled:
             return
 
-        # Prevent processing the same IP more than once
+        # Category-specific duplicate check
+        category = seed.source_type.lower()
+        if category.startswith("benign"):
+            flag = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
+            seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
+        elif "phishing" in category:
+            flag = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
+            seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
+        elif "ddos" in category:
+            flag = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
+            seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
+        elif "malicious" in category:
+            flag = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
+            seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
+        else:
+            flag = False
+            seen_set = set()
+
+        with self.lock:
+            if seed.ip in seen_set:
+                if not flag:
+                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
+                    return
+                else:
+                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
+                    self.handle_duplicate(category, seed)
+            else:
+                seen_set.add(seed.ip)
+
+        # Global duplicate check: once an IP is processed in any category, do not process it again.
         with self.lock:
             if seed.ip in self.visited_ips:
-                self.log(f"Already processed {seed.ip}, skipping.")
+                self.log(f"Already processed {seed.ip} globally, skipping.")
                 return
             self.visited_ips.add(seed.ip)
-
-        # (Optional duplicate handling per category remains unchanged)
-        duplicate = False
-        stype = seed.source_type.lower()
-
-        with self.lock:
-            if stype.startswith("benign"): # Whitelist
-                if seed.version == "ipv4":
-                    if not self.allow_duplicate_whitelist_ipv4:
-                        if seed.ip in self.seen_whitelist_ipv4:
-                            self.log(f"Duplicate whitelist IPv4 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_whitelist_ipv4.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_whitelist_ipv4:
-                            self.log(f"Duplicate whitelist IPv4 IP allowed: {seed.ip}")
-                            self.handle_duplicate("whitelist_ipv4", seed)
-                        else:
-                            self.seen_whitelist_ipv4.add(seed.ip)
-                else:  # IPv6
-                    if not self.allow_duplicate_whitelist_ipv6:
-                        if seed.ip in self.seen_whitelist_ipv6:
-                            self.log(f"Duplicate whitelist IPv6 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_whitelist_ipv6.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_whitelist_ipv6:
-                            self.log(f"Duplicate whitelist IPv6 IP allowed: {seed.ip}")
-                            self.handle_duplicate("whitelist_ipv6", seed)
-                        else:
-                            self.seen_whitelist_ipv6.add(seed.ip)
-            elif "phishing" in stype:
-                if seed.version == "ipv4":
-                    if not self.allow_duplicate_phishing_ipv4:
-                        if seed.ip in self.seen_phishing_ipv4:
-                            self.log(f"Duplicate phishing IPv4 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_phishing_ipv4.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_phishing_ipv4:
-                            self.log(f"Duplicate phishing IPv4 IP allowed: {seed.ip}")
-                            self.handle_duplicate("phishing_ipv4", seed)
-                        else:
-                            self.seen_phishing_ipv4.add(seed.ip)
-                else:
-                    if not self.allow_duplicate_phishing_ipv6:
-                        if seed.ip in self.seen_phishing_ipv6:
-                            self.log(f"Duplicate phishing IPv6 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_phishing_ipv6.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_phishing_ipv6:
-                            self.log(f"Duplicate phishing IPv6 IP allowed: {seed.ip}")
-                            self.handle_duplicate("phishing_ipv6", seed)
-                        else:
-                            self.seen_phishing_ipv6.add(seed.ip)
-            elif "ddos" in stype:
-                if seed.version == "ipv4":
-                    if not self.allow_duplicate_ddos_ipv4:
-                        if seed.ip in self.seen_ddos_ipv4:
-                            self.log(f"Duplicate ddos IPv4 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_ddos_ipv4.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_ddos_ipv4:
-                            self.log(f"Duplicate ddos IPv4 IP allowed: {seed.ip}")
-                            self.handle_duplicate("ddos_ipv4", seed)
-                        else:
-                            self.seen_ddos_ipv4.add(seed.ip)
-                else:
-                    if not self.allow_duplicate_ddos_ipv6:
-                        if seed.ip in self.seen_ddos_ipv6:
-                            self.log(f"Duplicate ddos IPv6 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_ddos_ipv6.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_ddos_ipv6:
-                            self.log(f"Duplicate ddos IPv6 IP allowed: {seed.ip}")
-                            self.handle_duplicate("ddos_ipv6", seed)
-                        else:
-                            self.seen_ddos_ipv6.add(seed.ip)
-            elif "malicious" in stype:
-                if seed.version == "ipv4":
-                    if not self.allow_duplicate_malicious_ipv4:
-                        if seed.ip in self.seen_malicious_ipv4:
-                            self.log(f"Duplicate malicious IPv4 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_malicious_ipv4.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_malicious_ipv4:
-                            self.log(f"Duplicate malicious IPv4 IP allowed: {seed.ip}")
-                            self.handle_duplicate("malicious_ipv4", seed)
-                        else:
-                            self.seen_malicious_ipv4.add(seed.ip)
-                else:
-                    if not self.allow_duplicate_malicious_ipv6:
-                        if seed.ip in self.seen_malicious_ipv6:
-                            self.log(f"Duplicate malicious IPv6 IP encountered: {seed.ip} (processing duplicate, not saving)")
-                            duplicate = True
-                        else:
-                            self.seen_malicious_ipv6.add(seed.ip)
-                    else:
-                        if seed.ip in self.seen_malicious_ipv6:
-                            self.log(f"Duplicate malicious IPv6 IP allowed: {seed.ip}")
-                            self.handle_duplicate("malicious_ipv6", seed)
-                        else:
-                            self.seen_malicious_ipv6.add(seed.ip)
 
         self.log(f"Processing: {seed.get_url()}")
         try:
@@ -494,10 +409,24 @@ class ScannerWorker(QObject):
 
         self.log(f"Visited: {seed.get_url()}")
 
-        # Process discovered IP addresses from the content
+        # Write CSV entry for this seed
+        report_date = datetime.now(timezone.utc).isoformat()
+        if seed.source_type.lower() == "benign":
+            self.write_whitelist_line(f'{seed.ip},"",{report_date},"Processed"\n')
+        else:
+            if seed.source_type.lower() == "malicious":
+                category_label = self.cat_malicious
+            elif seed.source_type.lower() == "ddos":
+                category_label = self.cat_ddos
+            elif seed.source_type.lower() == "phishing":
+                category_label = self.cat_phishing
+            else:
+                category_label = ""
+            self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"Processed"\n')
+
+        # Process discovered IPs from the content
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
-            # Skip own public IP and source URL match.
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
@@ -506,13 +435,14 @@ class ScannerWorker(QObject):
             if ip == seed.ip or (final_hostname and ip == final_hostname):
                 self.log(f"Skipping discovered IP {ip} because it matches the source.")
                 continue
-            # Check if this discovered IP has already been processed.
+
+            # Check global duplicate for discovered IPs.
             with self.lock:
                 if ip in self.visited_ips:
                     self.log(f"Skipping discovered IP {ip} because it is already processed.")
                     continue
 
-            # Determine new source type.
+            # Determine new source type using auto-verdict logic
             if seed.source_type.lower() == "benign":
                 new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
                                                                                          port) else "benign (auto verdict 3)"
@@ -520,22 +450,17 @@ class ScannerWorker(QObject):
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
                                                                                              port) else seed.source_type
 
-            report_date = datetime.now(timezone.utc).isoformat()
-            new_ip_url = f"http://{ip}" + (f":{port}" if port else "")
-            comment = self.comment_template.format(
-                ip=seed.ip,
-                source_url=final_url,
-                discovered_url=new_ip_url,
-                verdict=new_source_type
-            )[:1024]
-
             with self.lock:
                 self.total_seeds += 1
 
             new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            # Submit the new seed to the QThreadPool for concurrent processing.
+            # Submit the new seed to the QThreadPool.
             self.threadpool.start(SeedRunnable(new_seed, self))
+
+        with self.lock:
+            self.processed_count += 1
+            self.update_progress()
 
     def get_my_public_ip(self):
         try:
