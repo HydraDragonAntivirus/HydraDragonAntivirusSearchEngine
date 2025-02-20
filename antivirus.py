@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 
 from PySide6.QtCore import QObject, Signal, QThread
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QTextCursor
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -364,7 +364,7 @@ class ScannerWorker(QObject):
                 new_seed = Seed(ip, new_source_type, ip_version, port=port, depth=new_depth, source_url=final_url)
                 seed_queue.put(new_seed)
                 with self.lock:
-                     self.total_seeds += 1
+                    self.total_seeds += 1
                 self.log(f"Enqueued new seed: {new_seed.get_url()} with depth {new_seed.depth}")
 
         with self.lock:
@@ -376,7 +376,7 @@ class ScannerWorker(QObject):
             new_seed = Seed(seed.ip, seed.source_type, seed.version, port=seed.port, depth=seed.depth + 1, source_url=final_url)
             seed_queue.put(new_seed)
             with self.lock:
-                 self.total_seeds += 1
+                self.total_seeds += 1
             self.log(f"Re-enqueued {new_seed.get_url()} for re-scan with increased depth {new_seed.depth}")
 
     def get_my_public_ip(self):
@@ -599,7 +599,7 @@ class MainWindow(QMainWindow):
         btn_layout.addWidget(self.save_btn)
         main_layout.addLayout(btn_layout)
 
-        # Two buttons: one to start/stop the scan, one to pause/resume.
+        # Control buttons: Start/Stop scan and Pause/Resume scan.
         control_layout = QHBoxLayout()
         self.start_stop_button = QPushButton("Start Scan")
         self.start_stop_button.clicked.connect(self.toggle_scan)
@@ -614,7 +614,21 @@ class MainWindow(QMainWindow):
         self.progress_bar = QProgressBar()
         main_layout.addWidget(self.progress_bar)
 
-        # Use QTextEdit for logging
+        # Search controls for the log area.
+        search_layout = QHBoxLayout()
+        self.search_line = QLineEdit()
+        self.search_line.setPlaceholderText("Search log...")
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.search_log)
+        self.clear_search_button = QPushButton("Clear Search")
+        self.clear_search_button.clicked.connect(self.clear_search)
+        search_layout.addWidget(QLabel("Log Search:"))
+        search_layout.addWidget(self.search_line)
+        search_layout.addWidget(self.search_button)
+        search_layout.addWidget(self.clear_search_button)
+        main_layout.addLayout(search_layout)
+
+        # Log display area
         main_layout.addWidget(QLabel("Log:"))
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
@@ -721,6 +735,23 @@ class MainWindow(QMainWindow):
         if self.thread:
             self.thread.quit()
             self.thread.wait()
+
+    def search_log(self):
+        search_text = self.search_line.text().strip()
+        if not search_text:
+            return
+        # Try to find the search text; if not found from current position, restart from beginning.
+        if not self.log_text.find(search_text):
+            self.log_text.moveCursor(QTextCursor.Start)
+            if not self.log_text.find(search_text):
+                self.append_log(f'No matches found for "{search_text}".')
+
+    def clear_search(self):
+        # Clear any selection by moving the cursor to the end.
+        cursor = self.log_text.textCursor()
+        cursor.clearSelection()
+        self.log_text.setTextCursor(cursor)
+        self.log_text.moveCursor(QTextCursor.End)
 
 def main():
     app = QApplication(sys.argv)
