@@ -240,7 +240,7 @@ class ScannerWorker(QObject):
             self.whitelist_file_size += len(line.encode("utf-8"))
 
     def run_scan(self):
-        self.log("Starting scan...")
+        self.log("Loading definitions...")
         self.my_public_ip = self.get_my_public_ip()
         seeds = self.load_seeds()
         if not seeds:
