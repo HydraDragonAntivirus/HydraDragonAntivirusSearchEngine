@@ -6,9 +6,6 @@ Below is a detailed explanation of the JSON configuration settings used by the t
 
 ## Scanning & Concurrency Settings
 
-- **MaxDepth**: `10`  
-  *Sets the maximum recursive depth for scanning. The tool stops following links once this depth is reached.*
-
 - **MaxThreads**: `100`  
   *Specifies the maximum number of concurrent threads to use during the scan.*
 
@@ -42,9 +39,9 @@ Below is a detailed explanation of the JSON configuration settings used by the t
   *Identifier used for IP addresses involved in DDoS attacks.*
 
 - **CommentTemplate**:  
- *"Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict}, Depth: {depth})"*
+ *"Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})"*
 
- *Template for generating detailed comments for each reported IP, with placeholders for dynamic values: `{ip}`, `{source_url}`, `{discovered_url}`, `{verdict}`, and `{depth}`.*
+ *Template for generating detailed comments for each reported IP, with placeholders for dynamic values: `{ip}`, `{source_url}`, `{discovered_url}` and `{verdict}`.*
 
 ---
 
