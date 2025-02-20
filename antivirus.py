@@ -152,7 +152,8 @@ class ScannerWorker(QObject):
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
 
         self.my_public_ip = None
-        self.all_known_ips = set()
+        self.all_known_ips = {}
+        self.processed_depths = {} 
         self.processed_count = 0
         self.total_seeds = 0
         self.lock = threading.Lock()
@@ -171,7 +172,7 @@ class ScannerWorker(QObject):
 
         # Pause/Resume event; set means "not paused"
         self.pause_event = threading.Event()
-        self.pause_event.set()
+        self.pause_event.{}
 
     def log(self, message):
         self.log_signal.emit(message)
@@ -455,7 +456,7 @@ class ScannerWorker(QObject):
         return found_ips
 
     def load_lines(self, path):
-        s = set()
+        s = {}
         if os.path.exists(path):
             with open(path, "r", encoding="utf-8") as f:
                 for line in f:
@@ -505,7 +506,7 @@ class ScannerWorker(QObject):
             for ip in get_ips_from_file(file):
                 seeds.append(Seed(ip, "malicious", "ipv4", depth=0))
 
-        self.all_known_ips = set()
+        self.all_known_ips = {}
         for file_list in [self.whitelist_files_ipv6, self.whitelist_files_ipv4,
                           self.phishing_files_ipv6, self.phishing_files_ipv4,
                           self.ddos_files_ipv6, self.ddos_files_ipv4,
@@ -522,7 +523,7 @@ class ScannerWorker(QObject):
         self.log("Scan paused.")
 
     def resume(self):
-        self.pause_event.set()
+        self.pause_event.{}
         self.log("Scan resumed.")
 
 # -----------------------------
@@ -561,7 +562,6 @@ class MainWindow(QMainWindow):
 
         add_field("Max Depth:", "MaxDepth", 10)
         add_field("Max Threads:", "MaxThreads", 100)
-        # Default CsvMaxLines is now 10,000.
         add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
         add_field("Bulk Report File:", "OutputFile", default_bulk)
