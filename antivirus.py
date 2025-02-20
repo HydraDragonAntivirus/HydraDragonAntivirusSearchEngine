@@ -174,7 +174,7 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
 
-        # Initialize duplicate sets per category and IP version:
+        # Duplicate tracking sets
         self.seen_whitelist_ipv4 = set()
         self.seen_whitelist_ipv6 = set()
         self.seen_phishing_ipv4  = set()
@@ -184,7 +184,7 @@ class ScannerWorker(QObject):
         self.seen_malicious_ipv4 = set()
         self.seen_malicious_ipv6 = set()
 
-        # Global visited IPs to prevent re-visiting the same site
+        # Global visited IPs to prevent revisiting the same site
         self.visited_ips = set()
 
         # CSV splitting variables
@@ -198,7 +198,11 @@ class ScannerWorker(QObject):
         self.bulk_file_size = 0
         self.whitelist_file_size = 0
 
-        # Pause/Resume event; set means "not paused"
+        # Progress counters
+        self.processed_count = 0
+        self.total_seeds = 0
+
+        # Pause/Resume event
         self.pause_event = threading.Event()
         self.pause_event.set()
 
@@ -207,8 +211,9 @@ class ScannerWorker(QObject):
         logging.info(message)
 
     def update_progress(self):
+        # Emit progress with the current counters
         self.progress_signal.emit(self.processed_count, self.total_seeds)
- 
+
     def open_csv_files(self):
         # Create directories for output files if they don't exist.
         bulk_dir = os.path.dirname(self.out_bulk_csv)
@@ -220,7 +225,7 @@ class ScannerWorker(QObject):
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
         header = "IP,Categories,ReportDate,Comment\n"
-        self.bulk_line_count = 1  # header counts as first line
+        self.bulk_line_count = 1
         self.whitelist_line_count = 1
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
@@ -276,6 +281,8 @@ class ScannerWorker(QObject):
             self.finished_signal.emit()
             return
 
+        with self.lock:
+            self.total_seeds = len(seeds)
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
 
@@ -327,6 +334,7 @@ class ScannerWorker(QObject):
                 return
             self.visited_ips.add(seed.ip)
 
+        # (Optional duplicate handling per category remains unchanged)
         duplicate = False
         stype = seed.source_type.lower()
 
@@ -446,15 +454,24 @@ class ScannerWorker(QObject):
             final_url = response.url
         except Exception as e:
             self.log(f"Error visiting {seed.get_url()}: {e}")
+            with self.lock:
+                self.processed_count += 1
+                self.update_progress()
             return
 
         if response.status_code != 200:
             self.log(f"Skipping {seed.get_url()} due to status {response.status_code}")
+            with self.lock:
+                self.processed_count += 1
+                self.update_progress()
             return
 
         content = response.text
         if not content:
             self.log(f"No content from {seed.get_url()}")
+            with self.lock:
+                self.processed_count += 1
+                self.update_progress()
             return
 
         self.log(f"Visited: {seed.get_url()}")
@@ -500,9 +517,15 @@ class ScannerWorker(QObject):
                         category = ""
                     self.write_bulk_line(f'{ip},"{category}",{report_date},"{comment}"\n')
 
+            with self.lock:
+                self.total_seeds += 1
             new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.process_seed(new_seed)
+
+        with self.lock:
+            self.processed_count += 1
+            self.update_progress()
 
     def get_my_public_ip(self):
         try:
