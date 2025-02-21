@@ -535,31 +535,31 @@ class ScannerWorker:
                 file_ip_cache[file] = self.load_lines(file)
             return file_ip_cache[file]
 
-        # Load seeds from whitelist, phishing, ddos, and malware files.
+        # Load seeds from each file into the seeds list.
         for file in self.whitelist_files_ipv6:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv6", source_url=""))
+                seeds.append(Seed(ip, "benign", "ipv6", source_url=file))
         for file in self.whitelist_files_ipv4:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv4", source_url=""))
+                seeds.append(Seed(ip, "benign", "ipv4", source_url=file))
         for file in self.phishing_files_ipv6:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv6", source_url=""))
+                seeds.append(Seed(ip, "phishing", "ipv6", source_url=file))
         for file in self.phishing_files_ipv4:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv4", source_url=""))
+                seeds.append(Seed(ip, "phishing", "ipv4", source_url=file))
         for file in self.ddos_files_ipv6:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv6", source_url=""))
+                seeds.append(Seed(ip, "ddos", "ipv6", source_url=file))
         for file in self.ddos_files_ipv4:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv4", source_url=""))
+                seeds.append(Seed(ip, "ddos", "ipv4", source_url=file))
         for file in self.malware_files_ipv6:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv6", source_url=""))
+                seeds.append(Seed(ip, "malicious", "ipv6", source_url=file))
         for file in self.malware_files_ipv4:
             for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv4", source_url=""))
+                seeds.append(Seed(ip, "malicious", "ipv4", source_url=file))
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
