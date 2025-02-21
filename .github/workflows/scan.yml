@@ -1,0 +1,38 @@
+name: Scan for New IPs
+
+on:
+  schedule:
+    - cron: "0 * * * *"  # Runs every hour (adjust as needed)
+  workflow_dispatch:    # Allows manual triggering
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.8'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests
+
+      - name: Run the scanner script
+        run: |
+          # Replace 'scanner.py' with your script file name
+          python scanner.py
+
+      - name: Commit and push CSV updates
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add output/*.csv
+          git commit -m "Update IPs" || echo "No changes to commit"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
