@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
+import concurrent.futures
 from tqdm import tqdm
 
 # Setup directories and logging
@@ -516,9 +517,8 @@ class ScannerWorker:
         for file in self.malware_files_ipv4:
             add_file(file, "malicious", "ipv4")
 
-        # Use ThreadPoolExecutor to load files concurrently.
-        import concurrent.futures
         results = {}
+        # Use ThreadPoolExecutor to load files concurrently.
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_file = {
                 executor.submit(self.load_lines, file): file

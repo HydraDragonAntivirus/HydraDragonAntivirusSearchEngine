@@ -10,6 +10,7 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from queue import Queue, Empty
+import concurrent.futures
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
 from PySide6.QtGui import QIcon, QTextCursor
@@ -606,9 +607,8 @@ class ScannerWorker(QObject):
         for file in self.malware_files_ipv4:
             add_file(file, "malicious", "ipv4")
 
-        # Use ThreadPoolExecutor to load files concurrently.
-        import concurrent.futures
         results = {}
+        # Use ThreadPoolExecutor to load files concurrently.
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_file = {
                 executor.submit(self.load_lines, file): file
