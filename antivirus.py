@@ -8,7 +8,6 @@ import requests
 import logging
 from datetime import datetime, timezone
 from urllib.parse import urlparse
-from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
