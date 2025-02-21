@@ -490,37 +490,56 @@ class ScannerWorker:
 
     def load_seeds(self):
         seeds = []
-        file_ip_cache = {}
+        loaded_ips = set()
+        # Build a mapping: file -> list of (source_type, version)
+        file_category_mapping = {}
 
-        def get_ips_from_file(file):
-            if file not in file_ip_cache:
-                file_ip_cache[file] = self.load_lines(file)
-            return file_ip_cache[file]
+        def add_file(file, source_type, version):
+            if file not in file_category_mapping:
+                file_category_mapping[file] = []
+            file_category_mapping[file].append((source_type, version))
 
         for file in self.whitelist_files_ipv6:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv6"))
+            add_file(file, "benign", "ipv6")
         for file in self.whitelist_files_ipv4:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv4"))
+            add_file(file, "benign", "ipv4")
         for file in self.phishing_files_ipv6:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv6"))
+            add_file(file, "phishing", "ipv6")
         for file in self.phishing_files_ipv4:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv4"))
+            add_file(file, "phishing", "ipv4")
         for file in self.ddos_files_ipv6:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv6"))
+            add_file(file, "ddos", "ipv6")
         for file in self.ddos_files_ipv4:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv4"))
+            add_file(file, "ddos", "ipv4")
         for file in self.malware_files_ipv6:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv6"))
+            add_file(file, "malicious", "ipv6")
         for file in self.malware_files_ipv4:
-            for ip in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv4"))
+            add_file(file, "malicious", "ipv4")
+
+        # Use ThreadPoolExecutor to load files concurrently.
+        import concurrent.futures
+        results = {}
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_to_file = {
+                executor.submit(self.load_lines, file): file
+                for file in file_category_mapping
+            }
+            for future in concurrent.futures.as_completed(future_to_file):
+                file = future_to_file[future]
+                try:
+                    ips = future.result()
+                except Exception as exc:
+                    self.log(f"Error loading file {file}: {exc}")
+                    ips = []
+                results[file] = ips
+
+        # Build seeds using the results, ensuring each IP is only added once.
+        for file, ips in results.items():
+            for source_type, version in file_category_mapping[file]:
+                for ip in ips:
+                    if ip not in loaded_ips:
+                        seeds.append(Seed(ip, source_type, version))
+                        loaded_ips.add(ip)
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
