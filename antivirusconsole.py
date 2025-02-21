@@ -31,13 +31,12 @@ logging.basicConfig(
 # Seed Class: holds IP info
 # ---------------------------
 class Seed:
-    def __init__(self, ip, source_type, version, port=None, source_url=None):
+    def __init__(self, ip, source_type, version, port=None):
         self.ip = ip.lower()
         # source_type: "malicious", "ddos", "phishing", or "benign"
         self.source_type = source_type  
         self.version = version  # "ipv4" or "ipv6"
         self.port = port        
-        self.source_url = source_url if source_url else self.get_url()
 
     def get_url(self):
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
@@ -59,7 +58,7 @@ class ScannerWorker:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but will be enforced as 10,000 per file due to limits.")
         self.comment_template = settings.get(
             "CommentTemplate",
-            "Related with ip address detected (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})"
+            "Related with ip address detected (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})"
         )
 
         # Duplicate allowance flags
@@ -170,15 +169,12 @@ class ScannerWorker:
             self.total_seeds = len(seeds)
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
-        # Initialize tqdm progress bar; tqdm will calculate and display ETA automatically.
-        self.tqdm_bar = tqdm(total=self.total_seeds, desc="Scanning", unit="seed")
-        
+
         # Submit initial seeds to the executor
         for seed in seeds:
             self.executor.submit(self.process_seed, seed)
 
         self.executor.shutdown(wait=True)
-        self.tqdm_bar.close()
         self.close_csv_files()
         self.log("Scan completed.")
 
@@ -237,26 +233,6 @@ class ScannerWorker:
             self.whitelist_line_count += 1
             self.whitelist_file_size += len(line.encode("utf-8"))
 
-    def run_scan(self):
-        self.log("Loading definitions...")
-        self.my_public_ip = self.get_my_public_ip()
-        seeds = self.load_seeds()
-        if not seeds:
-            self.log("No seed IP addresses found.")
-            return
-        with self.lock:
-            self.total_seeds = len(seeds)
-        self.log(f"Starting with {len(seeds)} initial seeds.")
-        self.open_csv_files()
-
-        # Submit initial seeds to the executor
-        for seed in seeds:
-            self.executor.submit(self.process_seed, seed)
-
-        self.executor.shutdown(wait=True)
-        self.close_csv_files()
-        self.log("Scan completed.")
-
     def handle_duplicate(self, category, seed):
         duplicate_file = None
         dup_set = None
@@ -291,7 +267,6 @@ class ScannerWorker:
                 report_date = datetime.now(timezone.utc).isoformat()
                 comment = self.comment_template.format(
                     ip=seed.ip,
-                    source_url=seed.source_url,
                     discovered_url=seed.get_url(),
                     verdict=seed.source_type
                 )
@@ -333,7 +308,6 @@ class ScannerWorker:
                     seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
             )
             if already_seen:
-                # The IP has been seen in some list. If the current category allows duplicates, log it.
                 if dup_allowed:
                     self.log(f"Duplicate allowed for {seed.ip} in category {category}. Logging duplicate.")
                     self.handle_duplicate(category, seed)
@@ -341,7 +315,6 @@ class ScannerWorker:
                     self.log(f"Skipping duplicate {seed.ip} in category {category}.")
                 return
 
-            # If not seen anywhere, add it to the current category's seen set and global visited_ips.
             current_seen_set.add(seed.ip)
             self.visited_ips.add(seed.ip)
 
@@ -374,24 +347,21 @@ class ScannerWorker:
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # For benign seeds, immediately apply the auto verdict.
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 if self.is_active_and_static(seed.ip, seed.port):
-                    verdict = "benign (auto verdict 2)"  # Active and Static
+                    verdict = "benign (auto verdict 2)"
                 else:
-                    verdict = "benign (auto verdict 3)"  # Not active/static
+                    verdict = "benign (auto verdict 3)"
             else:
                 verdict = seed.source_type
             comment = self.comment_template.format(
                 ip=seed.ip,
-                source_url=seed.source_url,
                 discovered_url=final_url,
                 verdict=verdict
             )
             self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
-            # For non-benign seeds, use the appropriate category label.
             if category == "malicious":
                 category_label = self.cat_malicious
             elif category == "ddos":
@@ -402,13 +372,11 @@ class ScannerWorker:
                 category_label = ""
             comment = self.comment_template.format(
                 ip=seed.ip,
-                source_url=seed.source_url,
                 discovered_url=final_url,
                 verdict=seed.source_type
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Process discovered IPs from the page content.
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
             if self.my_public_ip and ip == self.my_public_ip:
@@ -426,17 +394,14 @@ class ScannerWorker:
                     continue
                 self.total_seeds += 1
 
-            # Apply auto verdict logic for discovered IPs.
             if category.startswith("benign"):
-                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
-                                                                                         port) else "benign (auto verdict 3)"
+                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
             else:
-                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
-                                                                                             port) else seed.source_type
+                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
 
-            new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
+            new_seed = Seed(ip, new_source_type, ip_version, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            self.threadpool.start(SeedRunnable(new_seed, self))
+            self.executor.submit(self.process_seed, new_seed)
 
         with self.lock:
             self.processed_count += 1
@@ -518,10 +483,8 @@ class ScannerWorker:
                 for line in f:
                     parts = line.strip().split(",", 1)
                     ip = parts[0].strip().lower()
-                    # Only set src_url if provided in the file
-                    src_url = parts[1].strip() if len(parts) > 1 else ""
                     if ip and self.is_valid_ip(ip):
-                        entries.append((ip, src_url))
+                        entries.append(ip)
         self.log(f"Loaded {len(entries)} valid IP entries from {path}")
         return entries
 
@@ -535,29 +498,29 @@ class ScannerWorker:
             return file_ip_cache[file]
 
         for file in self.whitelist_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "benign", "ipv6"))
         for file in self.whitelist_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "benign", "ipv4"))
         for file in self.phishing_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "phishing", "ipv6"))
         for file in self.phishing_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "phishing", "ipv4"))
         for file in self.ddos_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "ddos", "ipv6"))
         for file in self.ddos_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "ddos", "ipv4"))
         for file in self.malware_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "malicious", "ipv6"))
         for file in self.malware_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "malicious", "ipv4"))
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
@@ -576,7 +539,7 @@ def main():
         "CategoryMalicious": "20",
         "CategoryPhishing": "7",
         "CategoryDDoS": "18",
-        "CommentTemplate": "Related with ip address detected (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
+        "CommentTemplate": "Related with ip address detected (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})",
         "MalwareFilesIPv6": "website/IPv6Malware.txt",
         "MalwareFilesIPv4": "website/IPv4Malware.txt",
         "DDoSFilesIPv6": "",
