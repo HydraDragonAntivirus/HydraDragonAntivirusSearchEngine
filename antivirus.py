@@ -364,6 +364,8 @@ class ScannerWorker(QObject):
             return
 
         category = seed.source_type.lower()
+
+        # Duplicate checking for known lists and processed seeds
         with self.lock:
             # Check for "benign" seeds (whitelist)
             if category.startswith("benign"):
@@ -467,7 +469,7 @@ class ScannerWorker(QObject):
                     return
                 self.visited_ips.add(seed.ip)
 
-        # Outside the lock, proceed with processing the seed.
+        # Process the seed (outside lock)
         self.log(f"Processing: {seed.get_url()}")
         try:
             response = requests.get(seed.get_url(), timeout=self.request_timeout)
@@ -497,14 +499,14 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # Write to the appropriate CSV file.
+        # Compute the auto verdict for a benign seed only once.
         if category.startswith("benign"):
             if self.allow_auto_verdict:
-                verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip,
-                                                                                 seed.port) else "benign (auto verdict 3)"
+                seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip,
+                                                                                      seed.port) else "benign (auto verdict 3)"
             else:
-                verdict = seed.source_type
-            comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=verdict)
+                seed_verdict = seed.source_type
+            comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             self.write_whitelist_line(f'{seed.ip},"{final_url}",{report_date},"{comment}"\n')
         else:
             if category == "malicious":
@@ -515,10 +517,11 @@ class ScannerWorker(QObject):
                 category_label = self.cat_phishing
             else:
                 category_label = ""
-            comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
+            seed_verdict = seed.source_type
+            comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Process discovered IPs recursively.
+        # Process discovered IPs from the page content.
         for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
@@ -535,9 +538,9 @@ class ScannerWorker(QObject):
                     continue
                 self.total_seeds += 1
 
+            # For benign seeds, use the parent's computed seed_verdict; for non-benign, apply auto verdict 1 if inactive.
             if category.startswith("benign"):
-                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
-                                                                                         port) else "benign (auto verdict 3)"
+                new_source_type = seed_verdict
             else:
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
                                                                                              port) else seed.source_type
