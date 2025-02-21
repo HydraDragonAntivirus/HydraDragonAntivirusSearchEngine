@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
-from tqdm tqdm
+from tqdm import tqdm
 
 # Setup directories and logging
 log_dir = "log"
