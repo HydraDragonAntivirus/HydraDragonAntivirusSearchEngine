@@ -1,5 +1,5 @@
 {
-    "MaxThreads": 500,
+    "MaxThreads": 1000,
     "CsvMaxLines": 10000,
     "CsvMaxSize": 2097152,
     "OutputFile": "output\\BulkReport.csv",

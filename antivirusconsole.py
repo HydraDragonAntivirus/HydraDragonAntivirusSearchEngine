@@ -49,7 +49,7 @@ class Seed:
 class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
-        self.max_workers = int(settings.get("MaxThreads", 500))
+        self.max_workers = int(settings.get("MaxThreads", 1000))
         self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
