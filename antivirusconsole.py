@@ -257,30 +257,23 @@ class ScannerWorker:
         self.close_csv_files()
         self.log("Scan completed.")
 
-    def handle_duplicate(self, category_key, seed):
+    def handle_duplicate(self, category, seed):
         duplicate_file = ""
-        if category_key == "whitelist_ipv4":
-            duplicate_file = self.duplicate_whitelist_file_ipv4
-        elif category_key == "whitelist_ipv6":
-            duplicate_file = self.duplicate_whitelist_file_ipv6
-        elif category_key == "phishing_ipv4":
-            duplicate_file = self.duplicate_phishing_file_ipv4
-        elif category_key == "phishing_ipv6":
-            duplicate_file = self.duplicate_phishing_file_ipv6
-        elif category_key == "ddos_ipv4":
-            duplicate_file = self.duplicate_ddos_file_ipv4
-        elif category_key == "ddos_ipv6":
-            duplicate_file = self.duplicate_ddos_file_ipv6
-        elif category_key == "malicious_ipv4":
-            duplicate_file = self.duplicate_malicious_file_ipv4
-        elif category_key == "malicious_ipv6":
-            duplicate_file = self.duplicate_malicious_file_ipv6
+        # Select duplicate file based on category and IP version.
+        if category.startswith("benign"):
+            duplicate_file = self.duplicate_whitelist_file_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_file_ipv6
+        elif "phishing" in category:
+            duplicate_file = self.duplicate_phishing_file_ipv4 if seed.version == "ipv4" else self.duplicate_phishing_file_ipv6
+        elif "ddos" in category:
+            duplicate_file = self.duplicate_ddos_file_ipv4 if seed.version == "ipv4" else self.duplicate_ddos_file_ipv6
+        elif "malicious" in category:
+            duplicate_file = self.duplicate_malicious_file_ipv4 if seed.version == "ipv4" else self.duplicate_malicious_file_ipv6
 
         if duplicate_file:
             try:
                 with open(duplicate_file, "a", encoding="utf-8") as f:
                     report_date = datetime.now(timezone.utc).isoformat()
-                    # For duplicates, we use the seed's URL as the discovered URL.
+                    # Use seed.get_url() as the discovered URL because final_url isn’t available here.
                     comment = self.comment_template.format(
                         ip=seed.ip,
                         source_url=seed.source_url,
@@ -296,38 +289,27 @@ class ScannerWorker:
         if self.cancelled:
             return
 
-        # Check for category-specific duplicates
         category = seed.source_type.lower()
+        # Determine if duplicates are allowed for this seed based on category and IP version.
         if category.startswith("benign"):
-            flag = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
-            seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
+            duplicate_allowed = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
         elif "phishing" in category:
-            flag = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
-            seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
+            duplicate_allowed = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
         elif "ddos" in category:
-            flag = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
-            seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
+            duplicate_allowed = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
         elif "malicious" in category:
-            flag = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
-            seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
+            duplicate_allowed = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
         else:
-            flag = False
-            seen_set = set()
+            duplicate_allowed = False
 
-        with self.lock:
-            if seed.ip in seen_set:
-                if not flag:
-                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
-                    return
-                else:
-                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
-                    self.handle_duplicate(category, seed)
-            else:
-                seen_set.add(seed.ip)
-
+        # Global duplicate check across all categories.
         with self.lock:
             if seed.ip in self.visited_ips:
-                self.log(f"Already processed {seed.ip} globally, skipping.")
+                if duplicate_allowed:
+                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
+                    self.handle_duplicate(category, seed)
+                else:
+                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
                 return
             self.visited_ips.add(seed.ip)
 
@@ -358,10 +340,8 @@ class ScannerWorker:
             return
 
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
-
-        # Write CSV entry based on category
         report_date = datetime.now(timezone.utc).isoformat()
-        if seed.source_type.lower().startswith("benign"):
+        if category.startswith("benign"):
             comment = self.comment_template.format(
                 ip=seed.ip,
                 source_url=seed.source_url,
@@ -370,11 +350,11 @@ class ScannerWorker:
             )
             self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
-            if seed.source_type.lower() == "malicious":
+            if category == "malicious":
                 category_label = self.cat_malicious
-            elif seed.source_type.lower() == "ddos":
+            elif category == "ddos":
                 category_label = self.cat_ddos
-            elif seed.source_type.lower() == "phishing":
+            elif category == "phishing":
                 category_label = self.cat_phishing
             else:
                 category_label = ""
@@ -386,7 +366,7 @@ class ScannerWorker:
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Discover new IPs from the page content
+        # Discover new IPs from the page content.
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
             if self.my_public_ip and ip == self.my_public_ip:
@@ -404,23 +384,17 @@ class ScannerWorker:
                     continue
                 self.total_seeds += 1
 
-            # Determine new source type using auto-verdict logic for discovered IPs
-            if seed.source_type.lower().startswith("benign"):
-                # Parent is benign
-                if self.is_active_and_static(ip, port):
-                    new_source_type = "benign (auto verdict 2)"  # Active and Static Benign
-                else:
-                    new_source_type = "benign (auto verdict 3)"  # Dead IP
+            # Auto-verdict logic for discovered IPs.
+            if category.startswith("benign"):
+                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
+                                                                                         port) else "benign (auto verdict 3)"
             else:
-                # Parent is non-benign
-                if not self.is_active_and_static(ip, port):
-                    new_source_type = "benign (auto verdict 1)"  # Malicious to Benign
-                else:
-                    new_source_type = seed.source_type  # No benign conversion; keep original flag
+                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
+                                                                                             port) else seed.source_type
 
             new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            self.executor.submit(self.process_seed, new_seed)
+            self.threadpool.start(SeedRunnable(new_seed, self))
 
         with self.lock:
             self.processed_count += 1
@@ -554,7 +528,7 @@ class ScannerWorker:
 def main():
     # Default settings for the console version.
     settings = {
-        "MaxThreads": 500,
+        "MaxThreads": 1000,
         "CsvMaxLines": 10000,
         "CsvMaxSize": 2097152,
         "OutputFile": default_bulk,

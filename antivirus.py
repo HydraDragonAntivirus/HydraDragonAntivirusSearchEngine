@@ -128,7 +128,7 @@ class ScannerWorker(QObject):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.max_workers = int(settings.get("MaxThreads", 500))
+        self.max_workers = int(settings.get("MaxThreads", 1000))
         # User-defined CsvMaxLines; if above 10k, enforce 10k per file.
         self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
@@ -312,34 +312,28 @@ class ScannerWorker(QObject):
         self.log("Scan completed.")
         self.finished_signal.emit()
 
-    def handle_duplicate(self, category_key, seed):
+    def handle_duplicate(self, category, seed):
         duplicate_file = ""
-        if category_key == "whitelist_ipv4":
-            duplicate_file = self.duplicate_whitelist_file_ipv4
-        elif category_key == "whitelist_ipv6":
-            duplicate_file = self.duplicate_whitelist_file_ipv6
-        elif category_key == "phishing_ipv4":
-            duplicate_file = self.duplicate_phishing_file_ipv4
-        elif category_key == "phishing_ipv6":
-            duplicate_file = self.duplicate_phishing_file_ipv6
-        elif category_key == "ddos_ipv4":
-            duplicate_file = self.duplicate_ddos_file_ipv4
-        elif category_key == "ddos_ipv6":
-            duplicate_file = self.duplicate_ddos_file_ipv6
-        elif category_key == "malicious_ipv4":
-            duplicate_file = self.duplicate_malicious_file_ipv4
-        elif category_key == "malicious_ipv6":
-            duplicate_file = self.duplicate_malicious_file_ipv6
+        # Select duplicate file based on category and IP version.
+        if category.startswith("benign"):
+            duplicate_file = self.duplicate_whitelist_file_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_file_ipv6
+        elif "phishing" in category:
+            duplicate_file = self.duplicate_phishing_file_ipv4 if seed.version == "ipv4" else self.duplicate_phishing_file_ipv6
+        elif "ddos" in category:
+            duplicate_file = self.duplicate_ddos_file_ipv4 if seed.version == "ipv4" else self.duplicate_ddos_file_ipv6
+        elif "malicious" in category:
+            duplicate_file = self.duplicate_malicious_file_ipv4 if seed.version == "ipv4" else self.duplicate_malicious_file_ipv6
 
         if duplicate_file:
             # Write duplicate information to the file.
             try:
                 with open(duplicate_file, "a", encoding="utf-8") as f:
                     report_date = datetime.now(timezone.utc).isoformat()
+                    # Use seed.get_url() as the discovered URL because final_url isn’t available here.
                     comment = self.comment_template.format(
                         ip=seed.ip,
                         source_url=seed.source_url,
-                        discovered_url=final_url,
+                        discovered_url=seed.get_url(),
                         verdict=seed.source_type
                     )
                     line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
@@ -351,39 +345,27 @@ class ScannerWorker(QObject):
         if self.cancelled:
             return
 
-        # Category-specific duplicate check
         category = seed.source_type.lower()
+        # Determine if duplicates are allowed for this seed based on category and IP version.
         if category.startswith("benign"):
-            flag = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
-            seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
+            duplicate_allowed = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
         elif "phishing" in category:
-            flag = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
-            seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
+            duplicate_allowed = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
         elif "ddos" in category:
-            flag = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
-            seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
+            duplicate_allowed = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
         elif "malicious" in category:
-            flag = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
-            seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
+            duplicate_allowed = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
         else:
-            flag = False
-            seen_set = set()
+            duplicate_allowed = False
 
-        with self.lock:
-            if seed.ip in seen_set:
-                if not flag:
-                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
-                    return
-                else:
-                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
-                    self.handle_duplicate(category, seed)
-            else:
-                seen_set.add(seed.ip)
-
-        # Global duplicate check: once an IP is processed in any category, do not process it again.
+        # Global duplicate check across all categories.
         with self.lock:
             if seed.ip in self.visited_ips:
-                self.log(f"Already processed {seed.ip} globally, skipping.")
+                if duplicate_allowed:
+                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
+                    self.handle_duplicate(category, seed)
+                else:
+                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
                 return
             self.visited_ips.add(seed.ip)
 
@@ -413,11 +395,9 @@ class ScannerWorker(QObject):
                 self.update_progress()
             return
 
-        self.log(f"Visited: {seed.get_url()}")
-
-        # Write CSV entry for this seed
+        self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
-        if seed.source_type.lower().startswith("benign"):
+        if category.startswith("benign"):
             comment = self.comment_template.format(
                 ip=seed.ip,
                 source_url=seed.source_url,
@@ -426,11 +406,11 @@ class ScannerWorker(QObject):
             )
             self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
-            if seed.source_type.lower() == "malicious":
+            if category == "malicious":
                 category_label = self.cat_malicious
-            elif seed.source_type.lower() == "ddos":
+            elif category == "ddos":
                 category_label = self.cat_ddos
-            elif seed.source_type.lower() == "phishing":
+            elif category == "phishing":
                 category_label = self.cat_phishing
             else:
                 category_label = ""
@@ -442,7 +422,7 @@ class ScannerWorker(QObject):
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Process discovered IPs from the content
+        # Discover new IPs from the page content.
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
             if self.my_public_ip and ip == self.my_public_ip:
@@ -454,28 +434,19 @@ class ScannerWorker(QObject):
                 self.log(f"Skipping discovered IP {ip} because it matches the source.")
                 continue
 
-            # Check global duplicate for discovered IPs.
             with self.lock:
                 if ip in self.visited_ips:
                     self.log(f"Skipping discovered IP {ip} because it is already processed.")
                     continue
-
-            # Determine new source type using auto-verdict logic for discovered IPs
-            if seed.source_type.lower().startswith("benign"):
-                # Parent is benign
-                if self.is_active_and_static(ip, port):
-                    new_source_type = "benign (auto verdict 2)"  # Active and Static Benign
-                else:
-                    new_source_type = "benign (auto verdict 3)"  # Dead IP
-            else:
-                # Parent is non-benign
-                if not self.is_active_and_static(ip, port):
-                    new_source_type = "benign (auto verdict 1)"  # Malicious to Benign
-                else:
-                    new_source_type = seed.source_type  # No benign conversion; keep original flag
-
-            with self.lock:
                 self.total_seeds += 1
+
+            # Auto-verdict logic for discovered IPs.
+            if category.startswith("benign"):
+                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
+                                                                                         port) else "benign (auto verdict 3)"
+            else:
+                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
+                                                                                             port) else seed.source_type
 
             new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
@@ -660,7 +631,7 @@ class MainWindow(QMainWindow):
             row += 1
 
         # Basic settings
-        add_field("Max Threads:", "MaxThreads", 500)
+        add_field("Max Threads:", "MaxThreads", 1000)
         add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
         add_field("Bulk Report File:", "OutputFile", default_bulk)
