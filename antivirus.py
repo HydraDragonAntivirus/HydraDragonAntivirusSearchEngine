@@ -128,7 +128,7 @@ class ScannerWorker(QObject):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.max_workers = int(settings.get("MaxThreads", 100))
+        self.max_workers = int(settings.get("MaxThreads", 500))
         # User-defined CsvMaxLines; if above 10k, enforce 10k per file.
         self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
@@ -660,7 +660,7 @@ class MainWindow(QMainWindow):
             row += 1
 
         # Basic settings
-        add_field("Max Threads:", "MaxThreads", 100)
+        add_field("Max Threads:", "MaxThreads", 500)
         add_field("CsvMaxLines:", "CsvMaxLines", 10000)
         add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
         add_field("Bulk Report File:", "OutputFile", default_bulk)
