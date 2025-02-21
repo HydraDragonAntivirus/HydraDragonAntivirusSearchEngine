@@ -7,7 +7,7 @@
     "CategoryMalicious": "20",
     "CategoryPhishing": "7",
     "CategoryDDoS": "18",
-    "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})",
+    "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})",
     "MalwareFilesIPv6": "website\\IPv6Malware.txt",
     "MalwareFilesIPv4": "website\\IPv4Malware.txt",
     "DDoSFilesIPv6": "",
