@@ -258,8 +258,9 @@ class ScannerWorker:
         self.log("Scan completed.")
 
     def handle_duplicate(self, category, seed):
-        duplicate_file = ""
-        # Select duplicate file based on category and IP version.
+        duplicate_file = None
+
+        # Select the correct duplicate log file based on category and IP version.
         if category.startswith("benign"):
             duplicate_file = self.duplicate_whitelist_file_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_file_ipv6
         elif "phishing" in category:
@@ -269,47 +270,65 @@ class ScannerWorker:
         elif "malicious" in category:
             duplicate_file = self.duplicate_malicious_file_ipv4 if seed.version == "ipv4" else self.duplicate_malicious_file_ipv6
 
-        if duplicate_file:
-            try:
-                with open(duplicate_file, "a", encoding="utf-8") as f:
-                    report_date = datetime.now(timezone.utc).isoformat()
-                    # Use seed.get_url() as the discovered URL because final_url isn’t available here.
-                    comment = self.comment_template.format(
-                        ip=seed.ip,
-                        source_url=seed.source_url,
-                        discovered_url=seed.get_url(),
-                        verdict=seed.source_type
-                    )
-                    line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
-                    f.write(line)
-            except Exception as e:
-                self.log(f"Error writing duplicate to {duplicate_file}: {e}")
+        if not duplicate_file:
+            self.log(f"[ERROR] No duplicate file found for category {category}, skipping duplicate logging.")
+            return
+
+        try:
+            with open(duplicate_file, "a", encoding="utf-8") as f:
+                report_date = datetime.now(timezone.utc).isoformat()
+                comment = self.comment_template.format(
+                    ip=seed.ip,
+                    source_url=seed.source_url,
+                    discovered_url=seed.get_url(),  # Use seed's URL
+                    verdict=seed.source_type
+                )
+                line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
+                f.write(line)
+            self.log(f"Duplicate recorded: {seed.ip} in {duplicate_file}")
+        except Exception as e:
+            self.log(f"[ERROR] Failed to write duplicate entry for {seed.ip} in {duplicate_file}: {e}")
 
     def process_seed(self, seed):
         if self.cancelled:
             return
 
         category = seed.source_type.lower()
-        # Determine if duplicates are allowed for this seed based on category and IP version.
-        if category.startswith("benign"):
-            duplicate_allowed = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
-        elif "phishing" in category:
-            duplicate_allowed = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
-        elif "ddos" in category:
-            duplicate_allowed = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
-        elif "malicious" in category:
-            duplicate_allowed = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
-        else:
-            duplicate_allowed = False
 
-        # Global duplicate check across all categories.
+        # Determine duplicate-allowed flag and appropriate seen_set based on category and version.
+        if category.startswith("benign"):
+            dup_allowed = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
+            seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
+        elif "phishing" in category:
+            dup_allowed = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
+            seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
+        elif "ddos" in category:
+            dup_allowed = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
+            seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
+        elif "malicious" in category:
+            dup_allowed = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
+            seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
+        else:
+            dup_allowed = False
+            seen_set = set()
+
+        # Per-category duplicate check.
+        with self.lock:
+            if seed.ip in seen_set:
+                if not dup_allowed:
+                    self.log(f"Skipping duplicate {seed.ip} in category {category} (per-category check)")
+                    return
+                else:
+                    self.log(f"Duplicate allowed for {seed.ip} in category {category} (per-category check)")
+                    self.handle_duplicate(category, seed)
+                    return  # Do not process duplicate further.
+            else:
+                seen_set.add(seed.ip)
+
+        # Global duplicate check.
         with self.lock:
             if seed.ip in self.visited_ips:
-                if duplicate_allowed:
-                    self.log(f"Duplicate allowed for {seed.ip} in category {category}")
-                    self.handle_duplicate(category, seed)
-                else:
-                    self.log(f"Skipping duplicate {seed.ip} in category {category}")
+                self.log(f"Already processed {seed.ip} globally, skipping.")
                 return
             self.visited_ips.add(seed.ip)
 
@@ -341,15 +360,25 @@ class ScannerWorker:
 
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
+
+        # For benign seeds, immediately apply the auto verdict.
         if category.startswith("benign"):
+            if self.allow_auto_verdict:
+                if self.is_active_and_static(seed.ip, seed.port):
+                    verdict = "benign (auto verdict 2)"  # Active and Static
+                else:
+                    verdict = "benign (auto verdict 3)"  # Not active/static
+            else:
+                verdict = seed.source_type
             comment = self.comment_template.format(
                 ip=seed.ip,
                 source_url=seed.source_url,
                 discovered_url=final_url,
-                verdict=seed.source_type
+                verdict=verdict
             )
             self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
+            # For non-benign seeds, use the appropriate category label.
             if category == "malicious":
                 category_label = self.cat_malicious
             elif category == "ddos":
@@ -366,7 +395,7 @@ class ScannerWorker:
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Discover new IPs from the page content.
+        # Process discovered IPs from the page content.
         found_ips = self.extract_ip_and_port(content)
         for ip, port, ip_version in found_ips:
             if self.my_public_ip and ip == self.my_public_ip:
@@ -384,7 +413,7 @@ class ScannerWorker:
                     continue
                 self.total_seeds += 1
 
-            # Auto-verdict logic for discovered IPs.
+            # Apply auto verdict logic for discovered IPs.
             if category.startswith("benign"):
                 new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
                                                                                          port) else "benign (auto verdict 3)"
