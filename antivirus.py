@@ -314,20 +314,32 @@ class ScannerWorker(QObject):
 
     def handle_duplicate(self, category, seed):
         duplicate_file = None
+        dup_set = None
 
-        # Select the correct duplicate log file based on category and IP version.
+        # Select the duplicate file and tracking set based on category and IP version.
         if category.startswith("benign"):
             duplicate_file = self.duplicate_whitelist_file_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_file_ipv6
+            dup_set = self.duplicate_whitelist_set_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_set_ipv6
         elif "phishing" in category:
             duplicate_file = self.duplicate_phishing_file_ipv4 if seed.version == "ipv4" else self.duplicate_phishing_file_ipv6
+            dup_set = self.duplicate_phishing_set_ipv4 if seed.version == "ipv4" else self.duplicate_phishing_set_ipv6
         elif "ddos" in category:
             duplicate_file = self.duplicate_ddos_file_ipv4 if seed.version == "ipv4" else self.duplicate_ddos_file_ipv6
+            dup_set = self.duplicate_ddos_set_ipv4 if seed.version == "ipv4" else self.duplicate_ddos_set_ipv6
         elif "malicious" in category:
             duplicate_file = self.duplicate_malicious_file_ipv4 if seed.version == "ipv4" else self.duplicate_malicious_file_ipv6
+            dup_set = self.duplicate_malicious_set_ipv4 if seed.version == "ipv4" else self.duplicate_malicious_set_ipv6
 
         if not duplicate_file:
             self.log(f"[ERROR] No duplicate file found for category {category}, skipping duplicate logging.")
             return
+
+        # Check if this duplicate was already recorded.
+        with self.lock:
+            if seed.ip in dup_set:
+                self.log(f"Duplicate for {seed.ip} already recorded in {duplicate_file}")
+                return
+            dup_set.add(seed.ip)
 
         try:
             with open(duplicate_file, "a", encoding="utf-8") as f:
@@ -335,7 +347,7 @@ class ScannerWorker(QObject):
                 comment = self.comment_template.format(
                     ip=seed.ip,
                     source_url=seed.source_url,
-                    discovered_url=seed.get_url(),  # Use seed's URL
+                    discovered_url=seed.get_url(),
                     verdict=seed.source_type
                 )
                 line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
@@ -350,41 +362,42 @@ class ScannerWorker(QObject):
 
         category = seed.source_type.lower()
 
-        # Determine duplicate-allowed flag and appropriate seen_set based on category and version.
+        # Determine the current category's duplicate-allowed flag and seen_set.
         if category.startswith("benign"):
             dup_allowed = self.allow_duplicate_whitelist_ipv4 if seed.version == "ipv4" else self.allow_duplicate_whitelist_ipv6
-            seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
+            current_seen_set = self.seen_whitelist_ipv4 if seed.version == "ipv4" else self.seen_whitelist_ipv6
         elif "phishing" in category:
             dup_allowed = self.allow_duplicate_phishing_ipv4 if seed.version == "ipv4" else self.allow_duplicate_phishing_ipv6
-            seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
+            current_seen_set = self.seen_phishing_ipv4 if seed.version == "ipv4" else self.seen_phishing_ipv6
         elif "ddos" in category:
             dup_allowed = self.allow_duplicate_ddos_ipv4 if seed.version == "ipv4" else self.allow_duplicate_ddos_ipv6
-            seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
+            current_seen_set = self.seen_ddos_ipv4 if seed.version == "ipv4" else self.seen_ddos_ipv6
         elif "malicious" in category:
             dup_allowed = self.allow_duplicate_malicious_ipv4 if seed.version == "ipv4" else self.allow_duplicate_malicious_ipv6
-            seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
+            current_seen_set = self.seen_malicious_ipv4 if seed.version == "ipv4" else self.seen_malicious_ipv6
         else:
             dup_allowed = False
-            seen_set = set()
+            current_seen_set = set()
 
-        # Per-category duplicate check.
         with self.lock:
-            if seed.ip in seen_set:
-                if not dup_allowed:
-                    self.log(f"Skipping duplicate {seed.ip} in category {category} (per-category check)")
-                    return
-                else:
-                    self.log(f"Duplicate allowed for {seed.ip} in category {category} (per-category check)")
+            # Check all duplicate lists to see if this IP has been seen in any category.
+            already_seen = (
+                    seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.seen_whitelist_ipv6 or
+                    seed.ip in self.seen_phishing_ipv4 or seed.ip in self.seen_phishing_ipv6 or
+                    seed.ip in self.seen_ddos_ipv4 or seed.ip in self.seen_ddos_ipv6 or
+                    seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
+            )
+            if already_seen:
+                # The IP has been seen in some list. If the current category allows duplicates, log it.
+                if dup_allowed:
+                    self.log(f"Duplicate allowed for {seed.ip} in category {category}. Logging duplicate.")
                     self.handle_duplicate(category, seed)
-                    return  # Do not process duplicate further.
-            else:
-                seen_set.add(seed.ip)
-
-        # Global duplicate check.
-        with self.lock:
-            if seed.ip in self.visited_ips:
-                self.log(f"Already processed {seed.ip} globally, skipping.")
+                else:
+                    self.log(f"Skipping duplicate {seed.ip} in category {category}.")
                 return
+
+            # If not seen anywhere, add it to the current category's seen set and global visited_ips.
+            current_seen_set.add(seed.ip)
             self.visited_ips.add(seed.ip)
 
         self.log(f"Processing: {seed.get_url()}")
