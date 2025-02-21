@@ -6,6 +6,7 @@ import ipaddress
 import threading
 import requests
 import logging
+import time
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 from queue import Queue, Empty
@@ -416,7 +417,7 @@ class ScannerWorker(QObject):
 
         # Write CSV entry for this seed
         report_date = datetime.now(timezone.utc).isoformat()
-        if seed.source_type.lower() == "benign":
+        if seed.source_type.lower().startswith("benign"):
             comment = self.comment_template.format(
                 ip=seed.ip,
                 source_url=seed.source_url,
@@ -829,6 +830,8 @@ class MainWindow(QMainWindow):
         self.worker.failure.connect(self.append_log)
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
+        # Record the start time right before starting the thread
+        self.scan_start_time = time.time()  
         self.thread.started.connect(self.worker.run_scan)
         self.thread.start()
 
@@ -844,7 +847,17 @@ class MainWindow(QMainWindow):
         self.progress_bar.setMaximum(total if total > 0 else 1)
         self.progress_bar.setValue(processed)
         percent = (processed / total * 100) if total > 0 else 0
-        self.progress_bar.setFormat(f"{processed}/{total} ({percent:.0f}%)")
+        # Calculate ETA if at least one seed has been processed.
+        if processed > 0:
+            elapsed = time.time() - self.scan_start_time
+            average_time = elapsed / processed
+            remaining_time = average_time * (total - processed)
+            eta = time.strftime("%H:%M:%S", time.gmtime(remaining_time))
+        else:
+            eta = "Calculating..."
+
+        # Update progress bar text to include ETA.
+        self.progress_bar.setFormat(f"{processed}/{total} ({percent:.0f}%) - ETA: {eta}")
 
     def scan_finished(self):
         self.append_log("Scan finished.")

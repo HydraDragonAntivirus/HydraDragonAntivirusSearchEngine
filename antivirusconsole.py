@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 from concurrent.futures import ThreadPoolExecutor
 from queue import Queue, Empty
+from tqdm tqdm
 
 # Setup directories and logging
 log_dir = "log"
@@ -52,6 +53,8 @@ class ScannerWorker:
         self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
+        self.scan_start_time = None
+        self.tqdm_bar = None
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but will be enforced as 10,000 per file due to limits.")
         self.comment_template = settings.get(
@@ -148,9 +151,36 @@ class ScannerWorker:
 
     def update_progress(self):
         with self.lock:
+            processed = self.processed_count
             total = self.total_seeds if self.total_seeds > 0 else 1
-            percent = (self.processed_count / total * 100)
-        self.log(f"Progress: {self.processed_count}/{self.total_seeds} ({percent:.0f}%)")
+        if self.tqdm_bar:
+            self.tqdm_bar.n = processed
+            self.tqdm_bar.total = total  # Update total in case new seeds are added
+            self.tqdm_bar.refresh()
+        self.log(f"Progress: {processed}/{total} ({(processed/total*100):.0f}%)")
+
+    def run_scan(self):
+        self.log("Loading definitions...")
+        self.my_public_ip = self.get_my_public_ip()
+        seeds = self.load_seeds()
+        if not seeds:
+            self.log("No seed IP addresses found.")
+            return
+        with self.lock:
+            self.total_seeds = len(seeds)
+        self.log(f"Starting with {len(seeds)} initial seeds.")
+        self.open_csv_files()
+        # Initialize tqdm progress bar; tqdm will calculate and display ETA automatically.
+        self.tqdm_bar = tqdm(total=self.total_seeds, desc="Scanning", unit="seed")
+        
+        # Submit initial seeds to the executor
+        for seed in seeds:
+            self.executor.submit(self.process_seed, seed)
+
+        self.executor.shutdown(wait=True)
+        self.tqdm_bar.close()
+        self.close_csv_files()
+        self.log("Scan completed.")
 
     def open_csv_files(self):
         bulk_dir = os.path.dirname(self.out_bulk_csv)
@@ -331,7 +361,7 @@ class ScannerWorker:
 
         # Write CSV entry based on category
         report_date = datetime.now(timezone.utc).isoformat()
-        if seed.source_type.lower() == "benign":
+        if seed.source_type.lower().startswith("benign"):
             comment = self.comment_template.format(
                 ip=seed.ip,
                 source_url=seed.source_url,
