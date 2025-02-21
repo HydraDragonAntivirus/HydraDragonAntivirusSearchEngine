@@ -460,13 +460,19 @@ class ScannerWorker(QObject):
                     self.log(f"Skipping discovered IP {ip} because it is already processed.")
                     continue
 
-            # Determine new source type using auto-verdict logic
+            # Determine new source type using auto-verdict logic for discovered IPs
             if seed.source_type.lower().startswith("benign"):
-                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
-                                                                                         port) else "benign (auto verdict 3)"
+                # Parent is benign
+                if self.is_active_and_static(ip, port):
+                    new_source_type = "benign (auto verdict 2)"  # Active and Static Benign
+                else:
+                    new_source_type = "benign (auto verdict 3)"  # Dead IP
             else:
-                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
-                                                                                             port) else seed.source_type
+                # Parent is non-benign
+                if not self.is_active_and_static(ip, port):
+                    new_source_type = "benign (auto verdict 1)"  # Malicious to Benign
+                else:
+                    new_source_type = seed.source_type  # No benign conversion; keep original flag
 
             with self.lock:
                 self.total_seeds += 1
