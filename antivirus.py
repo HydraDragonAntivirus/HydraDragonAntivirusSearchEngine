@@ -93,13 +93,12 @@ QScrollArea {
 # Seed class
 # -----------------------------
 class Seed:
-    def __init__(self, ip, source_type, version, port=None, source_url=None):
+    def __init__(self, ip, source_type, version, port=None):
         self.ip = ip.lower()
         # source_type: "malicious", "ddos", "phishing", or "benign"
         self.source_type = source_type  
         self.version = version  # "ipv4" or "ipv6"
         self.port = port        # Port number if available
-        self.source_url = source_url  # URL where this IP was found
 
     def get_url(self):
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
@@ -136,8 +135,9 @@ class ScannerWorker(QObject):
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but will be enforced as 10,000 per file due to AbuseIPDB limits.")
-        self.comment_template = settings.get("CommentTemplate", "")
-        # Duplicate allowance flags
+        self.comment_template = settings.get("CommentTemplate", 
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})"
+        )
         self.allow_duplicate_whitelist_ipv4 = settings.get("AllowDuplicateWhitelistIPv4", False)
         self.allow_duplicate_whitelist_ipv6 = settings.get("AllowDuplicateWhitelistIPv6", False)
         self.allow_duplicate_phishing_ipv4  = settings.get("AllowDuplicatePhishingIPv4", False)
@@ -346,7 +346,6 @@ class ScannerWorker(QObject):
                 report_date = datetime.now(timezone.utc).isoformat()
                 comment = self.comment_template.format(
                     ip=seed.ip,
-                    source_url=seed.source_url,
                     discovered_url=seed.get_url(),
                     verdict=seed.source_type
                 )
@@ -380,12 +379,11 @@ class ScannerWorker(QObject):
             current_seen_set = set()
 
         with self.lock:
-            # Check all duplicate lists to see if this IP has been seen in any category.
             already_seen = (
-                    seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.seen_whitelist_ipv6 or
-                    seed.ip in self.seen_phishing_ipv4 or seed.ip in self.seen_phishing_ipv6 or
-                    seed.ip in self.seen_ddos_ipv4 or seed.ip in self.seen_ddos_ipv6 or
-                    seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
+                seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.seen_whitelist_ipv6 or
+                seed.ip in self.seen_phishing_ipv4 or seed.ip in self.seen_phishing_ipv6 or
+                seed.ip in self.seen_ddos_ipv4 or seed.ip in self.seen_ddos_ipv6 or
+                seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
             )
             if already_seen:
                 # The IP has been seen in some list. If the current category allows duplicates, log it.
@@ -429,24 +427,21 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # For benign seeds, immediately apply the auto verdict.
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 if self.is_active_and_static(seed.ip, seed.port):
-                    verdict = "benign (auto verdict 2)"  # Active and Static
+                    verdict = "benign (auto verdict 2)"
                 else:
-                    verdict = "benign (auto verdict 3)"  # Not active/static
+                    verdict = "benign (auto verdict 3)"
             else:
                 verdict = seed.source_type
             comment = self.comment_template.format(
                 ip=seed.ip,
-                source_url=seed.source_url,
                 discovered_url=final_url,
                 verdict=verdict
             )
             self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
-            # For non-benign seeds, use the appropriate category label.
             if category == "malicious":
                 category_label = self.cat_malicious
             elif category == "ddos":
@@ -457,7 +452,6 @@ class ScannerWorker(QObject):
                 category_label = ""
             comment = self.comment_template.format(
                 ip=seed.ip,
-                source_url=seed.source_url,
                 discovered_url=final_url,
                 verdict=seed.source_type
             )
@@ -481,15 +475,12 @@ class ScannerWorker(QObject):
                     continue
                 self.total_seeds += 1
 
-            # Apply auto verdict logic for discovered IPs.
             if category.startswith("benign"):
-                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip,
-                                                                                         port) else "benign (auto verdict 3)"
+                new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
             else:
-                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip,
-                                                                                             port) else seed.source_type
+                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
 
-            new_seed = Seed(ip, new_source_type, ip_version, port=port, source_url=final_url)
+            new_seed = Seed(ip, new_source_type, ip_version, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
 
@@ -582,10 +573,8 @@ class ScannerWorker(QObject):
                 for line in f:
                     parts = line.strip().split(",", 1)
                     ip = parts[0].strip().lower()
-                    # Only set src_url if provided in the file
-                    src_url = parts[1].strip() if len(parts) > 1 else ""
                     if ip and self.is_valid_ip(ip):
-                        entries.append((ip, src_url))
+                        entries.append(ip)
         self.log(f"Loaded {len(entries)} valid IP entries from {path}")
         return entries
 
@@ -599,29 +588,29 @@ class ScannerWorker(QObject):
             return file_ip_cache[file]
 
         for file in self.whitelist_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "benign", "ipv6"))
         for file in self.whitelist_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "benign", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "benign", "ipv4"))
         for file in self.phishing_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "phishing", "ipv6"))
         for file in self.phishing_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "phishing", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "phishing", "ipv4"))
         for file in self.ddos_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "ddos", "ipv6"))
         for file in self.ddos_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "ddos", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "ddos", "ipv4"))
         for file in self.malware_files_ipv6:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv6", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "malicious", "ipv6"))
         for file in self.malware_files_ipv4:
-            for ip, src_url in get_ips_from_file(file):
-                seeds.append(Seed(ip, "malicious", "ipv4", source_url=src_url))
+            for ip in get_ips_from_file(file):
+                seeds.append(Seed(ip, "malicious", "ipv4"))
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
@@ -677,7 +666,7 @@ class MainWindow(QMainWindow):
         add_field("Category Malicious:", "CategoryMalicious", "20")
         add_field("Category Phishing:", "CategoryPhishing", "7")
         add_field("Category DDoS:", "CategoryDDoS", "18")
-        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Source URL: {source_url}, Discovered URL: {discovered_url}, Verdict: {verdict})")
+        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
 
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
