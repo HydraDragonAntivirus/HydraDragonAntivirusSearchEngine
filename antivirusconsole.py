@@ -286,20 +286,27 @@ class ScannerWorker:
             return
 
         category = seed.source_type.lower()
-
         with self.lock:
             # Check for "benign" seeds (whitelist)
             if category.startswith("benign"):
                 if seed.version == "ipv4":
-                    if seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.duplicate_whitelist_set_ipv4:
-                        self.log(f"Skipping duplicate {seed.ip} in whitelist IPv4.")
+                    if seed.ip in self.seen_whitelist_ipv4:
+                        if self.allow_duplicate_whitelist_ipv4 and seed.ip not in self.duplicate_whitelist_set_ipv4:
+                            self.log(f"Duplicate allowed for {seed.ip} in whitelist IPv4. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in whitelist IPv4.")
                         return
                     else:
                         self.seen_whitelist_ipv4.add(seed.ip)
                         self.visited_ips.add(seed.ip)
                 elif seed.version == "ipv6":
-                    if seed.ip in self.seen_whitelist_ipv6 or seed.ip in self.duplicate_whitelist_set_ipv6:
-                        self.log(f"Skipping duplicate {seed.ip} in whitelist IPv6.")
+                    if seed.ip in self.seen_whitelist_ipv6:
+                        if self.allow_duplicate_whitelist_ipv6 and seed.ip not in self.duplicate_whitelist_set_ipv6:
+                            self.log(f"Duplicate allowed for {seed.ip} in whitelist IPv6. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in whitelist IPv6.")
                         return
                     else:
                         self.seen_whitelist_ipv6.add(seed.ip)
@@ -307,15 +314,23 @@ class ScannerWorker:
             # Check for "phishing" seeds
             elif category == "phishing":
                 if seed.version == "ipv4":
-                    if seed.ip in self.seen_phishing_ipv4 or seed.ip in self.duplicate_phishing_set_ipv4:
-                        self.log(f"Skipping duplicate {seed.ip} in phishing IPv4.")
+                    if seed.ip in self.seen_phishing_ipv4:
+                        if self.allow_duplicate_phishing_ipv4 and seed.ip not in self.duplicate_phishing_set_ipv4:
+                            self.log(f"Duplicate allowed for {seed.ip} in phishing IPv4. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in phishing IPv4.")
                         return
                     else:
                         self.seen_phishing_ipv4.add(seed.ip)
                         self.visited_ips.add(seed.ip)
                 elif seed.version == "ipv6":
-                    if seed.ip in self.seen_phishing_ipv6 or seed.ip in self.duplicate_phishing_set_ipv6:
-                        self.log(f"Skipping duplicate {seed.ip} in phishing IPv6.")
+                    if seed.ip in self.seen_phishing_ipv6:
+                        if self.allow_duplicate_phishing_ipv6 and seed.ip not in self.duplicate_phishing_set_ipv6:
+                            self.log(f"Duplicate allowed for {seed.ip} in phishing IPv6. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in phishing IPv6.")
                         return
                     else:
                         self.seen_phishing_ipv6.add(seed.ip)
@@ -323,15 +338,23 @@ class ScannerWorker:
             # Check for "ddos" seeds
             elif category == "ddos":
                 if seed.version == "ipv4":
-                    if seed.ip in self.seen_ddos_ipv4 or seed.ip in self.duplicate_ddos_set_ipv4:
-                        self.log(f"Skipping duplicate {seed.ip} in ddos IPv4.")
+                    if seed.ip in self.seen_ddos_ipv4:
+                        if self.allow_duplicate_ddos_ipv4 and seed.ip not in self.duplicate_ddos_set_ipv4:
+                            self.log(f"Duplicate allowed for {seed.ip} in ddos IPv4. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in ddos IPv4.")
                         return
                     else:
                         self.seen_ddos_ipv4.add(seed.ip)
                         self.visited_ips.add(seed.ip)
                 elif seed.version == "ipv6":
-                    if seed.ip in self.seen_ddos_ipv6 or seed.ip in self.duplicate_ddos_set_ipv6:
-                        self.log(f"Skipping duplicate {seed.ip} in ddos IPv6.")
+                    if seed.ip in self.seen_ddos_ipv6:
+                        if self.allow_duplicate_ddos_ipv6 and seed.ip not in self.duplicate_ddos_set_ipv6:
+                            self.log(f"Duplicate allowed for {seed.ip} in ddos IPv6. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in ddos IPv6.")
                         return
                     else:
                         self.seen_ddos_ipv6.add(seed.ip)
@@ -339,28 +362,34 @@ class ScannerWorker:
             # Check for "malicious" seeds
             elif category == "malicious":
                 if seed.version == "ipv4":
-                    if seed.ip in self.seen_malicious_ipv4 or seed.ip in self.duplicate_malicious_set_ipv4:
-                        self.log(f"Skipping duplicate {seed.ip} in malicious IPv4.")
+                    if seed.ip in self.seen_malicious_ipv4:
+                        if self.allow_duplicate_malicious_ipv4 and seed.ip not in self.duplicate_malicious_set_ipv4:
+                            self.log(f"Duplicate allowed for {seed.ip} in malicious IPv4. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in malicious IPv4.")
                         return
                     else:
                         self.seen_malicious_ipv4.add(seed.ip)
                         self.visited_ips.add(seed.ip)
                 elif seed.version == "ipv6":
-                    if seed.ip in self.seen_malicious_ipv6 or seed.ip in self.duplicate_malicious_set_ipv6:
-                        self.log(f"Skipping duplicate {seed.ip} in malicious IPv6.")
+                    if seed.ip in self.seen_malicious_ipv6:
+                        if self.allow_duplicate_malicious_ipv6 and seed.ip not in self.duplicate_malicious_set_ipv6:
+                            self.log(f"Duplicate allowed for {seed.ip} in malicious IPv6. Logging duplicate.")
+                            self.handle_duplicate(category, seed)
+                        else:
+                            self.log(f"Skipping duplicate {seed.ip} in malicious IPv6.")
                         return
                     else:
                         self.seen_malicious_ipv6.add(seed.ip)
                         self.visited_ips.add(seed.ip)
             else:
-                # For any unknown category, simply use a global check.
                 if seed.ip in self.visited_ips:
                     self.log(f"Skipping duplicate {seed.ip} in unknown category.")
                     return
-                else:
-                    self.visited_ips.add(seed.ip)
+                self.visited_ips.add(seed.ip)
 
-        # Outside the lock, continue processing the seed
+        # Outside the lock, proceed with processing the seed.
         self.log(f"Processing: {seed.get_url()}")
         try:
             response = requests.get(seed.get_url(), timeout=self.request_timeout)
@@ -390,7 +419,7 @@ class ScannerWorker:
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # Continue normal processing based on category
+        # Write to the appropriate CSV file.
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip,
