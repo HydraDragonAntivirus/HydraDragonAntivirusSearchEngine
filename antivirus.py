@@ -187,7 +187,7 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
 
-        # Duplicate tracking sets
+        # Duplicate tracking sets for seen seeds
         self.seen_whitelist_ipv4 = set()
         self.seen_whitelist_ipv6 = set()
         self.seen_phishing_ipv4  = set()
@@ -197,7 +197,15 @@ class ScannerWorker(QObject):
         self.seen_malicious_ipv4 = set()
         self.seen_malicious_ipv6 = set()
 
-        # Global visited IPs to prevent revisiting the same site
+        self.duplicate_whitelist_set_ipv4 = set()
+        self.duplicate_whitelist_set_ipv6 = set()
+        self.duplicate_phishing_set_ipv4 = set()
+        self.duplicate_phishing_set_ipv6 = set()
+        self.duplicate_ddos_set_ipv4 = set()
+        self.duplicate_ddos_set_ipv6 = set()
+        self.duplicate_malicious_set_ipv4 = set()
+        self.duplicate_malicious_set_ipv6 = set()
+
         self.visited_ips = set()
 
         # CSV splitting variables
@@ -441,7 +449,8 @@ class ScannerWorker(QObject):
                 discovered_url=final_url,
                 verdict=verdict
             )
-            self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
+            # Write whitelist entry with final_url in the Categories field
+            self.write_whitelist_line(f'{seed.ip},"{final_url}",{report_date},"{comment}"\n')
         else:
             if category == "malicious":
                 category_label = self.cat_malicious
@@ -458,9 +467,8 @@ class ScannerWorker(QObject):
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        # Process discovered IPs from the page content.
-        found_ips = self.extract_ip_and_port(content)
-        for ip, port, ip_version in found_ips:
+        # (Processing of discovered IPs follows here unchanged)
+        for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue

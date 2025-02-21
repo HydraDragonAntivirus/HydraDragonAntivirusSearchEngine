@@ -128,6 +128,15 @@ class ScannerWorker:
         self.seen_malicious_ipv6 = set()
         self.visited_ips = set()
 
+        self.duplicate_whitelist_set_ipv4 = set()
+        self.duplicate_whitelist_set_ipv6 = set()
+        self.duplicate_phishing_set_ipv4 = set()
+        self.duplicate_phishing_set_ipv6 = set()
+        self.duplicate_ddos_set_ipv4 = set()
+        self.duplicate_ddos_set_ipv6 = set()
+        self.duplicate_malicious_set_ipv4 = set()
+        self.duplicate_malicious_set_ipv6 = set()
+
         # CSV file rotation variables
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
@@ -303,10 +312,10 @@ class ScannerWorker:
         with self.lock:
             # Check all duplicate lists to see if this IP has been seen in any category.
             already_seen = (
-                    seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.seen_whitelist_ipv6 or
-                    seed.ip in self.seen_phishing_ipv4 or seed.ip in self.seen_phishing_ipv6 or
-                    seed.ip in self.seen_ddos_ipv4 or seed.ip in self.seen_ddos_ipv6 or
-                    seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
+                seed.ip in self.seen_whitelist_ipv4 or seed.ip in self.seen_whitelist_ipv6 or
+                seed.ip in self.seen_phishing_ipv4 or seed.ip in self.seen_phishing_ipv6 or
+                seed.ip in self.seen_ddos_ipv4 or seed.ip in self.seen_ddos_ipv6 or
+                seed.ip in self.seen_malicious_ipv4 or seed.ip in self.seen_malicious_ipv6
             )
             if already_seen:
                 if dup_allowed:
@@ -361,7 +370,8 @@ class ScannerWorker:
                 discovered_url=final_url,
                 verdict=verdict
             )
-            self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
+            # Write whitelist entry with final_url in the Categories field
+            self.write_whitelist_line(f'{seed.ip},"{final_url}",{report_date},"{comment}"\n')
         else:
             if category == "malicious":
                 category_label = self.cat_malicious
@@ -378,8 +388,8 @@ class ScannerWorker:
             )
             self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
-        found_ips = self.extract_ip_and_port(content)
-        for ip, port, ip_version in found_ips:
+        # (Processing of discovered IPs follows here unchanged)
+        for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
@@ -402,7 +412,7 @@ class ScannerWorker:
 
             new_seed = Seed(ip, new_source_type, ip_version, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            self.executor.submit(self.process_seed, new_seed)
+            self.threadpool.start(SeedRunnable(new_seed, self))
 
         with self.lock:
             self.processed_count += 1
