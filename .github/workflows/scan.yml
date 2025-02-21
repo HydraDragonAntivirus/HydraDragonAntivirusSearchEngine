@@ -24,8 +24,7 @@ jobs:
 
       - name: Run the scanner script
         run: |
-          # Replace 'scanner.py' with your script file name
-          python scanner.py
+          python antivirusconsole.py
 
       - name: Commit and push CSV updates
         run: |
