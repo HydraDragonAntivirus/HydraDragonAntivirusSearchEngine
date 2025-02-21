@@ -336,7 +336,13 @@ class ScannerWorker(QObject):
             try:
                 with open(duplicate_file, "a", encoding="utf-8") as f:
                     report_date = datetime.now(timezone.utc).isoformat()
-                    line = f'{seed.ip},Duplicate,{report_date},"Duplicate entry for {seed.get_url()}"\n'
+                    comment = self.comment_template.format(
+                        ip=seed.ip,
+                        source_url=seed.source_url,
+                        discovered_url=final_url,
+                        verdict=seed.source_type
+                    )
+                    line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
                     f.write(line)
             except Exception as e:
                 self.log(f"Error writing duplicate to {duplicate_file}: {e}")
@@ -412,7 +418,13 @@ class ScannerWorker(QObject):
         # Write CSV entry for this seed
         report_date = datetime.now(timezone.utc).isoformat()
         if seed.source_type.lower() == "benign":
-            self.write_whitelist_line(f'{seed.ip},"",{report_date},"Processed"\n')
+            comment = self.comment_template.format(
+                ip=seed.ip,
+                source_url=seed.source_url,
+                discovered_url=final_url,
+                verdict=seed.source_type
+            )
+            self.write_whitelist_line(f'{seed.ip},"",{report_date},"{comment}"\n')
         else:
             if seed.source_type.lower() == "malicious":
                 category_label = self.cat_malicious
@@ -422,7 +434,13 @@ class ScannerWorker(QObject):
                 category_label = self.cat_phishing
             else:
                 category_label = ""
-            self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"Processed"\n')
+            comment = self.comment_template.format(
+                ip=seed.ip,
+                source_url=seed.source_url,
+                discovered_url=final_url,
+                verdict=seed.source_type
+            )
+            self.write_bulk_line(f'{seed.ip},"{category_label}",{report_date},"{comment}"\n')
 
         # Process discovered IPs from the content
         found_ips = self.extract_ip_and_port(content)
