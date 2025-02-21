@@ -404,7 +404,7 @@ class ScannerWorker:
                     continue
                 self.total_seeds += 1
 
-            if seed.source_type.lower() == "benign":
+            if seed.source_type.lower().startswith("benign"):
                 new_source_type = "benign (auto verdict 2)" if self.is_active_and_static(ip, port) else "benign (auto verdict 3)"
             else:
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
