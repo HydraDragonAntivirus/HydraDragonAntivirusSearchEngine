@@ -710,8 +710,46 @@ class MainWindow(QMainWindow):
         settings_group = QWidget()
         settings_layout = QGridLayout(settings_group)
         row = 0
-        self.fields = {}
+
+        # Define keys for which a browse button should be added.
+        file_keys = {
+            "OutputFile", "WhiteListOutputFile", "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
+            "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6", "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
+            "DuplicateBruteForceFileIPv4", "DuplicateBruteForceFileIPv6", "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6"
+        }
+        directory_keys = {"LastPath"}
+
+        # Modified add_field: adds a browse button for file/directory selection if needed.
         def add_field(label_text, key, default=""):
+            nonlocal row
+            current_row = row
+            lbl = QLabel(label_text)
+            le = QLineEdit(str(default))
+            settings_layout.addWidget(lbl, current_row, 0)
+            settings_layout.addWidget(le, current_row, 1)
+            # Check if this key should have a browse button.
+            if key in file_keys:
+                browse_btn = QPushButton("Browse File")
+                def browse_file():
+                    file_path, _ = QFileDialog.getSaveFileName(self, "Select CSV File", le.text(), "CSV Files (*.csv)")
+                    if file_path:
+                        le.setText(file_path)
+                browse_btn.clicked.connect(browse_file)
+                settings_layout.addWidget(browse_btn, current_row, 2)
+            elif key in directory_keys:
+                browse_btn = QPushButton("Browse Directory")
+                def browse_directory():
+                    directory = QFileDialog.getExistingDirectory(self, "Select Directory", le.text())
+                    if directory:
+                        le.setText(directory)
+                browse_btn.clicked.connect(browse_directory)
+                settings_layout.addWidget(browse_btn, current_row, 2)
+            self.fields[key] = le
+            row = current_row + 1
+
+        self.fields = {}
+        def add_plain_field(label_text, key, default=""):
+            # Original add_field without browse button
             nonlocal row
             lbl = QLabel(label_text)
             le = QLineEdit(str(default))
@@ -719,42 +757,44 @@ class MainWindow(QMainWindow):
             settings_layout.addWidget(le, row, 1)
             self.fields[key] = le
             row += 1
-        # Basic settings
-        add_field("Max Threads:", "MaxThreads", 1000)
-        add_field("CsvMaxLines:", "CsvMaxLines", 10000)
-        add_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
+
+        # Basic settings (these remain unchanged)
+        add_plain_field("Max Threads:", "MaxThreads", 1000)
+        add_plain_field("CsvMaxLines:", "CsvMaxLines", 10000)
+        add_plain_field("CsvMaxSize (bytes):", "CsvMaxSize", 2097152)
+        # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
-        add_field("Category Malicious:", "CategoryMalicious", "20")
-        add_field("Category Phishing:", "CategoryPhishing", "7")
-        add_field("Category DDoS:", "CategoryBruteForce", "4")
-        add_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
-        add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
-        add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
-        add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
-        add_field("BruteForceFilesIPv4 (comma-separated):", "BruteForceFilesIPv4", "website\\IPv4BruteForce.txt")
-        add_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
-        add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
-        add_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "website\\IPv6DDoS.txt")
-        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
-        add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
-        add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
-        add_field("WhiteList Path IPv4:", "WhiteListPathIPv4", "website\\IPv4WhiteList.txt")
-        add_field("WhiteList Path IPv6:", "WhiteListPathIPv6", "website\\IPv6WhiteList.txt")
-        add_field("Phishing Path IPv4:", "PhishingPathIPv4", "website\\IPv4Phishing.txt")
-        add_field("Phishing Path IPv6:", "PhishingPathIPv6", "website\\IPv6Phishing.txt")
+        add_plain_field("Category Malicious:", "CategoryMalicious", "20")
+        add_plain_field("Category Phishing:", "CategoryPhishing", "7")
+        add_plain_field("Category DDoS:", "CategoryDDoS", "4")
+        add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
+        add_plain_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
+        add_plain_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
+        add_plain_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
+        add_plain_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
+        add_plain_field("BruteForceFilesIPv4 (comma-separated):", "BruteForceFilesIPv4", "website\\IPv4BruteForce.txt")
+        add_plain_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
+        add_plain_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
+        add_plain_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "website\\IPv6DDoS.txt")
+        add_plain_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
+        add_plain_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
+        add_plain_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
+        add_plain_field("WhiteList Path IPv4:", "WhiteListPathIPv4", "website\\IPv4WhiteList.txt")
+        add_plain_field("WhiteList Path IPv6:", "WhiteListPathIPv6", "website\\IPv6WhiteList.txt")
+        add_plain_field("Phishing Path IPv4:", "PhishingPathIPv4", "website\\IPv4Phishing.txt")
+        add_plain_field("Phishing Path IPv6:", "PhishingPathIPv6", "website\\IPv6Phishing.txt")
+        # Last Directory Path uses a directory browse button
         add_field("Last Directory Path:", "LastPath", "website")
-        # Duplicate allowance fields (default true)
-        add_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
-        add_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
-        add_field("Allow Duplicate Phishing IPv4 (true/false):", "AllowDuplicatePhishingIPv4", "true")
-        add_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
-        add_field("Allow Duplicate BruteForce IPv4 (true/false):", "AllowDuplicateBruteForceIPv4", "true")
-        add_field("Allow Duplicate BruteForce IPv6 (true/false):", "AllowDuplicateBruteForceIPv6", "true")
-        add_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
-        add_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
-        # Duplicate file path fields
+        add_plain_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
+        add_plain_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
+        add_plain_field("Allow Duplicate Phishing IPv4 (true/false):", "AllowDuplicatePhishingIPv4", "true")
+        add_plain_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
+        add_plain_field("Allow Duplicate BruteForce IPv4 (true/false):", "AllowDuplicateBruteForceIPv4", "true")
+        add_plain_field("Allow Duplicate BruteForce IPv6 (true/false):", "AllowDuplicateBruteForceIPv6", "true")
+        add_plain_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
+        add_plain_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
+        # Duplicate file fields (CSV) use browse buttons
         add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
         add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")

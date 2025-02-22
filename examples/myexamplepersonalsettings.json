@@ -6,6 +6,7 @@
     "WhiteListOutputFile": "output\\WhitelistReport.csv",
     "CategoryMalicious": "20",
     "CategoryPhishing": "7",
+    "CategoryDDoS": "4",
     "CategoryBruteForce": "18",
     "CommentTemplate": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})",
     "MalwareFilesIPv6": "website\\IPv6Malware.txt",
