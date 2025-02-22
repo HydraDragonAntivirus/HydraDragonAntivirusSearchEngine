@@ -90,7 +90,7 @@ QScrollArea {
 """
 
 # -----------------------------
-# Seed class with an added "is_input" attribute
+# Seed class – note that is_input is still stored for metadata
 # -----------------------------
 class Seed:
     def __init__(self, ip, source_type, version, port=None, is_input=True):
@@ -98,8 +98,8 @@ class Seed:
         # source_type: "malicious", "ddos", "phishing", or "benign"
         self.source_type = source_type  
         self.version = version  # "ipv4" or "ipv6"
-        self.port = port        # Port number if available
-        self.is_input = is_input  # True if loaded from file, False if discovered
+        self.port = port
+        self.is_input = is_input
 
     def get_url(self):
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
@@ -117,7 +117,7 @@ class SeedRunnable(QRunnable):
         self.worker.process_seed(self.seed)
 
 # -----------------------------
-# ScannerWorker using settings
+# ScannerWorker using settings and duplicate handling
 # -----------------------------
 class ScannerWorker(QObject):
     log_signal = Signal(str)
@@ -142,7 +142,7 @@ class ScannerWorker(QObject):
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
 
-        # Duplicate file paths (preserved as requested)
+        # Duplicate file paths (preserved)
         self.duplicate_whitelist_file_ipv4 = settings.get("DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
         self.duplicate_whitelist_file_ipv6 = settings.get("DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         self.duplicate_phishing_file_ipv4 = settings.get("DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
@@ -166,10 +166,10 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
 
-        # Set to prevent duplicate network processing (each IP processed only once)
+        # Prevent duplicate network processing
         self.visited_ips = set()
 
-        # Dictionary to track which IPs have been written to output (to prevent duplicate output)
+        # Track which IPs have been written to output (to prevent duplicates)
         self.output_ips = {
             "whitelist_ipv4": set(),
             "whitelist_ipv6": set(),
@@ -262,7 +262,6 @@ class ScannerWorker(QObject):
             self.whitelist_file_size += len(line.encode("utf-8"))
 
     def handle_duplicate(self, category, seed):
-        # Determine duplicate file and tracking set based on category and IP version.
         if category.startswith("benign"):
             dup_file = self.duplicate_whitelist_file_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_file_ipv6
             dup_set = self.duplicate_whitelist_set_ipv4 if seed.version == "ipv4" else self.duplicate_whitelist_set_ipv6
@@ -328,7 +327,7 @@ class ScannerWorker(QObject):
 
         category = seed.source_type.lower().strip()
 
-        # Compute auto verdict if seed is benign.
+        # Compute auto verdict for benign seeds
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
@@ -337,7 +336,7 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
-        self.log(f"Processing: {seed.get_url()} (Category: {category}, is_input: {seed.is_input})")
+        self.log(f"Processing: {seed.get_url()} (Category: {category})")
         try:
             response = requests.get(seed.get_url(), timeout=self.request_timeout)
             final_url = response.url
@@ -366,33 +365,22 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # Determine whether to output this IP based on input settings.
-        should_output = True
-        out_key = None
-
+        # Determine output key based on category and IP version.
         if category.startswith("benign"):
             out_key = "whitelist_" + seed.version
-            if seed.is_input and not self.settings.get("AllowInputWhitelist" + seed.version.upper() + "InOutput", False):
-                should_output = False
         elif category == "phishing":
             out_key = "phishing_" + seed.version
-            if seed.is_input and not self.settings.get("AllowInputPhishing" + seed.version.upper() + "InOutput", False):
-                should_output = False
         elif category == "ddos":
             out_key = "ddos_" + seed.version
-            if seed.is_input and not self.settings.get("AllowInputDDoS" + seed.version.upper() + "InOutput", False):
-                should_output = False
         elif category == "malicious":
             out_key = "malicious_" + seed.version
-            if seed.is_input and not self.settings.get("AllowInputMalicious" + seed.version.upper() + "InOutput", False):
-                should_output = False
         else:
             out_key = "other"
 
         with self.lock:
             output_already_done = (seed.ip in self.output_ips.get(out_key, set())) if out_key != "other" else False
 
-        if not output_already_done and should_output:
+        if not output_already_done:
             if category.startswith("benign"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{report_date},"{comment}"\n'
@@ -416,11 +404,30 @@ class ScannerWorker(QObject):
                     self.output_ips[out_key].add(seed.ip)
                 self.log(f"Bulk output written for {seed.ip}.")
         else:
-            if output_already_done:
+            # Check duplicate allowance based on settings.
+            duplicate_allowed = False
+            if out_key == "whitelist_ipv4":
+                duplicate_allowed = self.settings.get("AllowDuplicateWhitelistIPv4", True)
+            elif out_key == "whitelist_ipv6":
+                duplicate_allowed = self.settings.get("AllowDuplicateWhitelistIPv6", True)
+            elif out_key == "phishing_ipv4":
+                duplicate_allowed = self.settings.get("AllowDuplicatePhishingIPv4", True)
+            elif out_key == "phishing_ipv6":
+                duplicate_allowed = self.settings.get("AllowDuplicatePhishingIPv6", True)
+            elif out_key == "ddos_ipv4":
+                duplicate_allowed = self.settings.get("AllowDuplicateDDoSIPv4", True)
+            elif out_key == "ddos_ipv6":
+                duplicate_allowed = self.settings.get("AllowDuplicateDDoSIPv6", True)
+            elif out_key == "malicious_ipv4":
+                duplicate_allowed = self.settings.get("AllowDuplicateMaliciousIPv4", True)
+            elif out_key == "malicious_ipv6":
+                duplicate_allowed = self.settings.get("AllowDuplicateMaliciousIPv6", True)
+
+            if duplicate_allowed:
                 self.log(f"Duplicate for {seed.ip} already output. Logging duplicate.")
                 self.handle_duplicate(category, seed)
-            elif not should_output:
-                self.log(f"Output for {seed.ip} skipped due to input restrictions (is_input: {seed.is_input}).")
+            else:
+                self.log(f"Duplicate for {seed.ip} already output. Skipping duplicate.")
 
         # Process discovered IPs from page content.
         for ip, port, ip_version in self.extract_ip_and_port(content):
@@ -439,7 +446,8 @@ class ScannerWorker(QObject):
                     continue
                 self.total_seeds += 1
 
-            # For discovered IPs: if parent is benign, use computed seed_verdict; otherwise, apply auto verdict 1.
+            # For discovered IPs: if parent is benign, inherit the computed seed_verdict;
+            # for non-benign, apply auto verdict 1 if inactive.
             if category.startswith("benign"):
                 new_source_type = seed_verdict
             else:
@@ -604,7 +612,7 @@ class ScannerWorker(QObject):
         self.log("Scan resumed.")
 
 # -----------------------------
-# MainWindow: Manual Settings GUI with new input-to-output flags and duplicate file fields
+# MainWindow: Manual Settings GUI including duplicate allowance fields
 # -----------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -645,7 +653,8 @@ class MainWindow(QMainWindow):
         add_field("Category Malicious:", "CategoryMalicious", "20")
         add_field("Category Phishing:", "CategoryPhishing", "7")
         add_field("Category DDoS:", "CategoryDDoS", "18")
-        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
+        add_field("Comment Template:", "CommentTemplate", 
+                  "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
 
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
@@ -666,17 +675,17 @@ class MainWindow(QMainWindow):
         add_field("Malware Path IPv4:", "MalwarePathIPv4", "website\\IPv4Malware.txt")
         add_field("Malware Path IPv6:", "MalwarePathIPv6", "website\\IPv6Malware.txt")
 
-        # New settings: Allow Input IPs in Output for each category and IP version
-        add_field("Allow Input Whitelist IPv4 In Output (true/false):", "AllowInputWhitelistIPv4InOutput", "false")
-        add_field("Allow Input Whitelist IPv6 In Output (true/false):", "AllowInputWhitelistIPv6InOutput", "false")
-        add_field("Allow Input Phishing IPv4 In Output (true/false):", "AllowInputPhishingIPv4InOutput", "false")
-        add_field("Allow Input Phishing IPv6 In Output (true/false):", "AllowInputPhishingIPv6InOutput", "false")
-        add_field("Allow Input DDoS IPv4 In Output (true/false):", "AllowInputDDoSIPv4InOutput", "false")
-        add_field("Allow Input DDoS IPv6 In Output (true/false):", "AllowInputDDoSIPv6InOutput", "false")
-        add_field("Allow Input Malicious IPv4 In Output (true/false):", "AllowInputMaliciousIPv4InOutput", "false")
-        add_field("Allow Input Malicious IPv6 In Output (true/false):", "AllowInputMaliciousIPv6InOutput", "false")
+        # Duplicate allowance fields (default allow duplicates = true)
+        add_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
+        add_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
+        add_field("Allow Duplicate Phishing IPv4 (true/false):", "AllowDuplicatePhishingIPv4", "true")
+        add_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
+        add_field("Allow Duplicate DDoS IPv4 (true/false):", "AllowDuplicateDDoSIPv4", "true")
+        add_field("Allow Duplicate DDoS IPv6 (true/false):", "AllowDuplicateDDoSIPv6", "true")
+        add_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
+        add_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
 
-        # Duplicate file path fields (preserved as requested)
+        # Duplicate file path fields
         add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
         add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
@@ -732,11 +741,12 @@ class MainWindow(QMainWindow):
 
     def get_settings_from_fields(self):
         settings = {}
+        # Boolean keys include AllowAutoVerdict and all duplicate allowance flags.
         bool_keys = ("AllowAutoVerdict",
-                     "AllowInputWhitelistIPv4InOutput", "AllowInputWhitelistIPv6InOutput",
-                     "AllowInputPhishingIPv4InOutput", "AllowInputPhishingIPv6InOutput",
-                     "AllowInputDDoSIPv4InOutput", "AllowInputDDoSIPv6InOutput",
-                     "AllowInputMaliciousIPv4InOutput", "AllowInputMaliciousIPv6InOutput")
+                     "AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
+                     "AllowDuplicatePhishingIPv4", "AllowDuplicatePhishingIPv6",
+                     "AllowDuplicateDDoSIPv4", "AllowDuplicateDDoSIPv6",
+                     "AllowDuplicateMaliciousIPv4", "AllowDuplicateMaliciousIPv6")
         for key, le in self.fields.items():
             value = le.text().strip()
             if key in ("MaxThreads", "CsvMaxLines", "CsvMaxSize"):
