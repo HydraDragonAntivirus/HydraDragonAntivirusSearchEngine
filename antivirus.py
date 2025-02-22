@@ -374,22 +374,30 @@ class ScannerWorker(QObject):
                 self.log(f"Skipping {seed.ip} (already visited).")
                 return
         self.visited_ips.add(seed.ip)
-        if seed.ip in self.output_ips.get("whitelist_ipv4", set()):
+        if (not self.settings.get("AllowDuplicateWhitelistIPv4", True)) and (seed.ip in self.output_ips.get("whitelist_ipv4", set())):
             self.log(f"Confirmed {seed.ip} is in whitelist_ipv4 output_ips.")
-        if seed.ip in self.output_ips.get("whitelist_ipv6", set()):
+            return
+        elif (not self.settings.get("AllowDuplicateWhitelistIPv6", True)) and (seed.ip in self.output_ips.get("whitelist_ipv6", set())):
             self.log(f"Confirmed {seed.ip} is in whitelist_ipv6 output_ips.")
-        if seed.ip in self.output_ips.get("phishing_ipv4", set()):
+            return
+        elif (not self.settings.get("AllowDuplicatePhishingIPv4", True)) and (seed.ip in self.output_ips.get("phishing_ipv4", set())):
             self.log(f"Confirmed {seed.ip} is in phishing_ipv4 output_ips.")
-        if seed.ip in self.output_ips.get("phishing_ipv6", set()):
+            return
+        elif (not self.settings.get("AllowDuplicatePhishingIPv6", True)) and (seed.ip in self.output_ips.get("phishing_ipv6", set())):
             self.log(f"Confirmed {seed.ip} is in phishing_ipv6 output_ips.")
-        if seed.ip in self.output_ips.get("bruteforce_ipv4", set()):
+            return
+        elif (not self.settings.get("AllowDuplicateBruteForceIPv4", True)) and (seed.ip in self.output_ips.get("bruteforce_ipv4", set())):
             self.log(f"Confirmed {seed.ip} is in bruteforce_ipv4 output_ips.")
-        if seed.ip in self.output_ips.get("bruteforce_ipv6", set()):
+            return
+        elif (not self.settings.get("AllowDuplicateBruteForceIPv6", True)) and (seed.ip in self.output_ips.get("bruteforce_ipv6", set())):
             self.log(f"Confirmed {seed.ip} is in bruteforce_ipv6 output_ips.")
-        if seed.ip in self.output_ips.get("malicious_ipv4", set()):
+            return
+        elif (not self.settings.get("AllowDuplicateMaliciousIPv4", True)) and (seed.ip in self.output_ips.get("malicious_ipv4", set())):
             self.log(f"Confirmed {seed.ip} is in malicious_ipv4 output_ips.")
-        if seed.ip in self.output_ips.get("malicious_ipv6", set()):
+            return
+        elif (not self.settings.get("AllowDuplicateMaliciousIPv6", True)) and (seed.ip in self.output_ips.get("malicious_ipv6", set())):
             self.log(f"Confirmed {seed.ip} is in malicious_ipv6 output_ips.")
+            return
 
         category = seed.source_type.lower().strip()
         if category.startswith("whitelist"):
@@ -719,9 +727,9 @@ class MainWindow(QMainWindow):
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
         add_field("Category Malicious:", "CategoryMalicious", "20")
         add_field("Category Phishing:", "CategoryPhishing", "7")
+        add_field("Category DDoS:", "CategoryBruteForce", "4")
         add_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_field("Comment Template:", "CommentTemplate", 
-                  "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
+        add_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
@@ -736,10 +744,7 @@ class MainWindow(QMainWindow):
         add_field("WhiteList Path IPv6:", "WhiteListPathIPv6", "website\\IPv6WhiteList.txt")
         add_field("Phishing Path IPv4:", "PhishingPathIPv4", "website\\IPv4Phishing.txt")
         add_field("Phishing Path IPv6:", "PhishingPathIPv6", "website\\IPv6Phishing.txt")
-        add_field("BruteForce Path IPv4:", "BruteForcePathIPv4", "website\\IPv4BruteForce.txt")
-        add_field("BruteForce Path IPv6:", "BruteForcePathIPv6", "website\\IPv6BruteForce.txt")
-        add_field("Malware Path IPv4:", "MalwarePathIPv4", "website\\IPv4Malware.txt")
-        add_field("Malware Path IPv6:", "MalwarePathIPv6", "website\\IPv6Malware.txt")
+        add_field("Last Directory Path:", "LastPath", "website")
         # Duplicate allowance fields (default true)
         add_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
         add_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
