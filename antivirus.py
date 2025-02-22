@@ -109,7 +109,7 @@ def strip_protocol(url):
 class Seed:
     def __init__(self, ip, source_type, version, port=None, is_input=True):
         self.ip = ip.lower()
-        self.source_type = source_type  # "malicious", "ddos", "phishing", or "benign"
+        self.source_type = source_type  # "malicious", "bruteforce", "phishing", or "benign"
         self.version = version          # "ipv4" or "ipv6"
         self.port = port
         self.is_input = is_input
@@ -160,8 +160,8 @@ class ScannerWorker(QObject):
         self.duplicate_whitelist_file_ipv6 = settings.get("DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         self.duplicate_phishing_file_ipv4 = settings.get("DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
         self.duplicate_phishing_file_ipv6 = settings.get("DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
-        self.duplicate_ddos_file_ipv4 = settings.get("DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
-        self.duplicate_ddos_file_ipv6 = settings.get("DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
+        self.duplicate_bruteforce_file_ipv4 = settings.get("DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
+        self.duplicate_bruteforce_file_ipv6 = settings.get("DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
         self.duplicate_malicious_file_ipv4 = settings.get("DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         self.duplicate_malicious_file_ipv6 = settings.get("DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
         
@@ -171,8 +171,8 @@ class ScannerWorker(QObject):
             "whitelist_ipv6": set(),
             "phishing_ipv4": set(),
             "phishing_ipv6": set(),
-            "ddos_ipv4": set(),
-            "ddos_ipv6": set(),
+            "bruteforce_ipv4": set(),
+            "bruteforce_ipv6": set(),
             "malicious_ipv4": set(),
             "malicious_ipv6": set()
         }
@@ -186,8 +186,8 @@ class ScannerWorker(QObject):
             "whitelist_ipv6": set(),
             "phishing_ipv4": set(),
             "phishing_ipv6": set(),
-            "ddos_ipv4": set(),
-            "ddos_ipv6": set(),
+            "bruteforce_ipv4": set(),
+            "bruteforce_ipv6": set(),
             "malicious_ipv4": set(),
             "malicious_ipv6": set()
         }
@@ -216,8 +216,8 @@ class ScannerWorker(QObject):
             "whitelist_ipv6": {"base": self.duplicate_whitelist_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "phishing_ipv4": {"base": self.duplicate_phishing_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "phishing_ipv6": {"base": self.duplicate_phishing_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "ddos_ipv4": {"base": self.duplicate_ddos_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "ddos_ipv6": {"base": self.duplicate_ddos_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
+            "bruteforce_ipv4": {"base": self.duplicate_bruteforce_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
+            "bruteforce_ipv6": {"base": self.duplicate_bruteforce_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "malicious_ipv4": {"base": self.duplicate_malicious_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "malicious_ipv6": {"base": self.duplicate_malicious_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None}
         }
@@ -326,8 +326,8 @@ class ScannerWorker(QObject):
             key = "whitelist_" + seed.version
         elif category == "phishing":
             key = "phishing_" + seed.version
-        elif category == "ddos":
-            key = "ddos_" + seed.version
+        elif category == "bruteforce":
+            key = "bruteforce_" + seed.version
         elif category == "malicious":
             key = "malicious_" + seed.version
         else:
@@ -373,17 +373,16 @@ class ScannerWorker(QObject):
             self.log(f"Confirmed {seed.ip} is in phishing_ipv4 output_ips.")
         if seed.ip in self.output_ips.get("phishing_ipv6", set()):
             self.log(f"Confirmed {seed.ip} is in phishing_ipv6 output_ips.")
-        if seed.ip in self.output_ips.get("ddos_ipv4", set()):
-            self.log(f"Confirmed {seed.ip} is in ddos_ipv4 output_ips.")
-        if seed.ip in self.output_ips.get("ddos_ipv6", set()):
-            self.log(f"Confirmed {seed.ip} is in ddos_ipv6 output_ips.")
+        if seed.ip in self.output_ips.get("bruteforce_ipv4", set()):
+            self.log(f"Confirmed {seed.ip} is in bruteforce_ipv4 output_ips.")
+        if seed.ip in self.output_ips.get("bruteforce_ipv6", set()):
+            self.log(f"Confirmed {seed.ip} is in bruteforce_ipv6 output_ips.")
         if seed.ip in self.output_ips.get("malicious_ipv4", set()):
             self.log(f"Confirmed {seed.ip} is in malicious_ipv4 output_ips.")
         if seed.ip in self.output_ips.get("malicious_ipv6", set()):
             self.log(f"Confirmed {seed.ip} is in malicious_ipv6 output_ips.")
 
         category = seed.source_type.lower().strip()
-        # Benign (whitelist) için otomatik verdict
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
@@ -428,8 +427,8 @@ class ScannerWorker(QObject):
             out_key = "whitelist_" + seed.version
         elif category == "phishing":
             out_key = "phishing_" + seed.version
-        elif category == "ddos":
-            out_key = "ddos_" + seed.version
+        elif category == "bruteforce":
+            out_key = "bruteforce_" + seed.version
         elif category == "malicious":
             out_key = "malicious_" + seed.version
         else:
@@ -449,8 +448,8 @@ class ScannerWorker(QObject):
             else:
                 if category == "malicious":
                     cat_label = self.settings.get("CategoryMalicious", "20")
-                elif category == "ddos":
-                    cat_label = self.settings.get("CategoryDDoS", "18")
+                elif category == "bruteforce":
+                    cat_label = self.settings.get("CategoryBruteForce", "18")
                 elif category == "phishing":
                     cat_label = self.settings.get("CategoryPhishing", "7")
                 else:
@@ -471,10 +470,10 @@ class ScannerWorker(QObject):
                 dup_allowed = self.settings.get("AllowDuplicatePhishingIPv4", True)
             elif out_key == "phishing_ipv6":
                 dup_allowed = self.settings.get("AllowDuplicatePhishingIPv6", True)
-            elif out_key == "ddos_ipv4":
-                dup_allowed = self.settings.get("AllowDuplicateDDoSIPv4", True)
-            elif out_key == "ddos_ipv6":
-                dup_allowed = self.settings.get("AllowDuplicateDDoSIPv6", True)
+            elif out_key == "bruteforce_ipv4":
+                dup_allowed = self.settings.get("AllowDuplicateBruteForceIPv4", True)
+            elif out_key == "bruteforce_ipv6":
+                dup_allowed = self.settings.get("AllowDuplicateBruteForceIPv6", True)
             elif out_key == "malicious_ipv4":
                 dup_allowed = self.settings.get("AllowDuplicateMaliciousIPv4", True)
             elif out_key == "malicious_ipv6":
@@ -616,10 +615,10 @@ class ScannerWorker(QObject):
             add_file(file, "phishing", "ipv6")
         for file in [x.strip() for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "phishing", "ipv4")
-        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "ddos", "ipv6")
-        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "ddos", "ipv4")
+        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv6", "").split(",") if x.strip()]:
+            add_file(file, "bruteforce", "ipv6")
+        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
+            add_file(file, "bruteforce", "ipv4")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "malicious", "ipv6")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
@@ -690,13 +689,13 @@ class MainWindow(QMainWindow):
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
         add_field("Category Malicious:", "CategoryMalicious", "20")
         add_field("Category Phishing:", "CategoryPhishing", "7")
-        add_field("Category DDoS:", "CategoryDDoS", "18")
+        add_field("Category BruteForce:", "CategoryBruteForce", "18")
         add_field("Comment Template:", "CommentTemplate", 
                   "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
-        add_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "")
-        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
+        add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
+        add_field("BruteForceFilesIPv4 (comma-separated):", "BruteForceFilesIPv4", "website\\IPv4BruteForce.txt")
         add_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
         add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
         add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
@@ -705,8 +704,8 @@ class MainWindow(QMainWindow):
         add_field("WhiteList Path IPv6:", "WhiteListPathIPv6", "website\\IPv6WhiteList.txt")
         add_field("Phishing Path IPv4:", "PhishingPathIPv4", "website\\IPv4Phishing.txt")
         add_field("Phishing Path IPv6:", "PhishingPathIPv6", "website\\IPv6Phishing.txt")
-        add_field("DDoS Path IPv4:", "DDoSPathIPv4", "website\\IPv4DDoS.txt")
-        add_field("DDoS Path IPv6:", "DDoSPathIPv6", "website\\IPv6DDoS.txt")
+        add_field("BruteForce Path IPv4:", "BruteForcePathIPv4", "website\\IPv4BruteForce.txt")
+        add_field("BruteForce Path IPv6:", "BruteForcePathIPv6", "website\\IPv6BruteForce.txt")
         add_field("Malware Path IPv4:", "MalwarePathIPv4", "website\\IPv4Malware.txt")
         add_field("Malware Path IPv6:", "MalwarePathIPv6", "website\\IPv6Malware.txt")
         # Duplicate allowance fields (default true)
@@ -714,8 +713,8 @@ class MainWindow(QMainWindow):
         add_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
         add_field("Allow Duplicate Phishing IPv4 (true/false):", "AllowDuplicatePhishingIPv4", "true")
         add_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
-        add_field("Allow Duplicate DDoS IPv4 (true/false):", "AllowDuplicateDDoSIPv4", "true")
-        add_field("Allow Duplicate DDoS IPv6 (true/false):", "AllowDuplicateDDoSIPv6", "true")
+        add_field("Allow Duplicate BruteForce IPv4 (true/false):", "AllowDuplicateBruteForceIPv4", "true")
+        add_field("Allow Duplicate BruteForce IPv6 (true/false):", "AllowDuplicateBruteForceIPv6", "true")
         add_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
         add_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
         # Duplicate file path fields
@@ -723,8 +722,8 @@ class MainWindow(QMainWindow):
         add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
         add_field("Duplicate Phishing File IPv6:", "DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
-        add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
-        add_field("Duplicate DDoS File IPv6:", "DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
+        add_field("Duplicate BruteForce File IPv4:", "DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
+        add_field("Duplicate BruteForce File IPv6:", "DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
         add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
         scroll = QScrollArea()
@@ -772,7 +771,7 @@ class MainWindow(QMainWindow):
         bool_keys = ("AllowAutoVerdict",
                      "AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
                      "AllowDuplicatePhishingIPv4", "AllowDuplicatePhishingIPv6",
-                     "AllowDuplicateDDoSIPv4", "AllowDuplicateDDoSIPv6",
+                     "AllowDuplicateBruteForceIPv4", "AllowDuplicateBruteForceIPv6",
                      "AllowDuplicateMaliciousIPv4", "AllowDuplicateMaliciousIPv6")
         for key, le in self.fields.items():
             value = le.text().strip()
