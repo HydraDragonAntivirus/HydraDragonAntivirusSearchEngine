@@ -484,7 +484,7 @@ class ScannerWorker(QObject):
                 dup_allowed = self.settings.get("AllowDuplicatePhishingIPv4", True)
             elif out_key == "phishing_ipv6":
                 dup_allowed = self.settings.get("AllowDuplicatePhishingIPv6", True)
-           elif out_key == "ddos_ipv4":
+            elif out_key == "ddos_ipv4":
                 dup_allowed = self.settings.get("AllowDuplicateDDoSIPv4", True)
             elif out_key == "ddos_ipv6":
                 dup_allowed = self.settings.get("AllowDuplicateDDoSIPv6", True)
