@@ -369,12 +369,11 @@ class ScannerWorker(QObject):
         self.finished_signal.emit()
 
     def process_seed(self, seed):
-        if seed.ip in self.visited_ips:
-            self.log(f"Skipping processing for {seed.ip} (already visited).")
-            return
+        with self.lock:
+            if seed.ip in self.visited_ips:
+                self.log(f"Skipping {seed.ip} (already visited).")
+                return
         self.visited_ips.add(seed.ip)
-        if seed.ip in self.visited_ips:
-            self.log(f"Confirmed {seed.ip} is in visited_ips.")
         if seed.ip in self.output_ips.get("whitelist_ipv4", set()):
             self.log(f"Confirmed {seed.ip} is in whitelist_ipv4 output_ips.")
         if seed.ip in self.output_ips.get("whitelist_ipv6", set()):
@@ -515,18 +514,23 @@ class ScannerWorker(QObject):
             if ip == seed.ip or (final_hostname and ip == final_hostname):
                 self.log(f"Skipping discovered IP {ip} because it matches the source.")
                 continue
+            
             with self.lock:
                 if ip in self.visited_ips:
                     self.log(f"Skipping discovered IP {ip} (already processed).")
                     continue
+                self.visited_ips.add(ip)  # Ensure the IP is marked as visited immediately
                 self.total_seeds += 1
+            
             if category.startswith("whitelist"):
                 new_source_type = seed_verdict
             else:
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
+            
             new_seed = Seed(ip, new_source_type, ip_version, port=port, is_input=False)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
+
         with self.lock:
             self.processed_count += 1
             self.update_progress()
