@@ -109,7 +109,7 @@ def strip_protocol(url):
 class Seed:
     def __init__(self, ip, source_type, version, port=None, is_input=True):
         self.ip = ip.lower()
-        self.source_type = source_type  # "malicious", "bruteforce", "ddos", "phishing", or "benign"
+        self.source_type = source_type  # "malicious", "bruteforce", "ddos", "phishing", or "whitelist"
         self.version = version          # "ipv4" or "ipv6"
         self.port = port
         self.is_input = is_input
@@ -330,7 +330,7 @@ class ScannerWorker(QObject):
 
     def handle_duplicate(self, category, seed):
         # Map category and IP version to duplicate key.
-        if category.startswith("benign"):
+        if category.startswith("whitelist"):
             key = "whitelist_" + seed.version
         elif category == "phishing":
             key = "phishing_" + seed.version
@@ -393,7 +393,7 @@ class ScannerWorker(QObject):
             self.log(f"Confirmed {seed.ip} is in malicious_ipv6 output_ips.")
 
         category = seed.source_type.lower().strip()
-        if category.startswith("benign"):
+        if category.startswith("whitelist"):
             if self.allow_auto_verdict:
                 seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
             else:
@@ -433,7 +433,7 @@ class ScannerWorker(QObject):
             main_output_written = False
 
         # Determine output key.
-        if category.startswith("benign"):
+        if category.startswith("whitelist"):
             out_key = "whitelist_" + seed.version
         elif category == "phishing":
             out_key = "phishing_" + seed.version
@@ -449,8 +449,12 @@ class ScannerWorker(QObject):
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set()) if out_key != "other" else False
 
+        if seed.ip in self.duplicate_sets.get(out_key, set()):
+            self.log(f"Skipping {seed.ip}, already recorded as duplicate in {out_key}.")
+            return  # Do NOT write it again
+
         if not already_written and not main_output_written:
-            if category.startswith("benign"):
+            if category.startswith("whitelist"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_whitelist_line(line)
@@ -516,7 +520,7 @@ class ScannerWorker(QObject):
                     self.log(f"Skipping discovered IP {ip} (already processed).")
                     continue
                 self.total_seeds += 1
-            if category.startswith("benign"):
+            if category.startswith("whitelist"):
                 new_source_type = seed_verdict
             else:
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
@@ -626,9 +630,9 @@ class ScannerWorker(QObject):
                 file_category_mapping[file] = []
             file_category_mapping[file].append((source_type, version))
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "benign", "ipv6")
+            add_file(file, "whitelist", "ipv6")
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "benign", "ipv4")
+            add_file(file, "whitelist", "ipv4")
         for file in [x.strip() for x in self.settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "phishing", "ipv6")
         for file in [x.strip() for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
