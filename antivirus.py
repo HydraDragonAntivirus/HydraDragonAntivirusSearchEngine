@@ -223,7 +223,7 @@ class ScannerWorker(QObject):
             "phishing_ipv4": {"base": self.duplicate_phishing_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "phishing_ipv6": {"base": self.duplicate_phishing_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "ddos_ipv4": {"base": self.duplicate_ddos_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "ddos_ipv6": {"base": self.duplicate_ddos_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None}
+            "ddos_ipv6": {"base": self.duplicate_ddos_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "bruteforce_ipv4": {"base": self.duplicate_bruteforce_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "bruteforce_ipv6": {"base": self.duplicate_bruteforce_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "malicious_ipv4": {"base": self.duplicate_malicious_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
