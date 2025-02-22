@@ -142,7 +142,7 @@ class ScannerWorker(QObject):
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
 
-        # Duplicate file paths
+        # Duplicate file paths (preserved as requested)
         self.duplicate_whitelist_file_ipv4 = settings.get("DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
         self.duplicate_whitelist_file_ipv6 = settings.get("DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
         self.duplicate_phishing_file_ipv4 = settings.get("DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
@@ -320,7 +320,6 @@ class ScannerWorker(QObject):
         if self.cancelled:
             return
 
-        # Duplicate check for processing
         with self.lock:
             if seed.ip in self.visited_ips:
                 self.log(f"Skipping duplicate processing for {seed.ip}.")
@@ -328,6 +327,16 @@ class ScannerWorker(QObject):
             self.visited_ips.add(seed.ip)
 
         category = seed.source_type.lower().strip()
+
+        # Compute auto verdict if seed is benign.
+        if category.startswith("benign"):
+            if self.allow_auto_verdict:
+                seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
+            else:
+                seed_verdict = seed.source_type
+        else:
+            seed_verdict = seed.source_type
+
         self.log(f"Processing: {seed.get_url()} (Category: {category}, is_input: {seed.is_input})")
         try:
             response = requests.get(seed.get_url(), timeout=self.request_timeout)
@@ -357,7 +366,7 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         report_date = datetime.now(timezone.utc).isoformat()
 
-        # Determine whether to write output based on input flag
+        # Determine whether to output this IP based on input settings.
         should_output = True
         out_key = None
 
@@ -385,7 +394,7 @@ class ScannerWorker(QObject):
 
         if not output_already_done and should_output:
             if category.startswith("benign"):
-                comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
+                comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{report_date},"{comment}"\n'
                 self.write_whitelist_line(line)
                 with self.lock:
@@ -413,7 +422,7 @@ class ScannerWorker(QObject):
             elif not should_output:
                 self.log(f"Output for {seed.ip} skipped due to input restrictions (is_input: {seed.is_input}).")
 
-        # Process discovered IPs from the page content.
+        # Process discovered IPs from page content.
         for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
@@ -430,8 +439,9 @@ class ScannerWorker(QObject):
                     continue
                 self.total_seeds += 1
 
+            # For discovered IPs: if parent is benign, use computed seed_verdict; otherwise, apply auto verdict 1.
             if category.startswith("benign"):
-                new_source_type = seed.source_type
+                new_source_type = seed_verdict
             else:
                 new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
 
@@ -722,7 +732,6 @@ class MainWindow(QMainWindow):
 
     def get_settings_from_fields(self):
         settings = {}
-        # Boolean keys include the new Allow Input flags and basic booleans.
         bool_keys = ("AllowAutoVerdict",
                      "AllowInputWhitelistIPv4InOutput", "AllowInputWhitelistIPv6InOutput",
                      "AllowInputPhishingIPv4InOutput", "AllowInputPhishingIPv6InOutput",
