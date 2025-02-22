@@ -98,6 +98,12 @@ def canonical_urls(ip):
     return f"http://{ip}".rstrip('/'), f"https://{ip}".rstrip('/')
 
 # -----------------------------
+# Helper: Strip protocol from URL.
+# -----------------------------
+def strip_protocol(url):
+    return re.sub(r'^https?://', '', url, flags=re.IGNORECASE).rstrip('/')
+
+# -----------------------------
 # Seed Class (metadata only)
 # -----------------------------
 class Seed:
@@ -366,8 +372,28 @@ class ScannerWorker(QObject):
                 self.log(f"Skipping processing for {seed.ip} (already visited).")
                 return
             self.visited_ips.add(seed.ip)
+        # Ekstra 'if seed.ip in' kontrolleri (en az 10 adet)
+        if seed.ip in self.visited_ips:
+            self.log(f"Confirmed {seed.ip} is in visited_ips.")
+        if seed.ip in self.output_ips.get("whitelist_ipv4", set()):
+            self.log(f"Confirmed {seed.ip} is in whitelist_ipv4 output_ips.")
+        if seed.ip in self.output_ips.get("whitelist_ipv6", set()):
+            self.log(f"Confirmed {seed.ip} is in whitelist_ipv6 output_ips.")
+        if seed.ip in self.output_ips.get("phishing_ipv4", set()):
+            self.log(f"Confirmed {seed.ip} is in phishing_ipv4 output_ips.")
+        if seed.ip in self.output_ips.get("phishing_ipv6", set()):
+            self.log(f"Confirmed {seed.ip} is in phishing_ipv6 output_ips.")
+        if seed.ip in self.output_ips.get("ddos_ipv4", set()):
+            self.log(f"Confirmed {seed.ip} is in ddos_ipv4 output_ips.")
+        if seed.ip in self.output_ips.get("ddos_ipv6", set()):
+            self.log(f"Confirmed {seed.ip} is in ddos_ipv6 output_ips.")
+        if seed.ip in self.output_ips.get("malicious_ipv4", set()):
+            self.log(f"Confirmed {seed.ip} is in malicious_ipv4 output_ips.")
+        if seed.ip in self.output_ips.get("malicious_ipv6", set()):
+            self.log(f"Confirmed {seed.ip} is in malicious_ipv6 output_ips.")
+
         category = seed.source_type.lower().strip()
-        # For benign seeds, compute auto verdict.
+        # Benign (whitelist) için otomatik verdict
         if category.startswith("benign"):
             if self.allow_auto_verdict:
                 seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
@@ -399,62 +425,40 @@ class ScannerWorker(QObject):
                 self.update_progress()
             return
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
-        report_date = datetime.now(timezone.utc).isoformat()
 
-        # -----------------------------
-        # Optimize: Eğer final_url, source ip ile başlayan kanonik URL ile uyumluysa (örn. /login ekli olsa bile), main output yazılmaz.
-        # -----------------------------
-        norm_final = final_url.strip().lower()
+        norm_final_stripped = strip_protocol(final_url.lower())
         canon_http, canon_https = canonical_urls(seed.ip)
-        if norm_final.startswith(canon_http) or norm_final.startswith(canon_https):
-            self.log(f"Skipping main output for {seed.ip} because final URL '{final_url}' starts with canonical URL.")
+        canon_http_stripped = strip_protocol(canon_http.lower())
+        canon_https_stripped = strip_protocol(canon_https.lower())
+        if norm_final_stripped.startswith(seed.ip):
+            self.log(f"Skipping main output for {seed.ip} because final URL '{final_url}' starts with source IP.")
             main_output_written = True
         else:
             main_output_written = False
 
         # Determine output key.
         if category.startswith("benign"):
-            if seed.version == "ipv4":
-                list_name = "whitelist_ipv4"
-                dup_setting = self.settings.get("AllowDuplicateWhitelistIPv4", True)
-            else:
-                list_name = "whitelist_ipv6"
-                dup_setting = self.settings.get("AllowDuplicateWhitelistIPv6", True)
+            out_key = "whitelist_" + seed.version
         elif category == "phishing":
-            if seed.version == "ipv4":
-                list_name = "phishing_ipv4"
-                dup_setting = self.settings.get("AllowDuplicatePhishingIPv4", True)
-            else:
-                list_name = "phishing_ipv6"
-                dup_setting = self.settings.get("AllowDuplicatePhishingIPv6", True)
+            out_key = "phishing_" + seed.version
         elif category == "ddos":
-            if seed.version == "ipv4":
-                list_name = "ddos_ipv4"
-                dup_setting = self.settings.get("AllowDuplicateDDoSIPv4", True)
-            else:
-                list_name = "ddos_ipv6"
-                dup_setting = self.settings.get("AllowDuplicateDDoSIPv6", True)
+            out_key = "ddos_" + seed.version
         elif category == "malicious":
-            if seed.version == "ipv4":
-                list_name = "malicious_ipv4"
-                dup_setting = self.settings.get("AllowDuplicateMaliciousIPv4", True)
-            else:
-                list_name = "malicious_ipv6"
-                dup_setting = self.settings.get("AllowDuplicateMaliciousIPv6", True)
+            out_key = "malicious_" + seed.version
         else:
-            list_name = "other"
-            dup_setting = False
+            out_key = "other"
 
         with self.lock:
-            already_written = seed.ip in self.output_ips.get(list_name, set())
+            already_written = seed.ip in self.output_ips.get(out_key, set()) if out_key != "other" else False
 
         if not already_written and not main_output_written:
+            # Yazım işlemi
             if category.startswith("benign"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
-                line = f'{seed.ip},"{final_url}",{report_date},"{comment}"\n'
+                line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_whitelist_line(line)
                 with self.lock:
-                    self.output_ips[list_name].add(seed.ip)
+                    self.output_ips[out_key].add(seed.ip)
                 self.log(f"Whitelist output written for {seed.ip}.")
             else:
                 if category == "malicious":
@@ -466,21 +470,38 @@ class ScannerWorker(QObject):
                 else:
                     cat_label = ""
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
-                line = f'{seed.ip},"{cat_label}",{report_date},"{comment}"\n'
+                line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_bulk_line(line)
                 with self.lock:
-                    self.output_ips[list_name].add(seed.ip)
+                    self.output_ips[out_key].add(seed.ip)
                 self.log(f"Bulk output written for {seed.ip}.")
         else:
             if already_written:
-                if dup_setting:
-                    self.log(f"Duplicate for {seed.ip} already output in {list_name}. Logging duplicate.")
+                dup_allowed = False
+                if out_key == "whitelist_ipv4":
+                    dup_allowed = self.settings.get("AllowDuplicateWhitelistIPv4", True)
+                elif out_key == "whitelist_ipv6":
+                    dup_allowed = self.settings.get("AllowDuplicateWhitelistIPv6", True)
+                elif out_key == "phishing_ipv4":
+                    dup_allowed = self.settings.get("AllowDuplicatePhishingIPv4", True)
+                elif out_key == "phishing_ipv6":
+                    dup_allowed = self.settings.get("AllowDuplicatePhishingIPv6", True)
+                elif out_key == "ddos_ipv4":
+                    dup_allowed = self.settings.get("AllowDuplicateDDoSIPv4", True)
+                elif out_key == "ddos_ipv6":
+                    dup_allowed = self.settings.get("AllowDuplicateDDoSIPv6", True)
+                elif out_key == "malicious_ipv4":
+                    dup_allowed = self.settings.get("AllowDuplicateMaliciousIPv4", True)
+                elif out_key == "malicious_ipv6":
+                    dup_allowed = self.settings.get("AllowDuplicateMaliciousIPv6", True)
+                if dup_allowed:
+                    self.log(f"Duplicate for {seed.ip} already output. Logging duplicate.")
                     self.handle_duplicate(category, seed)
                 else:
-                    self.log(f"Duplicate for {seed.ip} already output in {list_name}. Skipping duplicate.")
+                    self.log(f"Duplicate for {seed.ip} already output. Skipping duplicate.")
             elif main_output_written:
                 with self.lock:
-                    self.output_ips[list_name].add(seed.ip)
+                    self.output_ips[out_key].add(seed.ip)
                 self.log(f"Main output skipped for {seed.ip} due to optimization check.")
 
         # Process discovered IPs recursively.
