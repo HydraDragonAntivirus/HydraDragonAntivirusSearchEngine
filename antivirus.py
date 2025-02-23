@@ -408,14 +408,45 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         final_hostname = urlparse(final_url.lower()).hostname
 
+        # --- FIX: Define seed_verdict before writing output ---
+        if category.startswith("whitelist"):
+            if self.allow_auto_verdict:
+                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip,
+                                                                                         seed.port) else "whitelist (auto verdict 3)"
+            else:
+                seed_verdict = "whitelist (manual verdict)"
+        elif category.startswith("phishing"):
+            if self.allow_auto_verdict:
+                seed_verdict = "phishing (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                                                                                            seed.port) else seed.source_type
+            else:
+                seed_verdict = "phishing"
+        elif category.startswith("ddos"):
+            if self.allow_auto_verdict:
+                seed_verdict = "ddos (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                                                                                        seed.port) else seed.source_type
+            else:
+                seed_verdict = "ddos"
+        elif category.startswith("bruteforce"):
+            if self.allow_auto_verdict:
+                seed_verdict = "bruteforce (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                                                                                              seed.port) else seed.source_type
+            else:
+                seed_verdict = "bruteforce"
+        elif category.startswith("malicious"):
+            if self.allow_auto_verdict:
+                seed_verdict = "malicious (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                                                                                             seed.port) else seed.source_type
+            else:
+                seed_verdict = "malicious"
+        else:
+            seed_verdict = seed.source_type
+
+        # Write whitelist or bulk output (do not add new IP here).
         if category.startswith("whitelist") and not duplicate_flag:
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
-            # If not initially loaded, add to new_ips.
-            if seed.ip not in self.initial_ips.get(out_key, set()):
-                with self.lock:
-                    self.new_ips[out_key].add(seed.ip)
             self.log(f"Whitelist output written for {seed.ip}.")
         elif not duplicate_flag:
             if category.startswith("phishing"):
@@ -429,31 +460,25 @@ class ScannerWorker(QObject):
             else:
                 self.log("Invalid label returning...")
                 return
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_bulk_line(line)
-            if seed.ip not in self.initial_ips.get(out_key, set()):
-                with self.lock:
-                    self.new_ips[out_key].add(seed.ip)
             self.log(f"Bulk output written for {seed.ip}.")
 
+        # Process recursive seeds from content.
         for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
-            if category.startswith("whitelist"):
-                # Determine the verdict.
-                if self.allow_auto_verdict:
-                    seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "whitelist (auto verdict 3)"
-            elif category.startswith("phishing") or category.startswith("ddos") or category.startswith("bruteforce") or category.startswith("malicious"):
-                if self.allow_auto_verdict:
-                    seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
-            else: 
-                self.log("Invalid category returning...")
-                return
             new_seed = Seed(ip, seed.source_type, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
+
+        # --- NEW: Write new IP only at the end if not a duplicate ---
+        if not duplicate_flag:
+            if seed.ip not in self.initial_ips.get(out_key, set()):
+                with self.lock:
+                    self.new_ips[out_key].add(seed.ip)
 
         with self.lock:
             self.processed_count += 1
