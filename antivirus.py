@@ -182,18 +182,6 @@ class ScannerWorker(QObject):
             "malicious_ipv4": set(),
             "malicious_ipv6": set()
         }
-        self.new_ips = {
-            "whitelist_ipv4": set(),
-            "whitelist_ipv6": set(),
-            "phishing_ipv4": set(),
-            "phishing_ipv6": set(),
-            "ddos_ipv4": set(),
-            "ddos_ipv6": set(),
-            "bruteforce_ipv4": set(),
-            "bruteforce_ipv6": set(),
-            "malicious_ipv4": set(),
-            "malicious_ipv6": set()
-        }
 
         # Main output rotation info
         self.bulk_file_index = 0
