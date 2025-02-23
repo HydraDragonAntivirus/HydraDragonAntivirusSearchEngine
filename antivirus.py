@@ -463,7 +463,7 @@ class ScannerWorker(QObject):
                     seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "whitelist (auto verdict 3)"
             elif category.startswith("phishing") or category.startswith("ddos") or category.startswith("bruteforce") or category.startswith("malicious"):
                 if self.allow_auto_verdict:
-                    new_source_type = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
+                    seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
             else: 
                 self.log("Invalid category returning...")
                 return
