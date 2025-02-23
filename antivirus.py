@@ -397,37 +397,36 @@ class ScannerWorker(QObject):
             return
 
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
-        final_hostname = urlparse(final_url.lower()).hostname
 
         # Define seed_verdict before writing output
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip,
-                                                                                         seed.port) else "whitelist (auto verdict 3)"
+                                                                                         seed.port, category=category) else "whitelist (auto verdict 3)"
             else:
                 seed_verdict = "whitelist (manual verdict)"
         elif category.startswith("phishing"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                            seed.port) else seed.source_type
+                                                                                            seed.port, category=category) else seed.source_type
             else:
                 seed_verdict = "phishing"
         elif category.startswith("ddos"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                        seed.port) else seed.source_type
+                                                                                        seed.port, category=category) else seed.source_type
             else:
                 seed_verdict = "ddos"
         elif category.startswith("bruteforce"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                              seed.port) else seed.source_type
+                                                                                              seed.port, category=category) else seed.source_type
             else:
                 seed_verdict = "bruteforce"
         elif category.startswith("malicious"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                             seed.port) else seed.source_type
+                                                                                             seed.port, category=category) else seed.source_type
             else:
                 seed_verdict = "malicious"
         else:
@@ -456,15 +455,6 @@ class ScannerWorker(QObject):
             self.write_bulk_line(line)
             self.log(f"Bulk output written for {seed.ip}.")
 
-        # Process recursive seeds from content.
-        for ip, port in self.extract_ip_and_port(content):
-            if self.my_public_ip and ip == self.my_public_ip:
-                self.log(f"Skipping my own public IP: {ip}")
-                continue
-            new_seed = Seed(ip, seed.source_type, port=port)
-            self.log(f"Recursively processing new seed: {new_seed.get_url()}")
-            self.threadpool.start(SeedRunnable(new_seed, self))
-
         with self.lock:
             self.processed_count += 1
             self.update_progress()
@@ -480,24 +470,40 @@ class ScannerWorker(QObject):
             self.failure.emit(f"Could not determine public IP: {e}")
             return None
 
-    def is_active_and_static(self, ip, port, timeout=None):
+    def is_active_and_static(self, ip, port, timeout=None, category=None):
         if timeout is None:
             timeout = self.request_timeout
+
         url = f"http://{ip}" + (f":{port}" if port else "")
+
         try:
             response = requests.get(url, timeout=timeout, allow_redirects=True)
+
             if response.status_code != 200:
                 return False
-            parsed_url = urlparse(response.url)
-            final_hostname = parsed_url.hostname
-            final_port = parsed_url.port if parsed_url.port else 80
-            expected_port = port if port else 80
-            if final_hostname and self.is_valid_ip(final_hostname) and final_hostname == ip and final_port == expected_port:
-                return True, response
-            return False, response
+
+            final_ip = urlparse(response.url).hostname  # Get redirected IP (if any)
+
+            # If redirected to a new IP, add it to the scan queue
+            if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
+                new_seed = Seed(final_ip, category, port=port)
+                self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category})")
+                self.threadpool.start(SeedRunnable(new_seed, self))
+
+            # Extract IPs from the site content
+            found_ips = self.extract_ip_and_port(response.text)
+
+            # Process each discovered IP with the given category
+            for extracted_ip, extracted_port, ip_version in found_ips:
+                new_seed = Seed(extracted_ip, category, port=extracted_port)
+                self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category})")
+                self.threadpool.start(SeedRunnable(new_seed, self))
+
+            return True  # Always return True if status code is 200
+
         except Exception as e:
             self.log(f"Active/static check failed for {url}: {e}")
-            return False, response
+            return False
 
     def is_valid_ip(self, ip_string):
         try:
