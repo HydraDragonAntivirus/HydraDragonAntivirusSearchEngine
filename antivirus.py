@@ -387,9 +387,6 @@ class ScannerWorker(QObject):
         else:
             self.visited_ips.add(seed.ip)
 
-        if not hasattr(seed, "added_to_duplicate"):
-            seed.added_to_duplicate = False
-
         # Determine category.
         category = seed.source_type.lower().strip()
         allowed_categories = ["whitelist", "phishing", "ddos", "bruteforce", "malicious"]
@@ -420,10 +417,8 @@ class ScannerWorker(QObject):
                 self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping processing.")
                 return
             else:
-                if not seed.added_to_duplicate:
-                    self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
-                    self.handle_duplicate(category, seed)
-                    seed.added_to_duplicate = True
+                self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
+                self.handle_duplicate(category, seed)
 
         # Determine the verdict.
         if category.startswith("whitelist"):
@@ -477,7 +472,7 @@ class ScannerWorker(QObject):
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set())
 
-        if not already_written and not seed.added_to_duplicate:
+        if not already_written:
             if category.startswith("whitelist"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
