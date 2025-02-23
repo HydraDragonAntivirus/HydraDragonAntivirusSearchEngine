@@ -370,12 +370,15 @@ class ScannerWorker(QObject):
             return
 
         # Check for duplicates using initial and new sets.
-        if seed.ip in (self.initial_ips.get(key, set())):
-            if not self.settings.get(setting_key, True):
-                self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping adding.")
+        if seed.ip in self.initial_ips.get(category, set()):
+            # Construct the settings key dynamically for duplicate allowance
+            allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
+
+            if not self.settings.get(allow_duplicate_key, True):
+                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
                 duplicate_flag = True
             else:
-                self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
+                self.log(f"Duplicate for {seed.ip} detected. Logging duplicate.")
                 self.handle_duplicate(category, seed)
                 duplicate_flag = True
 
@@ -474,9 +477,9 @@ class ScannerWorker(QObject):
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
 
-        # --- NEW: Write new IP only at the end if not a duplicate ---
+        # Write new IP only at the end if not a duplicate
         if not duplicate_flag:
-            if seed.ip not in self.initial_ips.get(out_key, set()):
+            if seed.ip not in self.initial_ips.get(category, set()):
                 with self.lock:
                     self.new_ips[out_key].add(seed.ip)
 
