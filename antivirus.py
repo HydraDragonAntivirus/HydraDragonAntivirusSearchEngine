@@ -361,7 +361,6 @@ class ScannerWorker(QObject):
 
         # Check for duplicates using initial and new sets.
         if seed.ip in self.initial_ips.get(category, set()):
-            # Construct the settings key dynamically for duplicate allowance
             allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
             if not self.settings.get(allow_duplicate_key, True):
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
@@ -374,7 +373,7 @@ class ScannerWorker(QObject):
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
         final_url = seed.get_url()  # Define final_url before using it
 
-        # Define seed_verdict based on category and active/static status.
+        # Determine seed_verdict based on category and active/static status.
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port,
@@ -408,12 +407,13 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
-        # Write whitelist or bulk output (add new IP here).
-        if category.startswith("whitelist") and not duplicate_flag:
+        # If the computed verdict starts with "whitelist", write to whitelist CSV.
+        if seed_verdict.startswith("whitelist"):
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
+        # Otherwise, write to bulk CSV using the appropriate category label.
         elif not duplicate_flag:
             if category.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
