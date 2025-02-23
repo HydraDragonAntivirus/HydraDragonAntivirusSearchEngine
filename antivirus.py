@@ -460,20 +460,20 @@ class ScannerWorker(QObject):
 
             final_ip = urlparse(response.url).hostname  # Get redirected IP (if any)
 
-            # If redirected to a new IP, add it to the scan queue
+            # If redirected to a new IP, process it directly
             if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
                 new_seed = Seed(final_ip, category, port=port)
                 self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category})")
-                self.threadpool.start(SeedRunnable(new_seed, self))
+                self.process_seed(new_seed)
 
             # Extract IPs from the site content
             found_ips = self.extract_ip_and_port(response.text)
 
-            # Process each discovered IP with the given category
+            # Process each discovered IP with the given category directly
             for extracted_ip, extracted_port, ip_version in found_ips:
                 new_seed = Seed(extracted_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category})")
-                self.threadpool.start(SeedRunnable(new_seed, self))
+                self.process_seed(new_seed)
 
             return True  # Always return True if status code is 200
 
