@@ -432,7 +432,7 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
-        # Write whitelist or bulk output (do not add new IP here).
+        # Write whitelist or bulk output (add new IP here).
         if category.startswith("whitelist") and not duplicate_flag:
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
