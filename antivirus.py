@@ -147,8 +147,8 @@ class ScannerWorker(QObject):
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
-        self.comment_template_zeroday = settings.get("CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
-        self.comment_template_nozeroday = settings.get("CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
+        self.comment_template_zeroday = settings.get("CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
+        self.comment_template_nozeroday = settings.get("CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
@@ -471,36 +471,33 @@ class ScannerWorker(QObject):
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set())
 
-        if not seed.added_to_duplicate:
-            if category.startswith("whitelist"):
-                comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
-                line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_whitelist_line(line)
-                # If not initially loaded, add to new_ips.
-                if seed.ip not in self.initial_ips.get(out_key, set()):
-                    with self.lock:
-                        self.new_ips[out_key].add(seed.ip)
-                self.log(f"Whitelist output written for {seed.ip}.")
-            else:
-                if category == "phishing":
-                    cat_label = self.settings.get("CategoryPhishing", "7")
-                elif category == "ddos":
-                    cat_label = self.settings.get("CategoryDDoS", "4")
-                elif category == "bruteforce":
-                    cat_label = self.settings.get("CategoryBruteForce", "18")
-                elif category == "malicious":
-                    cat_label = self.settings.get("CategoryMalicious", "20")
-                else:
-                    cat_label = ""
-                comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
-                line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_bulk_line(line)
-                if seed.ip not in self.initial_ips.get(out_key, set()):
-                    with self.lock:
-                        self.new_ips[out_key].add(seed.ip)
-                self.log(f"Bulk output written for {seed.ip}.")
+        if category.startswith("whitelist"):
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
+            line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            self.write_whitelist_line(line)
+            # If not initially loaded, add to new_ips.
+            if seed.ip not in self.initial_ips.get(out_key, set()):
+                with self.lock:
+                    self.new_ips[out_key].add(seed.ip)
+            self.log(f"Whitelist output written for {seed.ip}.")
         else:
-            self.log(f"Duplicate for {seed.ip} already handled or main output skipped.")
+            if category == "phishing":
+                cat_label = self.settings.get("CategoryPhishing", "7")
+            elif category == "ddos":
+                cat_label = self.settings.get("CategoryDDoS", "4")
+            elif category == "bruteforce":
+                cat_label = self.settings.get("CategoryBruteForce", "18")
+            elif category == "malicious":
+                cat_label = self.settings.get("CategoryMalicious", "20")
+            else:
+                cat_label = ""
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
+            line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            self.write_bulk_line(line)
+            if seed.ip not in self.initial_ips.get(out_key, set()):
+                with self.lock:
+                    self.new_ips[out_key].add(seed.ip)
+            self.log(f"Bulk output written for {seed.ip}.")
 
         for ip, port, ip_version in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
@@ -768,7 +765,8 @@ class MainWindow(QMainWindow):
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_plain_field("Comment Template:", "CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})")
+        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
+        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         add_plain_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_plain_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_plain_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
