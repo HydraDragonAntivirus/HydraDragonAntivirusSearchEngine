@@ -345,8 +345,7 @@ class ScannerWorker(QObject):
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
-        else:
-            self.visited_ips.add(seed.ip)
+        self.visited_ips.add(seed.ip)
 
         duplicate_flag = False
 
