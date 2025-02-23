@@ -371,32 +371,6 @@ class ScannerWorker(QObject):
                 duplicate_flag = True
 
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
-        try:
-            response = requests.get(seed.get_url(), timeout=self.request_timeout)
-            final_url = response.url
-        except Exception as e:
-            self.log(f"Error visiting {seed.get_url()}: {e}")
-            with self.lock:
-                self.processed_count += 1
-                self.update_progress()
-            return
-
-        if response.status_code != 200:
-            self.log(f"Skipping {seed.get_url()} due to status {response.status_code}")
-            with self.lock:
-                self.processed_count += 1
-                self.update_progress()
-            return
-
-        content = response.text
-        if not content:
-            self.log(f"No content from {seed.get_url()}")
-            with self.lock:
-                self.processed_count += 1
-                self.update_progress()
-            return
-
-        self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
 
         # Define seed_verdict before writing output
         if category.startswith("whitelist"):
