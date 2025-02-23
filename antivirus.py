@@ -410,7 +410,7 @@ class ScannerWorker(QObject):
         # If the computed verdict starts with "whitelist", write to whitelist CSV.
         if seed_verdict.startswith("whitelist"):
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
-            line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
         # Otherwise, write to bulk CSV using the appropriate category label.
