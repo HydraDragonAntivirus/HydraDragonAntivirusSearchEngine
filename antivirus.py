@@ -169,18 +169,6 @@ class ScannerWorker(QObject):
         self.lock = threading.Lock()
         self.cancelled = False
         self.visited_ips = set()  # for processing only once
-        self.output_ips = {
-            "whitelist_ipv4": set(),
-            "whitelist_ipv6": set(),
-            "phishing_ipv4": set(),
-            "phishing_ipv6": set(),
-            "ddos_ipv4": set(),
-            "ddos_ipv6": set(),
-            "bruteforce_ipv4": set(),
-            "bruteforce_ipv6": set(),
-            "malicious_ipv4": set(),
-            "malicious_ipv6": set()
-        }
         # New sets to differentiate initially loaded IPs vs. newly discovered ones.
         self.initial_ips = {
             "whitelist_ipv4": set(),
@@ -419,9 +407,6 @@ class ScannerWorker(QObject):
 
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         final_hostname = urlparse(final_url.lower()).hostname
-
-        with self.lock:
-            already_written = seed.ip in self.output_ips.get(out_key, set())
 
         if category.startswith("whitelist") and not duplicate_flag:
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
