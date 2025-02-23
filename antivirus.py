@@ -295,6 +295,7 @@ class ScannerWorker(QObject):
             self.bulk_file.flush()
             self.bulk_line_count += 1
             self.bulk_file_size += line_bytes
+            self.total_seeds += 1
 
     def write_whitelist_line(self, line):
         with self.lock:
@@ -302,6 +303,7 @@ class ScannerWorker(QObject):
             self.whitelist_file.flush()
             self.whitelist_line_count += 1
             self.whitelist_file_size += len(line.encode("utf-8"))
+            self.total_seeds += 1
 
     def write_duplicate_line(self, key, line):
         with self.lock:
@@ -339,20 +341,6 @@ class ScannerWorker(QObject):
             info["file_size"] += line_bytes
 
     def handle_duplicate(self, category, seed):
-        # Map category and IP version to duplicate key.
-        if category.startswith("whitelist"):
-            key = "whitelist_" + seed.version
-        elif category == "phishing":
-            key = "phishing_" + seed.version
-        elif category == "ddos":
-            key = "ddos_" + seed.version
-        elif category == "bruteforce":
-            key = "bruteforce_" + seed.version
-        elif category == "malicious":
-            key = "malicious_" + seed.version
-        else:
-            self.log(f"[ERROR] No duplicate file configured for category {category}")
-            return
         report_date = datetime.now(timezone.utc).isoformat()
         comment = self.comment_template_nozeroday.format(ip=seed.ip, discovered_url=seed.get_url(), verdict=seed.source_type)
         line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
@@ -394,23 +382,6 @@ class ScannerWorker(QObject):
             self.log(f"Category for {seed.ip} is '{category}', which is not allowed. Skipping processing.")
             return
 
-        # Determine key and corresponding setting.
-        if category.startswith("whitelist"):
-            key = "whitelist_" + seed.version
-            setting_key = "AllowDuplicateWhitelist" + ("IPv4" if seed.version == "ipv4" else "IPv6")
-        elif category == "phishing":
-            key = "phishing_" + seed.version
-            setting_key = "AllowDuplicatePhishing" + ("IPv4" if seed.version == "ipv4" else "IPv6")
-        elif category == "ddos":
-            key = "ddos_" + seed.version
-            setting_key = "AllowDuplicateDDoS" + ("IPv4" if seed.version == "ipv4" else "IPv6")
-        elif category == "bruteforce":
-            key = "bruteforce_" + seed.version
-            setting_key = "AllowDuplicateBruteForce" + ("IPv4" if seed.version == "ipv4" else "IPv6")
-        elif category == "malicious":
-            key = "malicious_" + seed.version
-            setting_key = "AllowDuplicateMalicious" + ("IPv4" if seed.version == "ipv4" else "IPv6")
-
         # Check for duplicates using initial and new sets.
         if seed.ip in (self.initial_ips.get(key, set())):
             if not self.settings.get(setting_key, True):
@@ -419,15 +390,7 @@ class ScannerWorker(QObject):
             else:
                 self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
                 self.handle_duplicate(category, seed)
-
-        # Determine the verdict.
-        if category.startswith("whitelist"):
-            if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "whitelist (auto verdict 3)"
-            else:
-                seed_verdict = seed.source_type
-        else:
-            seed_verdict = seed.source_type
+                duplicate_flag = True
 
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
         try:
@@ -458,21 +421,10 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         final_hostname = urlparse(final_url.lower()).hostname
 
-        if category.startswith("whitelist"):
-            out_key = "whitelist_" + seed.version
-        elif category == "phishing":
-            out_key = "phishing_" + seed.version
-        elif category == "ddos":
-            out_key = "ddos_" + seed.version
-        elif category == "bruteforce":
-            out_key = "bruteforce_" + seed.version
-        elif category == "malicious":
-            out_key = "malicious_" + seed.version
-
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set())
 
-        if category.startswith("whitelist"):
+        if category.startswith("whitelist") and not duplicate_flag:
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
             line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
@@ -481,17 +433,18 @@ class ScannerWorker(QObject):
                 with self.lock:
                     self.new_ips[out_key].add(seed.ip)
             self.log(f"Whitelist output written for {seed.ip}.")
-        else:
-            if category == "phishing":
+        elif not duplicate_flag:
+            if category.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
-            elif category == "ddos":
+            elif category.startswith("ddos"):
                 cat_label = self.settings.get("CategoryDDoS", "4")
-            elif category == "bruteforce":
+            elif category.startswith("bruteforce"):
                 cat_label = self.settings.get("CategoryBruteForce", "18")
-            elif category == "malicious":
+            elif category.startswith("malicious"):
                 cat_label = self.settings.get("CategoryMalicious", "20")
             else:
-                cat_label = ""
+                self.log("Invalid label returning...")
+                return
             comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_bulk_line(line)
@@ -504,32 +457,19 @@ class ScannerWorker(QObject):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
-            final_hostname = urlparse(final_url).hostname
-            if ip == seed.ip or (final_hostname and ip == final_hostname):
-                self.log(f"Skipping discovered IP {ip} because it matches the source.")
-                continue
-
-            with self.lock:
-                if ip in self.visited_ips:
-                    self.log(f"Skipping discovered IP {ip} (already processed).")
-                    continue
-                self.visited_ips.add(ip)
-                self.total_seeds += 1
-
             if category.startswith("whitelist"):
-                new_source_type = seed_verdict
-            else:
-                new_source_type = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
-
+                # Determine the verdict.
+                if self.allow_auto_verdict:
+                    seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "whitelist (auto verdict 3)"
+            elif category.startswith("phishing") or category.startswith("ddos") or category.startswith("bruteforce") or category.startswith("malicious"):
+                if self.allow_auto_verdict:
+                    new_source_type = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
+            else: 
+                self.log("Invalid category returning...")
+                return
             new_seed = Seed(ip, new_source_type, ip_version, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
-
-        # If HTML content is detected and the seed was initially loaded, reprocess as discovered.
-        if seed.ip in self.initial_ips.get(out_key, set()) and "<html" in content.lower():
-            new_seed = Seed(seed.ip, seed.source_type, seed.version, seed.port)
-            self.log(f"Reprocessing {seed.ip} as discovered due to HTML content.")
-            self.process_seed(new_seed)
 
         with self.lock:
             self.processed_count += 1
@@ -629,30 +569,30 @@ class ScannerWorker(QObject):
         seeds = []
         loaded_ips = set()
         file_category_mapping = {}
-        def add_file(file, source_type, version):
+        def add_file(file, source_type):
             if file not in file_category_mapping:
                 file_category_mapping[file] = []
-            file_category_mapping[file].append((source_type, version))
+            file_category_mapping[file].append((source_type))
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "whitelist", "ipv6")
+            add_file(file, "whitelist_ipv6")
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "whitelist", "ipv4")
+            add_file(file, "whitelist_ipv4")
         for file in [x.strip() for x in self.settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "phishing", "ipv6")
+            add_file(file, "phishing_ipv6")
         for file in [x.strip() for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "phishing", "ipv4")
+            add_file(file, "phishing_ipv4")
         for file in [x.strip() for x in self.settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "ddos", "ipv6")
+            add_file(file, "ddos_ipv6")
         for file in [x.strip() for x in self.settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "ddos", "ipv4")
+            add_file(file, "ddos_ipv4")
         for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "bruteforce", "ipv6")
+            add_file(file, "bruteforce_ipv6")
         for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "bruteforce", "ipv4")
+            add_file(file, "bruteforce_ipv4")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "malicious", "ipv6")
+            add_file(file, "malicious_ipv6")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "malicious", "ipv4")
+            add_file(file, "malicious_ipv4")
         results = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_file = {executor.submit(self.load_lines, file): file for file in file_category_mapping}
