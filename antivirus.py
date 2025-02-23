@@ -466,7 +466,7 @@ class ScannerWorker(QObject):
             self.log(f"Bulk output written for {seed.ip}.")
 
         # Process recursive seeds from content.
-        for ip, port, ip_version in self.extract_ip_and_port(content):
+        for ip, port in self.extract_ip_and_port(content):
             if self.my_public_ip and ip == self.my_public_ip:
                 self.log(f"Skipping my own public IP: {ip}")
                 continue
@@ -614,14 +614,14 @@ class ScannerWorker(QObject):
                     ips = []
                 results[file] = ips
         for file, ips in results.items():
-            for source_type, version in file_category_mapping[file]:
+            for source_type in file_category_mapping[file]:
                 for ip in ips:
                     if ip not in loaded_ips:
-                        seed = Seed(ip, source_type, version)
+                        seed = Seed(ip, source_type)
                         seeds.append(seed)
                         loaded_ips.add(ip)
                         # Add loaded IP to the appropriate initial set.
-                        key = f"{source_type.lower()}_{version}"
+                        key = f"{source_type.lower()}"
                         self.initial_ips.setdefault(key, set()).add(ip)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
