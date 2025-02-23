@@ -422,7 +422,7 @@ class ScannerWorker(QObject):
         # Determine the verdict.
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
-                seed_verdict = "benign (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "benign (auto verdict 3)"
+                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port) else "whitelist (auto verdict 3)"
             else:
                 seed_verdict = seed.source_type
         else:
@@ -518,7 +518,7 @@ class ScannerWorker(QObject):
             if category.startswith("whitelist"):
                 new_source_type = seed_verdict
             else:
-                new_source_type = "benign (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
+                new_source_type = "whitelist (auto verdict 1)" if not self.is_active_and_static(ip, port) else seed.source_type
 
             new_seed = Seed(ip, new_source_type, ip_version, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
