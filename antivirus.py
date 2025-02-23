@@ -477,12 +477,6 @@ class ScannerWorker(QObject):
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
 
-        # Write new IP only at the end if not a duplicate
-        if not duplicate_flag:
-            if seed.ip not in self.initial_ips.get(category, set()):
-                with self.lock:
-                    self.new_ips[category].add(seed.ip)
-
         with self.lock:
             self.processed_count += 1
             self.update_progress()
