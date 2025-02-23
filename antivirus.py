@@ -147,9 +147,8 @@ class ScannerWorker(QObject):
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
-        self.comment_template = settings.get("CommentTemplate", 
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict})"
-        )
+        self.comment_template_zeroday = settings.get("CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
+        self.comment_template_nozeroday = settings.get("CommentTemplate", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
@@ -355,7 +354,7 @@ class ScannerWorker(QObject):
             self.log(f"[ERROR] No duplicate file configured for category {category}")
             return
         report_date = datetime.now(timezone.utc).isoformat()
-        comment = self.comment_template.format(ip=seed.ip, discovered_url=seed.get_url(), verdict=seed.source_type)
+        comment = self.comment_template_nozeroday.format(ip=seed.ip, discovered_url=seed.get_url(), verdict=seed.source_type)
         line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
         self.write_duplicate_line(key, line)
         self.log(f"Duplicate recorded for {seed.ip} in duplicate file {key}.")
@@ -412,7 +411,7 @@ class ScannerWorker(QObject):
             setting_key = "AllowDuplicateMalicious" + ("IPv4" if seed.version == "ipv4" else "IPv6")
 
         # Check for duplicates using initial and new sets.
-        if seed.ip in (self.initial_ips.get(key, set()) | self.new_ips.get(key, set())):
+        if seed.ip in (self.initial_ips.get(key, set())):
             if not self.settings.get(setting_key, True):
                 self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping processing.")
                 return
@@ -474,7 +473,7 @@ class ScannerWorker(QObject):
 
         if not seed.added_to_duplicate:
             if category.startswith("whitelist"):
-                comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
+                comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_whitelist_line(line)
                 # If not initially loaded, add to new_ips.
@@ -493,7 +492,7 @@ class ScannerWorker(QObject):
                     cat_label = self.settings.get("CategoryMalicious", "20")
                 else:
                     cat_label = ""
-                comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
+                comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed.source_type)
                 line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_bulk_line(line)
                 if seed.ip not in self.initial_ips.get(out_key, set()):
