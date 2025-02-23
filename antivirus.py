@@ -472,7 +472,7 @@ class ScannerWorker(QObject):
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set())
 
-        if not already_written:
+        if not seed.added_to_duplicate:
             if category.startswith("whitelist"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
