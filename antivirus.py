@@ -462,11 +462,6 @@ class ScannerWorker(QObject):
 
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         final_hostname = urlparse(final_url.lower()).hostname
-        if final_hostname and final_hostname == seed.ip:
-            self.log(f"Skipping main output for {seed.ip} because final URL hostname '{final_hostname}' equals source IP.")
-            main_output_written = True
-        else:
-            main_output_written = False
 
         if category.startswith("whitelist"):
             out_key = "whitelist_" + seed.version
@@ -482,7 +477,7 @@ class ScannerWorker(QObject):
         with self.lock:
             already_written = seed.ip in self.output_ips.get(out_key, set())
 
-        if not already_written and not main_output_written and not seed.added_to_duplicate:
+        if not already_written and not seed.added_to_duplicate:
             if category.startswith("whitelist"):
                 comment = self.comment_template.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
                 line = f'{seed.ip},"{final_url}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
