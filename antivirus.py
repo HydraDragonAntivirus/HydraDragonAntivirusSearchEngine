@@ -364,7 +364,7 @@ class ScannerWorker(QObject):
 
         # Determine category.
         category = seed.source_type.lower().strip()
-        allowed_categories = ["whitelist", "phishing", "ddos", "bruteforce", "malicious"]
+        allowed_categories = ["whitelist_ipv6", "whitelist_ipv4", "phishing_ipv6", "phishing_ipv4", "ddos_ipv6", "ddos_ipv4", "bruteforce_ipv6", "bruteforce_ipv4", "malicious_ipv6", "malicious_ipv4"]
         if not any(category == cat or (cat == "whitelist" and category.startswith("whitelist")) for cat in allowed_categories):
             self.log(f"Category for {seed.ip} is '{category}', which is not allowed. Skipping processing.")
             return
