@@ -451,7 +451,7 @@ class ScannerWorker(QObject):
             else: 
                 self.log("Invalid category returning...")
                 return
-            new_seed = Seed(ip, new_source_type, port=port)
+            new_seed = Seed(ip, seed.source_type, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
 
