@@ -109,7 +109,7 @@ def strip_protocol(url):
 class Seed:
     def __init__(self, ip, source_type, port=None, is_input=True):
         self.ip = ip.lower()
-        self.source_type = source_type  # "malicious", "bruteforce", "ddos", "phishing", or "whitelist"
+        self.source_type = source_type  # "malicious ipv4/v6", "bruteforce ipv4/v6", "ddos ipv4/v6", "phishing ipv4/v6", or "whitelist ipv4/v6"
         self.port = port
         self.is_input = is_input
 
@@ -292,11 +292,11 @@ class ScannerWorker(QObject):
             self.whitelist_file_size += len(line.encode("utf-8"))
             self.total_seeds += 1
 
-    def write_duplicate_line(self, key, line):
+    def write_duplicate_line(self, category, line):
         with self.lock:
-            info = self.dup_file_info.get(key)
+            info = self.dup_file_info.get(category)
             if info is None:
-                self.log(f"[ERROR] No duplicate file info for key {key}")
+                self.log(f"[ERROR] No duplicate file info for category {category}")
                 return
             if info["handle"] is None:
                 base, ext = os.path.splitext(info["base"])
@@ -321,7 +321,7 @@ class ScannerWorker(QObject):
                 info["line_count"] = 1
                 info["file_size"] = len(header.encode("utf-8"))
                 info["handle"] = handle
-                self.log(f"Duplicate file for {key} rotated; new file: {new_filename}")
+                self.log(f"Duplicate file for {category} rotated; new file: {new_filename}")
             info["handle"].write(line)
             info["handle"].flush()
             info["line_count"] += 1
@@ -331,8 +331,8 @@ class ScannerWorker(QObject):
         report_date = datetime.now(timezone.utc).isoformat()
         comment = self.comment_template_nozeroday.format(ip=seed.ip, discovered_url=seed.get_url(), verdict=seed.source_type)
         line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
-        self.write_duplicate_line(key, line)
-        self.log(f"Duplicate recorded for {seed.ip} in duplicate file {key}.")
+        self.write_duplicate_line(category, line)
+        self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category}.")
 
     def run_scan(self):
         self.log("Loading definitions...")
@@ -481,7 +481,7 @@ class ScannerWorker(QObject):
         if not duplicate_flag:
             if seed.ip not in self.initial_ips.get(category, set()):
                 with self.lock:
-                    self.new_ips[out_key].add(seed.ip)
+                    self.new_ips[category].add(seed.ip)
 
         with self.lock:
             self.processed_count += 1
