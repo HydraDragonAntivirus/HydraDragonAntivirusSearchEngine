@@ -335,7 +335,7 @@ class ScannerWorker(QObject):
         self.open_csv_files()
         for seed in seeds:
             self.threadpool.start(SeedRunnable(seed, self))
-        #self.threadpool.waitForDone() This might be better to wait at end but it takes too much time
+        self.threadpool.waitForDone()
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
