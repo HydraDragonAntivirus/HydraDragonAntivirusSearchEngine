@@ -379,12 +379,13 @@ class ScannerWorker(QObject):
         self.finished_signal.emit()
 
     def process_seed(self, seed):
-        # Allow reprocessing if the seed has force_reprocess flag.
-        if seed.ip in self.visited_ips and not getattr(seed, "force_reprocess", False):
+        if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
         else:
             self.visited_ips.add(seed.ip)
+
+        duplicate_flag = False
 
         # Determine category.
         category = seed.source_type.lower().strip()
@@ -414,7 +415,7 @@ class ScannerWorker(QObject):
         if seed.ip in (self.initial_ips.get(key, set())):
             if not self.settings.get(setting_key, True):
                 self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping processing.")
-                return
+                duplicate_flag = True
             else:
                 self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
                 self.handle_duplicate(category, seed)
@@ -527,7 +528,6 @@ class ScannerWorker(QObject):
         # If HTML content is detected and the seed was initially loaded, reprocess as discovered.
         if seed.ip in self.initial_ips.get(out_key, set()) and "<html" in content.lower():
             new_seed = Seed(seed.ip, seed.source_type, seed.version, seed.port)
-            new_seed.force_reprocess = True  # bypass visited check
             self.log(f"Reprocessing {seed.ip} as discovered due to HTML content.")
             self.process_seed(new_seed)
 
