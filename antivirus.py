@@ -408,25 +408,25 @@ class ScannerWorker(QObject):
                 seed_verdict = "whitelist (manual verdict)"
         elif category.startswith("phishing"):
             if self.allow_auto_verdict:
-                seed_verdict = "phishing (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
                                                                                             seed.port) else seed.source_type
             else:
                 seed_verdict = "phishing"
         elif category.startswith("ddos"):
             if self.allow_auto_verdict:
-                seed_verdict = "ddos (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
                                                                                         seed.port) else seed.source_type
             else:
                 seed_verdict = "ddos"
         elif category.startswith("bruteforce"):
             if self.allow_auto_verdict:
-                seed_verdict = "bruteforce (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
                                                                                               seed.port) else seed.source_type
             else:
                 seed_verdict = "bruteforce"
         elif category.startswith("malicious"):
             if self.allow_auto_verdict:
-                seed_verdict = "malicious (auto verdict 1)" if not self.is_active_and_static(seed.ip,
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
                                                                                              seed.port) else seed.source_type
             else:
                 seed_verdict = "malicious"
