@@ -399,7 +399,7 @@ class ScannerWorker(QObject):
         self.log(f"Visited: {seed.get_url()} with final URL: {final_url}")
         final_hostname = urlparse(final_url.lower()).hostname
 
-        # --- FIX: Define seed_verdict before writing output ---
+        # Define seed_verdict before writing output
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip,
@@ -493,11 +493,11 @@ class ScannerWorker(QObject):
             final_port = parsed_url.port if parsed_url.port else 80
             expected_port = port if port else 80
             if final_hostname and self.is_valid_ip(final_hostname) and final_hostname == ip and final_port == expected_port:
-                return True
-            return False
+                return True, response
+            return False, response
         except Exception as e:
             self.log(f"Active/static check failed for {url}: {e}")
-            return False
+            return False, response
 
     def is_valid_ip(self, ip_string):
         try:
