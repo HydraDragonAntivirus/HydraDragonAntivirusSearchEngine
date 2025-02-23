@@ -107,11 +107,10 @@ def strip_protocol(url):
 # Seed Class (metadata only)
 # -----------------------------
 class Seed:
-    def __init__(self, ip, source_type, port=None, is_input=True):
+    def __init__(self, ip, source_type, port=None):
         self.ip = ip.lower()
         self.source_type = source_type  # "malicious ipv4/v6", "bruteforce ipv4/v6", "ddos ipv4/v6", "phishing ipv4/v6", or "whitelist ipv4/v6"
         self.port = port
-        self.is_input = is_input
 
     def get_url(self):
         return f"http://{self.ip}:{self.port}" if self.port else f"http://{self.ip}"
