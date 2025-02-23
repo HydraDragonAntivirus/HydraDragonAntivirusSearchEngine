@@ -335,7 +335,7 @@ class ScannerWorker(QObject):
         self.open_csv_files()
         for seed in seeds:
             self.threadpool.start(SeedRunnable(seed, self))
-        self.threadpool.waitForDone()
+        #self.threadpool.waitForDone() This might be better to wait at end but it takes too much time
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
@@ -543,37 +543,32 @@ class ScannerWorker(QObject):
 
     def load_seeds(self):
         seeds = []
+        loaded_ips = set()
         file_category_mapping = {}
-
         def add_file(file, source_type):
-            file = file.strip()
             if file not in file_category_mapping:
                 file_category_mapping[file] = []
-            file_category_mapping[file].append(source_type)
-
-        # Map files to their respective source types from settings.
-        for file in [x for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
+            file_category_mapping[file].append((source_type))
+        for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "whitelist_ipv6")
-        for file in [x for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "whitelist_ipv4")
-        for file in [x for x in self.settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "phishing_ipv6")
-        for file in [x for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "phishing_ipv4")
-        for file in [x for x in self.settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "ddos_ipv6")
-        for file in [x for x in self.settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "ddos_ipv4")
-        for file in [x for x in self.settings.get("BruteForceFilesIPv6", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "bruteforce_ipv6")
-        for file in [x for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "bruteforce_ipv4")
-        for file in [x for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "malicious_ipv6")
-        for file in [x for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
+        for file in [x.strip() for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "malicious_ipv4")
-
-        # Load IPs concurrently from all files.
         results = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_to_file = {executor.submit(self.load_lines, file): file for file in file_category_mapping}
@@ -585,19 +580,16 @@ class ScannerWorker(QObject):
                     self.log(f"Error loading file {file}: {exc}")
                     ips = []
                 results[file] = ips
-
-        # Use a global set inside self.initial_ips for deduplication.
-        global_set = self.initial_ips.setdefault("global", set())
         for file, ips in results.items():
             for source_type in file_category_mapping[file]:
                 for ip in ips:
-                    if ip in global_set:
-                        continue
-                    global_set.add(ip)
-                    key = source_type.lower()
-                    self.initial_ips.setdefault(key, set()).add(ip)
-                    seeds.append(Seed(ip, source_type))
-
+                    if ip not in loaded_ips:
+                        seed = Seed(ip, source_type)
+                        seeds.append(seed)
+                        loaded_ips.add(ip)
+                        # Add loaded IP to the appropriate initial set.
+                        key = f"{source_type.lower()}"
+                        self.initial_ips.setdefault(key, set()).add(ip)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
 
