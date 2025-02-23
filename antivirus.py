@@ -414,7 +414,7 @@ class ScannerWorker(QObject):
         # Check for duplicates using initial and new sets.
         if seed.ip in (self.initial_ips.get(key, set())):
             if not self.settings.get(setting_key, True):
-                self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping processing.")
+                self.log(f"Duplicate for {seed.ip} in {key} detected. Skipping adding.")
                 duplicate_flag = True
             else:
                 self.log(f"Duplicate for {seed.ip} in {key}. Logging duplicate.")
