@@ -352,16 +352,19 @@ class ScannerWorker(QObject):
 
         # Determine category.
         category = seed.source_type.lower().strip()
-        allowed_categories = ["whitelist_ipv6", "whitelist_ipv4", "phishing_ipv6", "phishing_ipv4", "ddos_ipv6", "ddos_ipv4", "bruteforce_ipv6", "bruteforce_ipv4", "malicious_ipv6", "malicious_ipv4"]
-            if category not in allowed_categories:
-                self.log(f"Category for {seed.ip} is '{category}', which is not allowed. Skipping processing.")
+        allowed_categories = [
+            "whitelist_ipv6", "whitelist_ipv4", "phishing_ipv6", "phishing_ipv4",
+            "ddos_ipv6", "ddos_ipv4", "bruteforce_ipv6", "bruteforce_ipv4",
+            "malicious_ipv6", "malicious_ipv4"
+        ]
+        if category not in allowed_categories:
+            self.log(f"Category for {seed.ip} is '{category}', which is not allowed. Skipping processing.")
             return
 
         # Check for duplicates using initial and new sets.
         if seed.ip in self.initial_ips.get(category, set()):
             # Construct the settings key dynamically for duplicate allowance
             allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
-
             if not self.settings.get(allow_duplicate_key, True):
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
                 duplicate_flag = True
@@ -371,36 +374,37 @@ class ScannerWorker(QObject):
                 duplicate_flag = True
 
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
+        final_url = seed.get_url()  # Define final_url before using it
 
-        # Define seed_verdict before writing output
+        # Define seed_verdict based on category and active/static status.
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip,
-                                                                                         seed.port, category=category) else "whitelist (auto verdict 3)"
+                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port,
+                                                                                         category=category) else "whitelist (auto verdict 3)"
             else:
                 seed_verdict = "whitelist (manual verdict)"
         elif category.startswith("phishing"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                            seed.port, category=category) else seed.source_type
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
+                                                                                             category=category) else seed.source_type
             else:
                 seed_verdict = "phishing"
         elif category.startswith("ddos"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                        seed.port, category=category) else seed.source_type
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
+                                                                                             category=category) else seed.source_type
             else:
                 seed_verdict = "ddos"
         elif category.startswith("bruteforce"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                              seed.port, category=category) else seed.source_type
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
+                                                                                             category=category) else seed.source_type
             else:
                 seed_verdict = "bruteforce"
         elif category.startswith("malicious"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip,
-                                                                                             seed.port, category=category) else seed.source_type
+                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
+                                                                                             category=category) else seed.source_type
             else:
                 seed_verdict = "malicious"
         else:
