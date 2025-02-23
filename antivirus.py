@@ -107,10 +107,9 @@ def strip_protocol(url):
 # Seed Class (metadata only)
 # -----------------------------
 class Seed:
-    def __init__(self, ip, source_type, version, port=None, is_input=True):
+    def __init__(self, ip, source_type, port=None, is_input=True):
         self.ip = ip.lower()
         self.source_type = source_type  # "malicious", "bruteforce", "ddos", "phishing", or "whitelist"
-        self.version = version          # "ipv4" or "ipv6"
         self.port = port
         self.is_input = is_input
 
@@ -467,7 +466,7 @@ class ScannerWorker(QObject):
             else: 
                 self.log("Invalid category returning...")
                 return
-            new_seed = Seed(ip, new_source_type, ip_version, port=port)
+            new_seed = Seed(ip, new_source_type, port=port)
             self.log(f"Recursively processing new seed: {new_seed.get_url()}")
             self.threadpool.start(SeedRunnable(new_seed, self))
 
