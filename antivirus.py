@@ -109,7 +109,7 @@ def strip_protocol(url):
 class Seed:
     def __init__(self, ip, source_type, port=None):
         self.ip = ip.lower()
-        self.source_type = source_type  # "malicious ipv4/v6", "bruteforce ipv4/v6", "ddos ipv4/v6", "phishing ipv4/v6", or "whitelist ipv4/v6"
+        self.source_type = source_type  # "malicious ipv4/v6", "bruteforce ipv4/v6", "spam ipv4/v6", "ddos ipv4/v6", "phishing ipv4/v6", or "whitelist ipv4/v6"
         self.port = port
 
     def get_url(self):
@@ -161,6 +161,8 @@ class ScannerWorker(QObject):
         self.duplicate_ddos_file_ipv6 = settings.get("DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
         self.duplicate_bruteforce_file_ipv4 = settings.get("DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
         self.duplicate_bruteforce_file_ipv6 = settings.get("DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
+        self.duplicate_spam_file_ipv4 = settings.get("DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
+        self.duplicate_spam_file_ipv6 = settings.get("DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
         self.duplicate_malicious_file_ipv4 = settings.get("DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         self.duplicate_malicious_file_ipv6 = settings.get("DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
 
@@ -178,6 +180,8 @@ class ScannerWorker(QObject):
             "ddos_ipv6": set(),
             "bruteforce_ipv4": set(),
             "bruteforce_ipv6": set(),
+            "spam_ipv4": set(),
+            "spam_ipv6": set(),
             "malicious_ipv4": set(),
             "malicious_ipv6": set()
         }
@@ -210,6 +214,8 @@ class ScannerWorker(QObject):
             "ddos_ipv6": {"base": self.duplicate_ddos_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "bruteforce_ipv4": {"base": self.duplicate_bruteforce_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "bruteforce_ipv6": {"base": self.duplicate_bruteforce_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
+            "spam_ipv4": {"base": self.duplicate_spam_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
+            "spam_ipv6": {"base": self.duplicate_spam_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "malicious_ipv4": {"base": self.duplicate_malicious_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
             "malicious_ipv6": {"base": self.duplicate_malicious_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None}
         }
@@ -348,37 +354,41 @@ class ScannerWorker(QObject):
 
         duplicate_flag = False
 
-        # Determine category.
-        category = seed.source_type.lower().strip()
+        # Add "spam_ipv4" and "spam_ipv6" to allowed categories.
         allowed_categories = [
-            "whitelist_ipv6", "whitelist_ipv4", "phishing_ipv6", "phishing_ipv4",
-            "ddos_ipv6", "ddos_ipv4", "bruteforce_ipv6", "bruteforce_ipv4",
-            "malicious_ipv6", "malicious_ipv4"
+            "whitelist_ipv6", "whitelist_ipv4",
+            "phishing_ipv6", "phishing_ipv4",
+            "ddos_ipv6", "ddos_ipv4",
+            "bruteforce_ipv6", "bruteforce_ipv4",
+            "spam_ipv6", "spam_ipv4",
+            "malicious_ipv6", "malicious_ipv4",
         ]
-        if category not in allowed_categories:
-            self.log(f"Category for {seed.ip} is '{category}', which is not allowed. Skipping processing.")
-            return
+        if category := seed.source_type.lower().strip() not in allowed_categories:
+            if seed.source_type.lower().strip() not in allowed_categories:
+                self.log(f"Category for {seed.ip} is '{seed.source_type.lower().strip()}', which is not allowed. Skipping processing.")
+                return
 
         # Check for duplicates using initial and new sets.
-        if seed.ip in self.initial_ips.get(category, set()):
+        if seed.ip in self.initial_ips.get(seed.source_type.lower().strip(), set()):
             allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
             if not self.settings.get(allow_duplicate_key, True):
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
                 duplicate_flag = True
             else:
                 self.log(f"Duplicate for {seed.ip} detected. Logging duplicate.")
-                self.handle_duplicate(category, seed)
+                self.handle_duplicate(seed.source_type.lower().strip(), seed)
                 duplicate_flag = True
 
-        self.log(f"Processing: {seed.get_url()} (Category: {category})")
+        self.log(f"Processing: {seed.get_url()} (Category: {seed.source_type.lower().strip()})")
         if not discovered_source_url:
-            discovered_source_url = seed.get_url()  # Default to seed URL if none provided
+            discovered_source_url = seed.get_url()  # Default discovered URL
 
         # Call is_active_and_static once and store its returned HTTP status code.
-        status = self.is_active_and_static(seed.ip, seed.port, category=category, discovered_source_url=discovered_source_url)
+        status = self.is_active_and_static(seed.ip, seed.port, category=seed.source_type.lower().strip(), discovered_source_url=discovered_source_url)
 
-        # Determine seed_verdict based on the status code.
-        if category.startswith("whitelist"):
+        # Determine seed_verdict based on category and HTTP status.
+        cat = seed.source_type.lower().strip()
+        if cat.startswith("whitelist"):
             if self.allow_auto_verdict:
                 if status is not None and 200 <= status <= 299:
                     seed_verdict = "whitelist (auto verdict 2)"
@@ -386,15 +396,33 @@ class ScannerWorker(QObject):
                     seed_verdict = "whitelist (auto verdict 3)"
             else:
                 seed_verdict = "whitelist (manual verdict)"
-        elif category.startswith("phishing"):
+        elif cat.startswith("phishing"):
             if self.allow_auto_verdict:
-                if status is None or not (200 <= status <= 299):
-                    seed_verdict = "whitelist (auto verdict 1)"
+                if status is not None:
+                    if 200 <= status <= 299:
+                        seed_verdict = "phishing (auto verdict 1)"
+                    elif 300 <= status <= 399:
+                        seed_verdict = "whitelist (auto verdict 4)"
+                    else:
+                        seed_verdict = "whitelist (auto verdict 2)"
                 else:
-                    seed_verdict = seed.source_type
+                    seed_verdict = "whitelist (auto verdict 2)"
             else:
                 seed_verdict = "phishing"
-        elif category.startswith("ddos"):
+        elif cat.startswith("spam"):
+            if self.allow_auto_verdict:
+                if status is not None:
+                    if 200 <= status <= 299:
+                        seed_verdict = "spam (auto verdict 1)"
+                    elif 300 <= status <= 399:
+                        seed_verdict = "whitelist (auto verdict 4)"
+                    else:
+                        seed_verdict = "whitelist (auto verdict 2)"
+                else:
+                    seed_verdict = "whitelist (auto verdict 2)"
+            else:
+                seed_verdict = "spam"
+        elif cat.startswith("ddos"):
             if self.allow_auto_verdict:
                 if status is None or not (200 <= status <= 299):
                     seed_verdict = "whitelist (auto verdict 1)"
@@ -402,7 +430,7 @@ class ScannerWorker(QObject):
                     seed_verdict = seed.source_type
             else:
                 seed_verdict = "ddos"
-        elif category.startswith("bruteforce"):
+        elif cat.startswith("bruteforce"):
             if self.allow_auto_verdict:
                 if status is None or not (200 <= status <= 299):
                     seed_verdict = "whitelist (auto verdict 1)"
@@ -410,7 +438,7 @@ class ScannerWorker(QObject):
                     seed_verdict = seed.source_type
             else:
                 seed_verdict = "bruteforce"
-        elif category.startswith("malicious"):
+        elif cat.startswith("malicious"):
             if self.allow_auto_verdict:
                 if status is None or not (200 <= status <= 299):
                     seed_verdict = "whitelist (auto verdict 1)"
@@ -428,13 +456,15 @@ class ScannerWorker(QObject):
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
         elif not duplicate_flag:
-            if category.startswith("phishing"):
+            if cat.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
-            elif category.startswith("ddos"):
+            elif cat.startswith("ddos"):
                 cat_label = self.settings.get("CategoryDDoS", "4")
-            elif category.startswith("bruteforce"):
+            elif cat.startswith("bruteforce"):
                 cat_label = self.settings.get("CategoryBruteForce", "18")
-            elif category.startswith("malicious"):
+            elif cat.startswith("spam"):
+                cat_label = self.settings.get("CategorySpam", "10")
+            elif cat.startswith("malicious"):
                 cat_label = self.settings.get("CategoryMalicious", "20")
             else:
                 self.log("Invalid label returning...")
@@ -447,6 +477,44 @@ class ScannerWorker(QObject):
         with self.lock:
             self.processed_count += 1
             self.update_progress()
+
+
+    def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
+        if timeout is None:
+            timeout = self.request_timeout
+
+        url = f"http://{ip}" + (f":{port}" if port else "")
+
+        try:
+            response = requests.get(url, timeout=timeout, allow_redirects=True)
+            code = response.status_code
+
+            if 200 <= code <= 299:
+                final_ip = urlparse(response.url).hostname
+                if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
+                    new_seed = Seed(final_ip, category, port=port)
+                    self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
+                    self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                found_ips = self.extract_ip_and_port(response.text)
+                for extracted_ip, extracted_port, ip_version in found_ips:
+                    extracted_ip = urlparse(extracted_ip).hostname
+                    new_seed = Seed(extracted_ip, category, port=extracted_port)
+                    self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
+                    self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+            elif 300 <= code <= 399:
+                self.log(f"Redirection detected: HTTP {code} for {url}")
+            elif 400 <= code <= 499:
+                self.log(f"Client error: HTTP {code} for {url}")
+            elif 500 <= code <= 599:
+                self.log(f"Server error: HTTP {code} for {url}")
+            else:
+                self.log(f"Unhandled HTTP status code {code} for {url}")
+
+            return code
+
+        except Exception as e:
+            self.log(f"Active/static check failed for {url}: {e}")
+            return None
 
     def get_my_public_ip(self):
         try:
@@ -579,6 +647,10 @@ class ScannerWorker(QObject):
             add_file(file, "bruteforce_ipv6")
         for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
             add_file(file, "bruteforce_ipv4")
+        for file in [x for x in self.settings.get("SpamFilesIPv6", "").split(",") if x.strip()]:
+            add_file(file, "spam_ipv6")
+        for file in [x for x in self.settings.get("SpamFilesIPv4", "").split(",") if x.strip()]:
+            add_file(file, "spam_ipv4")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "malicious_ipv6")
         for file in [x.strip() for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
@@ -639,10 +711,15 @@ class MainWindow(QMainWindow):
 
         # Define keys for which a browse button should be added.
         file_keys = {
-            "OutputFile", "WhiteListOutputFile", "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
-            "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6", "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
-            "DuplicateBruteForceFileIPv4", "DuplicateBruteForceFileIPv6", "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6"
+            "OutputFile", "WhiteListOutputFile",
+            "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
+            "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
+            "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
+            "DuplicateBruteForceFileIPv4", "DuplicateBruteForceFileIPv6",
+            "DuplicateSpamFileIPv4", "DuplicateSpamFileIPv6",
+            "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6"
         }
+
         directory_keys = {"LastPath"}
 
         # Modified add_field: adds a browse button for file/directory selection if needed.
@@ -691,16 +768,19 @@ class MainWindow(QMainWindow):
         # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
-        add_plain_field("Category Malicious:", "CategoryMalicious", "20")
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
+        add_plain_field("Category BruteForce:", "CategorySpam", "10")
+        add_plain_field("Category Malicious:", "CategoryMalicious", "20")
         add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
         add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         add_plain_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_plain_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_plain_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
         add_plain_field("BruteForceFilesIPv4 (comma-separated):", "BruteForceFilesIPv4", "website\\IPv4BruteForce.txt")
+        add_plain_field("SpamFilesIPv6 (comma-separated):", "SpamIPv6", "website\\IPv6Spam.txt")
+        add_plain_field("SpamFilesIPv4 (comma-separated):", "SpamFilesIPv4", "website\\IPv4Spam.txt")
         add_plain_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
         add_plain_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
         add_plain_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "website\\IPv6DDoS.txt")
@@ -719,6 +799,8 @@ class MainWindow(QMainWindow):
         add_plain_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
         add_plain_field("Allow Duplicate BruteForce IPv4 (true/false):", "AllowDuplicateBruteForceIPv4", "true")
         add_plain_field("Allow Duplicate BruteForce IPv6 (true/false):", "AllowDuplicateBruteForceIPv6", "true")
+        add_plain_field("Allow Duplicate Spam IPv4 (true/false):", "AllowDuplicateSpamIPv4", "true")
+        add_plain_field("Allow Duplicate Spam IPv6 (true/false):", "AllowDuplicateSpamIPv6", "true")
         add_plain_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
         add_plain_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
         # Duplicate file fields (CSV) use browse buttons
@@ -730,6 +812,8 @@ class MainWindow(QMainWindow):
         add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
         add_field("Duplicate BruteForce File IPv4:", "DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
         add_field("Duplicate BruteForce File IPv6:", "DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
+        add_field("Duplicate Spam File IPv4:", "DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
+        add_field("Duplicate Spam File IPv6:", "DuplicateSpameFileIPv6", "output\\spam_ipv6_duplicates.csv")
         add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
         scroll = QScrollArea()
