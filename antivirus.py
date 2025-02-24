@@ -360,7 +360,7 @@ class ScannerWorker(QObject):
             self.log(f"Skipping {seed.ip} (already visited).")
             return
 
-        if self.my_public_ip and ip == self.my_public_ip:
+        if self.my_public_ip and seed.ip == self.my_public_ip:
             self.log(f"Skipping my own public IP: {ip}")
             return
 
