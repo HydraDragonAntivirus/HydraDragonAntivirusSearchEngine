@@ -332,7 +332,7 @@ class ScannerWorker(QObject):
                                                          discovered_url=seed.get_url(),
                                                          verdict=seed.source_type,
                                                          status=status)
-        line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
+        line = f'{seed.ip},"",{report_date},"{comment}"\n'
         self.write_duplicate_line(category, line)
         self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category} with status {status}.")
 
@@ -379,44 +379,63 @@ class ScannerWorker(QObject):
 
         # Call is_active_and_static only once.
         status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
-
-        # If duplicate, log duplicate with the same status and return.
-        if seed.ip in self.initial_ips.get(cat, set()):
-            allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
-            if not self.settings.get(allow_duplicate_key, True):
-                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
-                return
-            else:
-                self.handle_duplicate(cat, seed, status=status if status is not None else "N/A")
-                return
-
+        
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
+
+        # Duplicate flag
+        duplicate_flag = False 
+
+        # If duplicate, log duplicate with the same status and return.
+        if seed.ip in self.initial_ips.get(cat, set()):
+                duplicate_flag = True
+
+        # Duplicate settings
+        duplicate_settings = False
+
+        allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
+        if self.settings.get(allow_duplicate_key, True):
+                duplicate_settings = True
 
         # Determine seed_verdict based on category and HTTP status.
         if cat.startswith("whitelist"):
             seed_verdict = "whitelist (auto verdict 2)" if 200 <= status <= 299 else "whitelist (auto verdict 3)"
         elif cat.startswith("phishing"):
             if 200 <= status <= 299:
-                seed_verdict = "phishing (auto verdict 1)"
+                seed_verdict = "phishing (auto verdict 5)"
             elif 300 <= status <= 399:
-                seed_verdict = "whitelist (auto verdict 4)"
+                seed_verdict = "phishing (auto verdict 6)"
             else:
                 seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("spam"):
             if 200 <= status <= 299:
-                seed_verdict = "spam (auto verdict 1)"
+                seed_verdict = "spam (auto verdict 5)"
             elif 300 <= status <= 399:
-                seed_verdict = "whitelist (auto verdict 4)"
+                seed_verdict = "spam (auto verdict 6)"
             else:
                 seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("ddos"):
-            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
+            if 200 <= status <= 299:
+                seed_verdict = "ddos (auto verdict 5)"
+            elif 300 <= status <= 399:
+                seed_verdict = "ddos (auto verdict 6)"
+            else:
+                seed_verdict = "whitelist (auto verdict 1)"
         elif cat.startswith("bruteforce"):
-            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
+            if 200 <= status <= 299:
+                seed_verdict = "bruteforce (auto verdict 5)"
+            elif 300 <= status <= 399:
+                seed_verdict = "bruteforce (auto verdict 6)"
+            else:
+                seed_verdict = "whitelist (auto verdict 1)"
         elif cat.startswith("malicious"):
-            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
+            if 200 <= status <= 299:
+                seed_verdict = "malicious (auto verdict 5)"
+            elif 300 <= status <= 399:
+                seed_verdict = "malicious (auto verdict 6)"
+            else:
+                seed_verdict = "whitelist (auto verdict 1)"
         else:
             seed_verdict = seed.source_type
 
@@ -427,8 +446,13 @@ class ScannerWorker(QObject):
                                                            verdict=seed_verdict,
                                                            status=status)
             line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-            self.write_whitelist_line(line)
-            self.log(f"Whitelist output written for {seed.ip}.")
+            if not duplicate_flag:
+                self.write_whitelist_line(line)
+                self.log(f"Whitelist output written for {seed.ip}.")
+            elif duplicate_flag and duplicate_settings:
+                 self.handle_duplicate(cat, seed, status=status)
+            elif duplicate_flag and not duplicate_settings:
+                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         else:
             if cat.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
@@ -448,9 +472,13 @@ class ScannerWorker(QObject):
                                                            verdict=seed_verdict,
                                                            status=status)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-            self.write_bulk_line(line)
-            self.log(f"Bulk output written for {seed.ip}.")
-
+            if not duplicate_flag:
+               self.write_bulk_line(line)
+                self.log(f"Bulk output written for {seed.ip}.")
+            elif duplicate_flag and duplicate_settings:
+                 self.handle_duplicate(cat, seed, status=status)
+            elif duplicate_flag and not duplicate_settings:
+                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         with self.lock:
             self.processed_count += 1
             self.update_progress()
@@ -459,7 +487,11 @@ class ScannerWorker(QObject):
         if timeout is None:
             timeout = self.request_timeout
 
-        url = f"http://{ip}" + (f":{port}" if port else "")
+        # If the IP is IPv6, wrap it in brackets.
+        if self.is_valid_ip(ip) == "ipv6":
+            url = f"http://[{ip}]" + (f":{port}" if port else "")
+        else:
+            url = f"http://{ip}" + (f":{port}" if port else "")
 
         try:
             response = requests.get(url, timeout=timeout, allow_redirects=True)
@@ -473,7 +505,9 @@ class ScannerWorker(QObject):
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
                 found_ips = self.extract_ip_and_port(response.text)
                 for extracted_ip, extracted_port, ip_version in found_ips:
-                    extracted_ip = urlparse(extracted_ip).hostname
+                    # For IPv6 discovered IPs, enclose them in brackets when needed.
+                    if ip_version == "ipv6":
+                        extracted_ip = f"[{extracted_ip}]"
                     new_seed = Seed(extracted_ip, category, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
