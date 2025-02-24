@@ -364,7 +364,9 @@ class ScannerWorker(QObject):
             self.log(f"Skipping my own public IP: {ip}")
             return
 
-        self.visited_ips.add(seed.ip)
+        if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
+            seed.ip = urlparse(seed.ip).hostname
+            self.visited_ips.add(seed.ip)
 
         cat = seed.source_type.lower().strip()
         allowed_categories = [
