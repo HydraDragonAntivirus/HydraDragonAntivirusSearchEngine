@@ -508,14 +508,18 @@ class ScannerWorker(QObject):
                 # Extract discovered IPs from the response content.
                 found_ips = self.extract_ip_and_port(response.text)
                 for extracted_ip, extracted_port, ip_version in found_ips:
-                    # Parse the extracted IP to get the hostname.
-                    parsed_extracted = urlparse(extracted_ip).hostname
+                    if ip_version == "ipv6":
+                        # If the IPv6 address is not already enclosed in brackets, add them.
+                        if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')):
+                            candidate = "http://[" + extracted_ip + "]"
+                        else:
+                            # If it already has brackets, remove them so that we can parse correctly.
+                            candidate = "http://" + extracted_ip[1:-1]
+                    else:
+                        candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
+                    # Parse the candidate extracted IP to get the hostname.
+                    parsed_extracted = urlparse(candidate).hostname
                     discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
-                    # For IPv6 discovered IPs: if already enclosed in brackets, remove them.
-                    if ip_version == "ipv6" and discovered_ip:
-                        if discovered_ip.startswith('[') and discovered_ip.endswith(']'):
-                            discovered_ip = discovered_ip[1:-1]
-                    parsed_discovered_ip = urlparse(discovered_ip).hostname
                     new_seed = Seed(discovered_ip, category, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
