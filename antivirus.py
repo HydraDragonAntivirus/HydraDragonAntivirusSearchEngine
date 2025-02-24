@@ -145,8 +145,8 @@ class ScannerWorker(QObject):
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
-        self.comment_template_zeroday = settings.get("CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
-        self.comment_template_nozeroday = settings.get("CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
+        self.comment_template_zeroday = settings.get("CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
+        self.comment_template_nozeroday = settings.get("CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
@@ -340,7 +340,7 @@ class ScannerWorker(QObject):
         self.log("Scan completed.")
         self.finished_signal.emit()
 
-    def process_seed(self, seed):
+    def process_seed(self, seed, discovered_source_url=None):
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
@@ -371,37 +371,38 @@ class ScannerWorker(QObject):
                 duplicate_flag = True
 
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
-        final_url = seed.get_url()  # Define final_url before using it
+        if not discovered_source_url:
+            discovered_source_url = seed.get_url()  # Define discovered_source_url before using it
 
         # Determine seed_verdict based on category and active/static status.
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port,
-                                                                                         category=category) else "whitelist (auto verdict 3)"
+                                                                                         category=category, discovered_source_url=discovered_source_url) else "whitelist (auto verdict 3)"
             else:
                 seed_verdict = "whitelist (manual verdict)"
         elif category.startswith("phishing"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category) else seed.source_type
+                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
             else:
                 seed_verdict = "phishing"
         elif category.startswith("ddos"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category) else seed.source_type
+                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
             else:
                 seed_verdict = "ddos"
         elif category.startswith("bruteforce"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category) else seed.source_type
+                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
             else:
                 seed_verdict = "bruteforce"
         elif category.startswith("malicious"):
             if self.allow_auto_verdict:
                 seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category) else seed.source_type
+                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
             else:
                 seed_verdict = "malicious"
         else:
@@ -409,7 +410,7 @@ class ScannerWorker(QObject):
 
         # If the computed verdict starts with "whitelist", write to whitelist CSV.
         if seed_verdict.startswith("whitelist"):
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict)
             line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
@@ -426,7 +427,7 @@ class ScannerWorker(QObject):
             else:
                 self.log("Invalid label returning...")
                 return
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=final_url, verdict=seed_verdict)
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_bulk_line(line)
             self.log(f"Bulk output written for {seed.ip}.")
@@ -446,7 +447,7 @@ class ScannerWorker(QObject):
             self.failure.emit(f"Could not determine public IP: {e}")
             return None
 
-    def is_active_and_static(self, ip, port, timeout=None, category=None):
+    def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
         if timeout is None:
             timeout = self.request_timeout
 
@@ -464,7 +465,7 @@ class ScannerWorker(QObject):
             if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
                 new_seed = Seed(final_ip, category, port=port)
                 self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category})")
-                self.process_seed(new_seed)
+                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
 
             # Extract IPs from the site content
             found_ips = self.extract_ip_and_port(response.text)
@@ -473,7 +474,7 @@ class ScannerWorker(QObject):
             for extracted_ip, extracted_port, ip_version in found_ips:
                 new_seed = Seed(extracted_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category})")
-                self.process_seed(new_seed)
+                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
 
             return True  # Always return True if status code is 200
 
@@ -681,8 +682,8 @@ class MainWindow(QMainWindow):
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
-        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Source IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
+        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: Yes it's not duplicate")
+        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}), Zeroday: No it's duplicate")
         add_plain_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_plain_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_plain_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")

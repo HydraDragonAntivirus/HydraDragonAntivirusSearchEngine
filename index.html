@@ -46,6 +46,15 @@
       return rows;
     }
     
+    // Obfuscate the IP by replacing the last dot with "[.]"
+    function obfuscateIP(ip) {
+      const lastDotIndex = ip.lastIndexOf('.');
+      if (lastDotIndex !== -1) {
+        return ip.substring(0, lastDotIndex) + "[.]" + ip.substring(lastDotIndex + 1);
+      }
+      return ip;
+    }
+    
     // Load a CSV file and populate the table with the given ID
     function loadCSV(filename, tableId) {
       fetch(filename)
@@ -64,8 +73,8 @@
             const reportDate = row[2];
             const comment = row[3];
 
-            // Always prepend "[.]" to the IP for obfuscation
-            ip = "[.]" + ip;
+            // Replace the last dot with "[.]"
+            ip = obfuscateIP(ip);
 
             const tr = document.createElement("tr");
             tr.innerHTML = `<td>${ip}</td><td>${category}</td><td>${reportDate}</td><td>${comment}</td>`;
