@@ -3,27 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <title>Hydra Dragon Antivirus Report</title>
-  <!-- Link to external CSS -->
   <link rel="stylesheet" href="css/style.css">
+  <style>
+    .warning {
+      color: red;
+      font-weight: bold;
+      font-size: 1.2em;
+      margin-bottom: 1em;
+    }
+  </style>
 </head>
 <body>
   <h1>Hydra Dragon Antivirus Report</h1>
-  <p>This report displays fully unknown benign and non benign IPs discovered by the Hydra Dragon Antivirus Search Engine.</p>
-  
-  <div id="whitelist-section">
-    <h2>Fully Unknown Benign IPs</h2>
-    <table id="whitelist-table">
-      <thead>
-        <tr>
-          <th>IP</th>
-          <th>Category</th>
-          <th>Report Date</th>
-          <th>Comment</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-  </div>
+  <p>This report displays fully unknown non-benign IPs discovered by the Hydra Dragon Antivirus Search Engine.</p>
+  <p class="warning">WARNING: Do NOT open these IP addresses directly.</p>
   
   <div id="bulk-section">
     <h2>Fully Unknown Non‑Benign IPs</h2>
@@ -59,19 +52,21 @@
         .then(response => response.text())
         .then(text => {
           const data = parseCSV(text);
-          // Skip header row (assumed to be first row)
           const tbody = document.getElementById(tableId).querySelector("tbody");
+
+          // Skip header row (assumed to be first row)
           for (let i = 1; i < data.length; i++) {
             const row = data[i];
-            if (row.length < 4) continue;
+            if (row.length < 4) continue; // Skip malformed rows
+
             let ip = row[0];
             const category = row[1];
             const reportDate = row[2];
             const comment = row[3];
-            // If the category is non‑empty (non‑benign), prepend "[.]" to the IP
-            if (category && category !== "") {
-              ip = "[.]" + ip;
-            }
+
+            // Always prepend "[.]" to the IP for obfuscation
+            ip = "[.]" + ip;
+
             const tr = document.createElement("tr");
             tr.innerHTML = `<td>${ip}</td><td>${category}</td><td>${reportDate}</td><td>${comment}</td>`;
             tbody.appendChild(tr);
@@ -80,8 +75,7 @@
         .catch(err => console.error("Error loading " + filename, err));
     }
     
-    // Load both CSV files on page load
-    loadCSV("WhitelistReport.csv", "whitelist-table");
+    // Load CSV file on page load
     loadCSV("BulkReport.csv", "bulk-table");
   </script>
 </body>
