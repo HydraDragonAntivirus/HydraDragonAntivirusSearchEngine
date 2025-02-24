@@ -326,10 +326,10 @@ class ScannerWorker(QObject):
             info["line_count"] += 1
             info["file_size"] += line_bytes
 
-    def handle_duplicate(self, category, seed, status="N/A"):
+    def handle_duplicate(self, category, seed, status, discovered_source_url):
         report_date = datetime.now(timezone.utc).isoformat()
         comment = self.comment_template_nozeroday.format(ip=seed.ip,
-                                                         discovered_url=seed.get_url(),
+                                                         discovered_url=discovered_source_url,
                                                          verdict=seed.source_type,
                                                          status=status)
         line = f'{seed.ip},"",{report_date},"{comment}"\n'
@@ -455,7 +455,7 @@ class ScannerWorker(QObject):
                 self.write_whitelist_line(line)
                 self.log(f"Whitelist output written for {seed.ip}.")
             elif duplicate_flag and duplicate_settings:
-                 self.handle_duplicate(cat, seed, status=status)
+                 self.handle_duplicate(cat, seed, status, discovered_source_url)
             elif duplicate_flag and not duplicate_settings:
                  self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         else:
@@ -481,7 +481,7 @@ class ScannerWorker(QObject):
                 self.write_bulk_line(line)
                 self.log(f"Bulk output written for {seed.ip}.")
             elif duplicate_flag and duplicate_settings:
-                self.handle_duplicate(cat, seed, status=status)
+                self.handle_duplicate(cat, seed, status, discovered_source_url)
             elif duplicate_flag and not duplicate_settings:
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         with self.lock:
@@ -508,7 +508,7 @@ class ScannerWorker(QObject):
                 parsed_ip = urlparse(response.url).hostname
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
                     new_seed = Seed(parsed_ip, category, port=port)
-                    self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
+                    self.log(f"Processing redirected IP: {new_seed} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
                 # Extract discovered IPs from the response content.
                 found_ips = self.extract_ip_and_port(response.text)
@@ -526,7 +526,7 @@ class ScannerWorker(QObject):
                     parsed_extracted = urlparse(candidate).hostname
                     discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
                     new_seed = Seed(discovered_ip, category, port=extracted_port)
-                    self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
+                    self.log(f"Processing discovered IP: {new_seed} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
             elif 400 <= code <= 499:
                 self.log(f"Client error: HTTP {code} for {url}")
