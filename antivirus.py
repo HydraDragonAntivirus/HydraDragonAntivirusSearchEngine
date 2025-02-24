@@ -372,49 +372,61 @@ class ScannerWorker(QObject):
 
         self.log(f"Processing: {seed.get_url()} (Category: {category})")
         if not discovered_source_url:
-            discovered_source_url = seed.get_url()  # Define discovered_source_url before using it
+            discovered_source_url = seed.get_url()  # Default to seed URL if none provided
 
-        # Determine seed_verdict based on category and active/static status.
+        # Call is_active_and_static once and store its returned HTTP status code.
+        status = self.is_active_and_static(seed.ip, seed.port, category=category, discovered_source_url=discovered_source_url)
+
+        # Determine seed_verdict based on the status code.
         if category.startswith("whitelist"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 2)" if self.is_active_and_static(seed.ip, seed.port,
-                                                                                         category=category, discovered_source_url=discovered_source_url) else "whitelist (auto verdict 3)"
+                if status is not None and 200 <= status <= 299:
+                    seed_verdict = "whitelist (auto verdict 2)"
+                else:
+                    seed_verdict = "whitelist (auto verdict 3)"
             else:
                 seed_verdict = "whitelist (manual verdict)"
         elif category.startswith("phishing"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
+                if status is None or not (200 <= status <= 299):
+                    seed_verdict = "whitelist (auto verdict 1)"
+                else:
+                    seed_verdict = seed.source_type
             else:
                 seed_verdict = "phishing"
         elif category.startswith("ddos"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
+                if status is None or not (200 <= status <= 299):
+                    seed_verdict = "whitelist (auto verdict 1)"
+                else:
+                    seed_verdict = seed.source_type
             else:
                 seed_verdict = "ddos"
         elif category.startswith("bruteforce"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
+                if status is None or not (200 <= status <= 299):
+                    seed_verdict = "whitelist (auto verdict 1)"
+                else:
+                    seed_verdict = seed.source_type
             else:
                 seed_verdict = "bruteforce"
         elif category.startswith("malicious"):
             if self.allow_auto_verdict:
-                seed_verdict = "whitelist (auto verdict 1)" if not self.is_active_and_static(seed.ip, seed.port,
-                                                                                             category=category, discovered_source_url=discovered_source_url) else seed.source_type
+                if status is None or not (200 <= status <= 299):
+                    seed_verdict = "whitelist (auto verdict 1)"
+                else:
+                    seed_verdict = seed.source_type
             else:
                 seed_verdict = "malicious"
         else:
             seed_verdict = seed.source_type
 
-        # If the computed verdict starts with "whitelist", write to whitelist CSV.
+        # Build the comment using the updated template (includes {status}).
         if seed_verdict.startswith("whitelist"):
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict)
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict, status=status)
             line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
-        # Otherwise, write to bulk CSV using the appropriate category label.
         elif not duplicate_flag:
             if category.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
@@ -427,7 +439,7 @@ class ScannerWorker(QObject):
             else:
                 self.log("Invalid label returning...")
                 return
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict)
+            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict, status=status)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_bulk_line(line)
             self.log(f"Bulk output written for {seed.ip}.")
