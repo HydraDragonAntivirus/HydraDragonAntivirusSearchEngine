@@ -473,12 +473,12 @@ class ScannerWorker(QObject):
                                                            status=status)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
-               self.write_bulk_line(line)
+                self.write_bulk_line(line)
                 self.log(f"Bulk output written for {seed.ip}.")
             elif duplicate_flag and duplicate_settings:
-                 self.handle_duplicate(cat, seed, status=status)
+                self.handle_duplicate(cat, seed, status=status)
             elif duplicate_flag and not duplicate_settings:
-                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
+                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         with self.lock:
             self.processed_count += 1
             self.update_progress()
