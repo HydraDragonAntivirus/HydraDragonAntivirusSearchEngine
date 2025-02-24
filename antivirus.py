@@ -711,7 +711,7 @@ class MainWindow(QMainWindow):
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_plain_field("Category BruteForce:", "CategorySpam", "10")
+        add_plain_field("Category Spam:", "CategorySpam", "10")
         add_plain_field("Category Malicious:", "CategoryMalicious", "20")
         add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
         add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
