@@ -326,12 +326,15 @@ class ScannerWorker(QObject):
             info["line_count"] += 1
             info["file_size"] += line_bytes
 
-    def handle_duplicate(self, category, seed):
+    def handle_duplicate(self, category, seed, status="N/A"):
         report_date = datetime.now(timezone.utc).isoformat()
-        comment = self.comment_template_nozeroday.format(ip=seed.ip, discovered_url=seed.get_url(), verdict=seed.source_type)
+        comment = self.comment_template_nozeroday.format(ip=seed.ip,
+                                                         discovered_url=seed.get_url(),
+                                                         verdict=seed.source_type,
+                                                         status=status)
         line = f'{seed.ip},"{seed.source_type}",{report_date},"{comment}"\n'
         self.write_duplicate_line(category, line)
-        self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category}.")
+        self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category} with status {status}.")
 
     def run_scan(self):
         self.log("Loading definitions...")
@@ -358,9 +361,7 @@ class ScannerWorker(QObject):
             return
         self.visited_ips.add(seed.ip)
 
-        duplicate_flag = False
-
-        # Add "spam_ipv4" and "spam_ipv6" to allowed categories.
+        cat = seed.source_type.lower().strip()
         allowed_categories = [
             "whitelist_ipv6", "whitelist_ipv4",
             "phishing_ipv6", "phishing_ipv4",
@@ -369,99 +370,66 @@ class ScannerWorker(QObject):
             "spam_ipv6", "spam_ipv4",
             "malicious_ipv6", "malicious_ipv4",
         ]
-        if category := seed.source_type.lower().strip() not in allowed_categories:
-            if seed.source_type.lower().strip() not in allowed_categories:
-                self.log(f"Category for {seed.ip} is '{seed.source_type.lower().strip()}', which is not allowed. Skipping processing.")
-                return
+        if cat not in allowed_categories:
+            self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
+            return
 
-        # Check for duplicates using initial and new sets.
-        if seed.ip in self.initial_ips.get(seed.source_type.lower().strip(), set()):
-            allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
-            if not self.settings.get(allow_duplicate_key, True):
-                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
-                duplicate_flag = True
-            else:
-                self.log(f"Duplicate for {seed.ip} detected. Logging duplicate.")
-                self.handle_duplicate(seed.source_type.lower().strip(), seed)
-                duplicate_flag = True
-
-        self.log(f"Processing: {seed.get_url()} (Category: {seed.source_type.lower().strip()})")
         if not discovered_source_url:
             discovered_source_url = seed.get_url()  # Default discovered URL
 
-        # Call is_active_and_static once and store its returned HTTP status code.
-        status = self.is_active_and_static(seed.ip, seed.port, category=seed.source_type.lower().strip(), discovered_source_url=discovered_source_url)
+        # Call is_active_and_static only once.
+        status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
+
+        # If duplicate, log duplicate with the same status and return.
+        if seed.ip in self.initial_ips.get(cat, set()):
+            allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
+            if not self.settings.get(allow_duplicate_key, True):
+                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
+                return
+            else:
+                self.handle_duplicate(cat, seed, status=status if status is not None else "N/A")
+                return
+
+        if status is None:
+            self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
+            return
 
         # Determine seed_verdict based on category and HTTP status.
-        cat = seed.source_type.lower().strip()
         if cat.startswith("whitelist"):
-            if self.allow_auto_verdict:
-                if status is not None and 200 <= status <= 299:
-                    seed_verdict = "whitelist (auto verdict 2)"
-                else:
-                    seed_verdict = "whitelist (auto verdict 3)"
-            else:
-                seed_verdict = "whitelist (manual verdict)"
+            seed_verdict = "whitelist (auto verdict 2)" if 200 <= status <= 299 else "whitelist (auto verdict 3)"
         elif cat.startswith("phishing"):
-            if self.allow_auto_verdict:
-                if status is not None:
-                    if 200 <= status <= 299:
-                        seed_verdict = "phishing (auto verdict 1)"
-                    elif 300 <= status <= 399:
-                        seed_verdict = "whitelist (auto verdict 4)"
-                    else:
-                        seed_verdict = "whitelist (auto verdict 2)"
-                else:
-                    seed_verdict = "whitelist (auto verdict 2)"
+            if 200 <= status <= 299:
+                seed_verdict = "phishing (auto verdict 1)"
+            elif 300 <= status <= 399:
+                seed_verdict = "whitelist (auto verdict 4)"
             else:
-                seed_verdict = "phishing"
+                seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("spam"):
-            if self.allow_auto_verdict:
-                if status is not None:
-                    if 200 <= status <= 299:
-                        seed_verdict = "spam (auto verdict 1)"
-                    elif 300 <= status <= 399:
-                        seed_verdict = "whitelist (auto verdict 4)"
-                    else:
-                        seed_verdict = "whitelist (auto verdict 2)"
-                else:
-                    seed_verdict = "whitelist (auto verdict 2)"
+            if 200 <= status <= 299:
+                seed_verdict = "spam (auto verdict 1)"
+            elif 300 <= status <= 399:
+                seed_verdict = "whitelist (auto verdict 4)"
             else:
-                seed_verdict = "spam"
+                seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("ddos"):
-            if self.allow_auto_verdict:
-                if status is None or not (200 <= status <= 299):
-                    seed_verdict = "whitelist (auto verdict 1)"
-                else:
-                    seed_verdict = seed.source_type
-            else:
-                seed_verdict = "ddos"
+            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
         elif cat.startswith("bruteforce"):
-            if self.allow_auto_verdict:
-                if status is None or not (200 <= status <= 299):
-                    seed_verdict = "whitelist (auto verdict 1)"
-                else:
-                    seed_verdict = seed.source_type
-            else:
-                seed_verdict = "bruteforce"
+            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
         elif cat.startswith("malicious"):
-            if self.allow_auto_verdict:
-                if status is None or not (200 <= status <= 299):
-                    seed_verdict = "whitelist (auto verdict 1)"
-                else:
-                    seed_verdict = seed.source_type
-            else:
-                seed_verdict = "malicious"
+            seed_verdict = seed.source_type if 200 <= status <= 299 else "whitelist (auto verdict 1)"
         else:
             seed_verdict = seed.source_type
 
         # Build the comment using the updated template (includes {status}).
         if seed_verdict.startswith("whitelist"):
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict, status=status)
+            comment = self.comment_template_zeroday.format(ip=seed.ip,
+                                                           discovered_url=discovered_source_url,
+                                                           verdict=seed_verdict,
+                                                           status=status)
             line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_whitelist_line(line)
             self.log(f"Whitelist output written for {seed.ip}.")
-        elif not duplicate_flag:
+        else:
             if cat.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
             elif cat.startswith("ddos"):
@@ -475,7 +443,10 @@ class ScannerWorker(QObject):
             else:
                 self.log("Invalid label returning...")
                 return
-            comment = self.comment_template_zeroday.format(ip=seed.ip, discovered_url=discovered_source_url, verdict=seed_verdict, status=status)
+            comment = self.comment_template_zeroday.format(ip=seed.ip,
+                                                           discovered_url=discovered_source_url,
+                                                           verdict=seed_verdict,
+                                                           status=status)
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             self.write_bulk_line(line)
             self.log(f"Bulk output written for {seed.ip}.")
@@ -483,7 +454,6 @@ class ScannerWorker(QObject):
         with self.lock:
             self.processed_count += 1
             self.update_progress()
-
 
     def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
         if timeout is None:
@@ -532,42 +502,6 @@ class ScannerWorker(QObject):
             self.log(f"Could not determine public IP: {e}")
             self.failure.emit(f"Could not determine public IP: {e}")
             return None
-
-    def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
-        if timeout is None:
-            timeout = self.request_timeout
-
-        url = f"http://{ip}" + (f":{port}" if port else "")
-
-        try:
-            response = requests.get(url, timeout=timeout, allow_redirects=True)
-
-            if response.status_code != 200:
-                return False
-
-            final_ip = urlparse(response.url).hostname  # Get redirected IP (if any)
-
-            # If redirected to a new IP, process it directly
-            if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
-                new_seed = Seed(final_ip, category, port=port)
-                self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category})")
-                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
-
-            # Extract IPs from the site content
-            found_ips = self.extract_ip_and_port(response.text)
-
-            # Process each discovered IP with the given category directly
-            for extracted_ip, extracted_port, ip_version in found_ips:
-                extracted_ip = urlparse(extracted_ip).hostname
-                new_seed = Seed(extracted_ip, category, port=extracted_port)
-                self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category})")
-                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
-
-            return True  # Always return True if status code is 200
-
-        except Exception as e:
-            self.log(f"Active/static check failed for {url}: {e}")
-            return False
 
     def is_valid_ip(self, ip_string):
         try:
