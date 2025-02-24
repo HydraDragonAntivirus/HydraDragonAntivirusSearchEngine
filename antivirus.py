@@ -511,9 +511,10 @@ class ScannerWorker(QObject):
                     # Parse the extracted IP to get the hostname.
                     parsed_extracted = urlparse(extracted_ip).hostname
                     discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
-                    # For IPv6 discovered IPs, ensure they are wrapped in brackets.
-                    if ip_version == "ipv6" and not discovered_ip.startswith('['):
-                        discovered_ip = f"[{discovered_ip}]"
+                    # For IPv6 discovered IPs: if already enclosed in brackets, remove them.
+                    if ip_version == "ipv6" and discovered_ip:
+                        if discovered_ip.startswith('[') and discovered_ip.endswith(']'):
+                            discovered_ip = discovered_ip[1:-1]
                     parsed_discovered_ip = urlparse(response.discovered_ip).hostname
                     new_seed = Seed(discovered_ip, category, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
