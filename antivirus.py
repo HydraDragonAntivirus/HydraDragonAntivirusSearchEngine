@@ -472,6 +472,7 @@ class ScannerWorker(QObject):
 
             # Process each discovered IP with the given category directly
             for extracted_ip, extracted_port, ip_version in found_ips:
+                extracted_ip = urlparse(extracted_ip).hostname
                 new_seed = Seed(extracted_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category})")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
