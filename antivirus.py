@@ -359,6 +359,11 @@ class ScannerWorker(QObject):
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
+
+        if self.my_public_ip and ip == self.my_public_ip:
+            self.log(f"Skipping my own public IP: {ip}")
+            return
+
         self.visited_ips.add(seed.ip)
 
         cat = seed.source_type.lower().strip()
