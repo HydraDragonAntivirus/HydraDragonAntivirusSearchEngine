@@ -497,22 +497,27 @@ class ScannerWorker(QObject):
             response = requests.get(url, timeout=timeout, allow_redirects=True)
             code = response.status_code
 
-            if 200 <= code <= 299:
-                final_ip = urlparse(response.url).hostname
-                if final_ip and final_ip != ip and self.is_valid_ip(final_ip):
-                    new_seed = Seed(final_ip, category, port=port)
+            # Process responses in the active range: 200-299 and 300-399.
+            if 200 <= code <= 399:
+                # Always extract the final hostname from the response URL.
+                parsed_ip = urlparse(response.url).hostname
+                if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
+                    new_seed = Seed(parsed_ip, category, port=port)
                     self.log(f"Processing redirected IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                # Extract discovered IPs from the response content.
                 found_ips = self.extract_ip_and_port(response.text)
                 for extracted_ip, extracted_port, ip_version in found_ips:
-                    # For IPv6 discovered IPs, enclose them in brackets when needed.
-                    if ip_version == "ipv6":
-                        extracted_ip = f"[{extracted_ip}]"
-                    new_seed = Seed(extracted_ip, category, port=extracted_port)
+                    # Parse the extracted IP to get the hostname.
+                    parsed_extracted = urlparse(extracted_ip).hostname
+                    discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
+                    # For IPv6 discovered IPs, ensure they are wrapped in brackets.
+                    if ip_version == "ipv6" and not discovered_ip.startswith('['):
+                        discovered_ip = f"[{discovered_ip}]"
+                    parsed_discovered_ip = urlparse(response.discovered_ip).hostname
+                    new_seed = Seed(discovered_ip, category, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
-            elif 300 <= code <= 399:
-                self.log(f"Redirection detected: HTTP {code} for {url}")
             elif 400 <= code <= 499:
                 self.log(f"Client error: HTTP {code} for {url}")
             elif 500 <= code <= 599:
