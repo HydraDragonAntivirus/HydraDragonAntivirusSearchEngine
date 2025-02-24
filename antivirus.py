@@ -515,7 +515,7 @@ class ScannerWorker(QObject):
                     if ip_version == "ipv6" and discovered_ip:
                         if discovered_ip.startswith('[') and discovered_ip.endswith(']'):
                             discovered_ip = discovered_ip[1:-1]
-                    parsed_discovered_ip = urlparse(response.discovered_ip).hostname
+                    parsed_discovered_ip = urlparse(discovered_ip).hostname
                     new_seed = Seed(discovered_ip, category, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed.get_url()} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
