@@ -167,9 +167,9 @@ class ScannerWorker(QObject):
         self.out_dead_whitelist_duplicate_1_csv = settings.get("DeadWhitelistDuplicate1OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_1.csv"))
         self.out_dead_whitelist_duplicate_2_csv = settings.get("DeadWhitelistDuplicate2OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_2.csv"))
 
-        self.out_winerror_bulk_csv = settings.get("WinErrorbulk_1OutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
+        self.out_winerror_bulk_csv = settings.get("WinErrorbulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkduplicate_1OutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
+        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkduplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
         self.out_winerror_whitelist_duplicate_csv = settings.get("WinErrorWhitelistDuplicateOutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
 
         # Duplicate file paths from settings.
