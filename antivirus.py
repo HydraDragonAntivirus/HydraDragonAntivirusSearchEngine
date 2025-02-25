@@ -534,6 +534,8 @@ class ScannerWorker(QObject):
                 self.log(f"Client error: HTTP {code} for {url}")
             elif 500 <= code <= 599:
                 self.log(f"Server error: HTTP {code} for {url}")
+            elif 100 <= code <= 199:
+                self.log(f"Info: HTTP {code} for {url}")
             else:
                 self.log(f"Unhandled HTTP status code {code} for {url}")
 
