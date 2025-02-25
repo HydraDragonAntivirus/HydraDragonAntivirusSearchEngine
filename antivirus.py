@@ -413,36 +413,26 @@ class ScannerWorker(QObject):
                 seed_verdict = "phishing (auto verdict 5)"
             elif 300 <= status <= 399:
                 seed_verdict = "phishing (auto verdict 6)"
-            else:
-                seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("spam"):
             if 200 <= status <= 299:
                 seed_verdict = "spam (auto verdict 5)"
             elif 300 <= status <= 399:
                 seed_verdict = "spam (auto verdict 6)"
-            else:
-                seed_verdict = "whitelist (auto verdict 2)"
         elif cat.startswith("ddos"):
             if 200 <= status <= 299:
                 seed_verdict = "ddos (auto verdict 5)"
             elif 300 <= status <= 399:
                 seed_verdict = "ddos (auto verdict 6)"
-            else:
-                seed_verdict = "whitelist (auto verdict 1)"
         elif cat.startswith("bruteforce"):
             if 200 <= status <= 299:
                 seed_verdict = "bruteforce (auto verdict 5)"
             elif 300 <= status <= 399:
                 seed_verdict = "bruteforce (auto verdict 6)"
-            else:
-                seed_verdict = "whitelist (auto verdict 1)"
         elif cat.startswith("malicious"):
             if 200 <= status <= 299:
                 seed_verdict = "malicious (auto verdict 5)"
             elif 300 <= status <= 399:
                 seed_verdict = "malicious (auto verdict 6)"
-            else:
-                seed_verdict = "whitelist (auto verdict 1)"
         else:
             seed_verdict = seed.source_type
 
