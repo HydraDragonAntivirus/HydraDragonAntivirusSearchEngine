@@ -1127,7 +1127,13 @@ class MainWindow(QMainWindow):
             "WinErrorBulk1OutputFile", "WinErrorBulk2OutputFile",
             "WinErrorWhitelist1OutputFile", "WinErrorWhitelist2OutputFile",
             "WinErrorBulkDuplicate1OutputFile", "WinErrorBulkDuplicate2OutputFile",
-            "WinErrorWhitelistDuplicate1OutputFile", "WinErrorWhitelistDuplicate2OutputFile"
+            "WinErrorWhitelistDuplicate1OutputFile", "WinErrorWhitelistDuplicate2OutputFile",
+            "MalwareFilesIPv6", "MalwareFilesIPv4",
+            "BruteForceFilesIPv4", "BruteForceFilesIPv6",
+            "SpamFilesIPv4", "SpamFilesIPv6",
+            "PhishingFilesIPv4", "PhishingFilesIPv6",
+            "DDoSFilesIPv4", "DDoSFilesIPv6",
+            "WhiteListFilesIPv4", "WhiteListFilesIPv6"
         }
 
         directory_keys = {"LastPath"}
