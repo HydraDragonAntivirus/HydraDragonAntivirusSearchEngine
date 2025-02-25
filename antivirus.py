@@ -527,7 +527,7 @@ class ScannerWorker(QObject):
                     # Parse the candidate extracted IP to get the hostname.
                     parsed_extracted = urlparse(candidate).hostname
                     discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
-                    new_seed = Seed(discovered_ip, category, port=extracted_port)
+                    new_seed = Seed(discovered_ip, parse_extracted, port=extracted_port)
                     self.log(f"Processing discovered IP: {new_seed} (Category: {category}) - HTTP {code}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
             elif 400 <= code <= 499:
