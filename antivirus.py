@@ -742,28 +742,23 @@ class ScannerWorker(QObject):
                 elif cat.startswith("phishing"):
                     winerror_cat = f"winerror phishing duplicate {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_phishing_duplicate_line(line)
+                    self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError phishing duplicate output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     winerror_cat = f"winerror ddos duplicate {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_ddos_duplicate_line(line)
+                    self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     winerror_cat = f"winerror bruteforce duplicate {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_bruteforce_duplicate_line(line)
+                    self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError bruteforce duplicate output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     winerror_cat = f"winerror malware duplicate {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_malware_duplicate_line(line)
-                    self.log(f"WinError malware duplicate output written for {seed.ip}.")
-                else:
-                    winerror_cat = f"winerror bulk duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
-                    self.log(f"WinError bulk duplicate output written for {seed.ip}.")
+                    self.log(f"WinError malware duplicate output written for {seed.ip}.")
             else:
                 if cat.startswith("whitelist"):
                     winerror_cat = f"winerror whitelist {base_category}"
@@ -773,28 +768,23 @@ class ScannerWorker(QObject):
                 elif cat.startswith("phishing"):
                     winerror_cat = f"winerror phishing {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_phishing_line(line)
+                    self.write_winerror_bulk_line(line)
                     self.log(f"WinError phishing output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     winerror_cat = f"winerror ddos {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_ddos_line(line)
+                    self.write_winerror_bulk_line(line)
                     self.log(f"WinError ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     winerror_cat = f"winerror bruteforce {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_bruteforce_line(line)
+                    self.write_winerror_bulk_line(line)
                     self.log(f"WinError bruteforce output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     winerror_cat = f"winerror malware {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
-                    self.write_winerror_malware_line(line)
-                    self.log(f"WinError malware output written for {seed.ip}.")
-                else:
-                    winerror_cat = f"winerror bulk {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
                     self.write_winerror_bulk_line(line)
-                    self.log(f"WinError bulk output written for {seed.ip}.")
+                    self.log(f"WinError malware output written for {seed.ip}.")
             return
 
         # --- Dead response handling for 400-499 ---
@@ -895,12 +885,6 @@ class ScannerWorker(QObject):
                     line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_dead_bulk_duplicate2_line(line)
                     self.log(f"Dead malware duplicate2 output written for {seed.ip} with status {status}.")
-                else:
-                    dead_category = f"dead_bulk duplicate {base_category}"
-                    comment = f"Dead2 (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate2_line(line)
-                    self.log(f"Dead bulk duplicate2 output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
                     dead_category = f"dead_bulk {base_category}"
@@ -932,12 +916,6 @@ class ScannerWorker(QObject):
                     line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_deadmalware_line(line)
                     self.log(f"Dead malware output written for {seed.ip} with status {status}.")
-                else:
-                    dead_category = f"dead_bulk {base_category}"
-                    comment = f"Dead2 (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk2_line(line)
-                    self.log(f"Dead bulk2 output written for {seed.ip} with status {status}.")
             return
 
         duplicate_settings = self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True)
