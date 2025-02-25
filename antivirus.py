@@ -162,14 +162,14 @@ class ScannerWorker(QObject):
         self.out_dead_whitelist1_csv = settings.get("DeadWhitelist1OutputFile", os.path.join(output_dir, "dead_whitelist1.csv"))
         self.out_dead_whitelist2_csv = settings.get("DeadWhitelist2OutputFile", os.path.join(output_dir, "dead_whitelist2.csv"))
         # New output files for dead duplicate responses
-        self.out_dead_bulk_duplicate_1_csv = settings.get("DeadBulkDuplicate_1OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_1.csv"))
-        self.out_dead_bulk_duplicate_2_csv = settings.get("DeadBulkDuplicate_2OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_2.csv"))
+        self.out_dead_bulk_duplicate_1_csv = settings.get("DeadBulkDuplicate1OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_1.csv"))
+        self.out_dead_bulk_duplicate_2_csv = settings.get("DeadBulkDuplicate2OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_2.csv"))
         self.out_dead_whitelist_duplicate_1_csv = settings.get("DeadWhitelistDuplicate1OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_1.csv"))
         self.out_dead_whitelist_duplicate_2_csv = settings.get("DeadWhitelistDuplicate2OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_2.csv"))
 
-        self.out_winerror_bulk_csv = settings.get("WinErrorbulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
+        self.out_winerror_bulk_csv = settings.get("WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkduplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
+        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkDuplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
         self.out_winerror_whitelist_duplicate_csv = settings.get("WinErrorWhitelistDuplicateOutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
 
         # Duplicate file paths from settings.
@@ -1227,6 +1227,8 @@ class MainWindow(QMainWindow):
             "OutputFile", "WhiteListOutputFile",
             "DeadBulk1OutputFile", "DeadBulk2OutputFile",
             "DeadBulkDuplicate1OutputFile", "DeadBulkDuplicate2OutputFile",
+            "DeadWhiteList1OutputFile", "DeadWhiteList2OutputFile",
+            "DeadWhiteListDuplicate1OutputFile", "DeadWhiteListDuplicate2OutputFile",
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
             "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
@@ -1234,7 +1236,7 @@ class MainWindow(QMainWindow):
             "DuplicateSpamFileIPv4", "DuplicateSpamFileIPv6",
             "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6",
             "WinErrorWhitelistOutputFile",  "WinErrorBulkOutputFile",
-            "WinErrorWhitelistDuplicateOutputFile",  "WinErrorBulkDuplicate2OutputFile",
+            "WinErrorWhitelistDuplicateOutputFile", "WinErrorBulkDuplicateOutputFile",
             "MalwareFilesIPv6", "MalwareFilesIPv4",
             "BruteForceFilesIPv4", "BruteForceFilesIPv6",
             "SpamFilesIPv4", "SpamFilesIPv6",
@@ -1301,10 +1303,10 @@ class MainWindow(QMainWindow):
         add_field("Dead Whitelist Duplicate 1 Output File:", "DeadWhiteListDuplicate1OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_1.csv"))
         add_field("Dead Whitelist Duplicate 2 Output File:", "DeadWhiteListDuplicate2OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_2.csv"))
         # New fields for WinError CSV outputs:
-        add_field("WinError Bulk 1 Output File:", "WinErrorBulk1OutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
-        add_field("WinError Whitelist 1 Output File:", "WinErrorWhitelist1OutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        add_field("WinError Bulk Duplicate 1 Output File:", "WinErrorBulkDuplicate1OutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
-        add_field("WinError Whitelist Duplicate 1 Output File:", "WinErrorWhitelistDuplicate1OutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
+        add_field("WinError Bulk Output File:", "WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
+        add_field("WinError Whitelist Output File:", "WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
+        add_field("WinError Bulk Duplicate Output File:", "WinErrorBulkDuplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
+        add_field("WinError Whitelist Duplicate Output File:", "WinErrorWhitelistDuplicateOutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
 
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
@@ -1325,10 +1327,6 @@ class MainWindow(QMainWindow):
         add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
         add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
         add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
-        add_field("WhiteList Path IPv4:", "WhiteListPathIPv4", "website\\IPv4WhiteList.txt")
-        add_field("WhiteList Path IPv6:", "WhiteListPathIPv6", "website\\IPv6WhiteList.txt")
-        add_field("Phishing Path IPv4:", "PhishingPathIPv4", "website\\IPv4Phishing.txt")
-        add_field("Phishing Path IPv6:", "PhishingPathIPv6", "website\\IPv6Phishing.txt")
         # Last Directory Path uses a directory browse button
         add_field("Last Directory Path:", "LastPath", "website")
         add_plain_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
