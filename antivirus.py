@@ -1020,8 +1020,8 @@ class ScannerWorker(QObject):
                         candidate = "http://" + extracted_ip[1:-1]
                 else:
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
-                parsed_extracted = urlparse(candidate).hostname
-                discovered_ip = parsed_extracted if parsed_extracted is not None else extracted_ip
+                parse_extracted = urlparse(candidate).hostname
+                discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
                 new_seed = Seed(discovered_ip, parse_extracted, port=extracted_port)
                 self.log(f"Processing discovered IP: {new_seed} (Category: {category}) - HTTP {code}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
