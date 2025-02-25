@@ -1197,7 +1197,7 @@ class MainWindow(QMainWindow):
         file_keys = {
             "OutputFile", "WhiteListOutputFile",
             "dead_bulk_1OutputFile", "dead_bulk_2OutputFile",
-            "dead_bulk_1OutputFile", "dead_bulk_2OutputFile",
+            "dead_bulkduplicate_1OutputFile", "dead_bulkduplicate_2OutputFile",
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
             "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
