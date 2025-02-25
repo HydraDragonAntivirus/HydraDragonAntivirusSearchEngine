@@ -208,12 +208,15 @@ class ScannerWorker(QObject):
 
         # Main output rotation info
         self.bulk_file_index = 0
+        self.dead_bulk_2_file_index = 0
         self.whitelist_file_index = 0
         self.bulk_line_count = 0
+        self.dead_bulk_2_line_count = 0
         self.whitelist_line_count = 0
         self.bulk_file = None
         self.whitelist_file = None
         self.bulk_file_size = 0
+        self.dead_bulk_2_file_size = 0
         self.whitelist_file_size = 0
 
         self.processed_count = 0
@@ -308,18 +311,6 @@ class ScannerWorker(QObject):
         self.dead_bulk_duplicate_1_file_size = hsize
         self.dead_bulk_duplicate_2_file_size = hsize
 
-        # Initialize line counters to 1 (header is counted as the first line)
-        self.bulk_line_count = 1
-        self.whitelist_line_count = 1
-        self.dead_bulk_1_line_count = 1
-        self.dead_bulk_2_line_count = 1
-        self.dead_bulk_1_line_count = 1
-        self.dead_bulk_2_line_count = 1
-        self.dead_bulk_duplicate_1_line_count = 1
-        self.dead_bulk_duplicate_2_line_count = 1
-        self.dead_bulk_duplicate_1_line_count = 1
-        self.dead_bulk_duplicate_2_line_count = 1
-
     def close_csv_files(self):
         if self.bulk_file:
             self.bulk_file.close()
@@ -337,6 +328,28 @@ class ScannerWorker(QObject):
             if info.get("handle"):
                 info["handle"].close()
                 info["handle"] = None
+
+    def write_winerror_whitelist_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.out_winerror_whitelist_line_count >= self.csv_max_lines or (
+                    self.out_winerror_whitelist_file_size + line_bytes) >= self.csv_max_size:
+                self.out_winerror_whitelist_file.close()
+                self.out_winerror_whitelist_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_whitelist_csv)
+                new_filename = f"{base}_{self.out_winerror_whitelist_file_index}{ext}"
+                self.out_winerror_whitelist_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.out_winerror_whitelist_file.write(header)
+                self.out_winerror_whitelist_file.flush()
+                self.out_winerror_whitelist_line_count = 1
+                self.out_winerror_whitelist_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Whitelist file rotated; new file: {new_filename}")
+            self.out_winerror_whitelist_file.write(line)
+            self.out_winerror_whitelist_file.flush()
+            self.out_winerror_whitelist_line_count += 1
+            self.out_winerror_whitelist_file_size += line_bytes
+            self.total_seeds += 1
 
     def write_winerror_bulk_line(self, line):
         with self.lock:
@@ -399,27 +412,6 @@ class ScannerWorker(QObject):
             self.out_winerror_bulk_duplicate_line_count += 1
             self.out_winerror_bulk_duplicate_file_size += line_bytes
 
-    def write_winerror_whitelist_duplicate_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.out_winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (
-                    self.out_winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.out_winerror_whitelist_duplicate_file.close()
-                self.out_winerror_whitelist_duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_winerror_whitelist_duplicate_csv)
-                new_filename = f"{base}_{self.out_winerror_whitelist_duplicate_file_index}{ext}"
-                self.out_winerror_whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.out_winerror_whitelist_duplicate_file.write(header)
-                self.out_winerror_whitelist_duplicate_file.flush()
-                self.out_winerror_whitelist_duplicate_line_count = 1
-                self.out_winerror_whitelist_duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"WinError Whitelist Duplicate file rotated; new file: {new_filename}")
-            self.out_winerror_whitelist_duplicate_file.write(line)
-            self.out_winerror_whitelist_duplicate_file.flush()
-            self.out_winerror_whitelist_duplicate_line_count += 1
-            self.out_winerror_whitelist_duplicate_file_size += line_bytes
-
     # New helper methods for duplicate dead outputs:
     def write_dead_bulk_duplicate_1_line(self, line):
         with self.lock:
@@ -480,26 +472,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_1_file.flush()
             self.dead_bulk_duplicate_1_line_count += 1
             self.dead_bulk_duplicate_1_file_size += line_bytes
-
-    def write_dead_bulk_duplicate_2_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_duplicate_2_line_count >= self.csv_max_lines or (self.dead_bulk_duplicate_2_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_duplicate_2_file.close()
-                self.dead_bulk_duplicate_2_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_duplicate_2_csv)
-                new_filename = f"{base}_{self.dead_bulk_duplicate_2_file_index}{ext}"
-                self.dead_bulk_duplicate_2_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_duplicate_2_file.write(header)
-                self.dead_bulk_duplicate_2_file.flush()
-                self.dead_bulk_duplicate_2_line_count = 1
-                self.dead_bulk_duplicate_2_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulkduplicate_2 file rotated; new file: {new_filename}")
-            self.dead_bulk_duplicate_2_file.write(line)
-            self.dead_bulk_duplicate_2_file.flush()
-            self.dead_bulk_duplicate_2_line_count += 1
-            self.dead_bulk_duplicate_2_file_size += line_bytes
 
     def write_dead_bulk_1_line(self, line):
         with self.lock:
@@ -663,6 +635,9 @@ class ScannerWorker(QObject):
             return
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
+
+        winerror_msg = "WinError Happened"
+
         try:
             status = self.is_active_and_static(seed.ip, seed.port, category=cat,
                                                discovered_source_url=discovered_source_url)
@@ -695,6 +670,7 @@ class ScannerWorker(QObject):
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
+
                     winerror_cat = f"winerror bruteforce duplicate {base_category}"
                     line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
