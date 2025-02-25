@@ -1248,7 +1248,7 @@ class MainWindow(QMainWindow):
         add_field("Duplicate BruteForce File IPv4:", "DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
         add_field("Duplicate BruteForce File IPv6:", "DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
         add_field("Duplicate Spam File IPv4:", "DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
-        add_field("Duplicate Spam File IPv6:", "DuplicateSpameFileIPv6", "output\\spam_ipv6_duplicates.csv")
+        add_field("Duplicate Spam File IPv6:", "DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
         add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
 
