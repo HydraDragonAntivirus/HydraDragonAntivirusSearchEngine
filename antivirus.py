@@ -215,10 +215,6 @@ class ScannerWorker(QObject):
         self.whitelist_line_count = 0
         self.bulk_file = None
         self.whitelist_file = None
-        self.bulk_file_size = 0
-        self.dead_bulk_2_file_size = 0
-        self.whitelist_file_size = 0
-
         self.processed_count = 0
         self.total_seeds = 0
 
