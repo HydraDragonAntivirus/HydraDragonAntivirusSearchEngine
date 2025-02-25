@@ -446,11 +446,16 @@ class ScannerWorker(QObject):
 
     def handle_duplicate(self, category, seed, status, discovered_source_url):
         report_date = datetime.now(timezone.utc).isoformat()
-        comment = self.comment_template_nozeroday.format(ip=seed.ip,
-                                                         discovered_url=discovered_source_url,
-                                                         verdict=seed.source_type,
-                                                         status=status)
-        line = f'{seed.ip},"",{report_date},"{comment}"\n'
+        comment = self.comment_template_nozeroday.format(
+            ip=seed.ip,
+            discovered_url=discovered_source_url,
+            verdict=seed.source_type,
+            status=status
+        )
+        # Extract the base category (e.g., "phishing", "ddos", "malicious", "bruteforce")
+        base_cat = seed.source_type.split("_")[0]
+        dup_cat = f"duplicate {base_cat}"
+        line = f'{seed.ip},"{dup_cat}",{report_date},"{comment}"\n'
         self.write_duplicate_line(category, line)
         self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category} with status {status}.")
 
@@ -502,8 +507,8 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()  # Default discovered URL
 
-        # Call the HTTP checker (assumed to exist)
-        status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
+        status = self.is_active_and_static(seed.ip, seed.port, category=cat,
+                                           discovered_source_url=discovered_source_url)
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
@@ -553,6 +558,9 @@ class ScannerWorker(QObject):
         if self.settings.get(allow_duplicate_key, True):
             duplicate_settings = True
 
+        # Always assign a default value first:
+        seed_verdict = seed.source_type
+
         # Determine seed_verdict based on category and HTTP status.
         if cat.startswith("whitelist"):
             seed_verdict = "whitelist (auto verdict 2)" if 200 <= status <= 299 else "whitelist (auto verdict 3)"
@@ -586,11 +594,14 @@ class ScannerWorker(QObject):
 
         # Build the comment using the updated template (includes {status}).
         if seed_verdict.startswith("whitelist"):
-            comment = self.comment_template_zeroday.format(ip=seed.ip,
-                                                           discovered_url=discovered_source_url,
-                                                           verdict=seed_verdict,
-                                                           status=status)
-            line = f'{seed.ip},"",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            comment = self.comment_template_zeroday.format(
+                ip=seed.ip,
+                discovered_url=discovered_source_url,
+                verdict=seed_verdict,
+                status=status
+            )
+            # Instead of leaving Category empty, we set it to "whitelist"
+            line = f'{seed.ip},"whitelist",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_whitelist_line(line)
                 self.log(f"Whitelist output written for {seed.ip}.")
@@ -612,10 +623,12 @@ class ScannerWorker(QObject):
             else:
                 self.log("Invalid label returning...")
                 return
-            comment = self.comment_template_zeroday.format(ip=seed.ip,
-                                                           discovered_url=discovered_source_url,
-                                                           verdict=seed_verdict,
-                                                           status=status)
+            comment = self.comment_template_zeroday.format(
+                ip=seed.ip,
+                discovered_url=discovered_source_url,
+                verdict=seed_verdict,
+                status=status
+            )
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_bulk_line(line)
