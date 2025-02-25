@@ -157,6 +157,11 @@ class ScannerWorker(QObject):
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
+        # New output files for dead outputs
+        self.out_deadbulk1_csv = settings.get("DeadBulk1OutputFile", os.path.join(output_dir, "deadbulk1.csv"))
+        self.out_deadbulk2_csv = settings.get("DeadBulk2OutputFile", os.path.join(output_dir, "deadbulk2.csv"))
+        self.out_deadwhitelist1_csv = settings.get("DeadWhitelist1OutputFile", os.path.join(output_dir, "deadwhitelist1.csv"))
+        self.out_deadwhitelist2_csv = settings.get("DeadWhitelist2OutputFile", os.path.join(output_dir, "deadwhitelist2.csv"))
 
         # Duplicate file paths from settings.
         self.duplicate_whitelist_file_ipv4 = settings.get("DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
@@ -234,33 +239,146 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
-        for filename in [self.out_bulk_csv, self.out_whitelist_csv]:
+        # Ensure directories exist
+        for filename in [self.out_bulk_csv, self.out_whitelist_csv,
+                         self.out_deadbulk1_csv, self.out_deadbulk2_csv,
+                         self.out_deadwhitelist1_csv, self.out_deadwhitelist2_csv]:
             directory = os.path.dirname(filename)
             if directory and not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
-        self.bulk_file_index = 0
-        self.whitelist_file_index = 0
         header = "IP,Categories,ReportDate,Comment\n"
         self.bulk_line_count = 1
         self.whitelist_line_count = 1
+        self.deadbulk1_line_count = 1
+        self.deadbulk2_line_count = 1
+        self.deadwhitelist1_line_count = 1
+        self.deadwhitelist2_line_count = 1
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
+        self.deadbulk1_file = open(self.out_deadbulk1_csv, "w", encoding="utf-8")
+        self.deadbulk2_file = open(self.out_deadbulk2_csv, "w", encoding="utf-8")
+        self.deadwhitelist1_file = open(self.out_deadwhitelist1_csv, "w", encoding="utf-8")
+        self.deadwhitelist2_file = open(self.out_deadwhitelist2_csv, "w", encoding="utf-8")
         self.bulk_file.write(header)
         self.whitelist_file.write(header)
+        self.deadbulk1_file.write(header)
+        self.deadbulk2_file.write(header)
+        self.deadwhitelist1_file.write(header)
+        self.deadwhitelist2_file.write(header)
         self.bulk_file.flush()
         self.whitelist_file.flush()
+        self.deadbulk1_file.flush()
+        self.deadbulk2_file.flush()
+        self.deadwhitelist1_file.flush()
+        self.deadwhitelist2_file.flush()
         self.bulk_file_size = len(header.encode("utf-8"))
         self.whitelist_file_size = len(header.encode("utf-8"))
+        self.deadbulk1_file_size = len(header.encode("utf-8"))
+        self.deadbulk2_file_size = len(header.encode("utf-8"))
+        self.deadwhitelist1_file_size = len(header.encode("utf-8"))
+        self.deadwhitelist2_file_size = len(header.encode("utf-8"))
 
     def close_csv_files(self):
         if self.bulk_file:
             self.bulk_file.close()
         if self.whitelist_file:
             self.whitelist_file.close()
+        if self.deadbulk1_file:
+            self.deadbulk1_file.close()
+        if self.deadbulk2_file:
+            self.deadbulk2_file.close()
+        if self.deadwhitelist1_file:
+            self.deadwhitelist1_file.close()
+        if self.deadwhitelist2_file:
+            self.deadwhitelist2_file.close()
         for info in self.dup_file_info.values():
-            if info["handle"]:
+            if info.get("handle"):
                 info["handle"].close()
                 info["handle"] = None
+
+    def write_deadbulk1_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.deadbulk1_line_count >= self.csv_max_lines or (self.deadbulk1_file_size + line_bytes) >= self.csv_max_size:
+                self.deadbulk1_file.close()
+                self.deadbulk1_file_index += 1
+                base, ext = os.path.splitext(self.out_deadbulk1_csv)
+                new_filename = f"{base}_{self.deadbulk1_file_index}{ext}"
+                self.deadbulk1_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.deadbulk1_file.write(header)
+                self.deadbulk1_file.flush()
+                self.deadbulk1_line_count = 1
+                self.deadbulk1_file_size = len(header.encode("utf-8"))
+                self.log(f"DeadBulk1 file rotated; new file: {new_filename}")
+            self.deadbulk1_file.write(line)
+            self.deadbulk1_file.flush()
+            self.deadbulk1_line_count += 1
+            self.deadbulk1_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_deadbulk2_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.deadbulk2_line_count >= self.csv_max_lines or (self.deadbulk2_file_size + line_bytes) >= self.csv_max_size:
+                self.deadbulk2_file.close()
+                self.deadbulk2_file_index += 1
+                base, ext = os.path.splitext(self.out_deadbulk2_csv)
+                new_filename = f"{base}_{self.deadbulk2_file_index}{ext}"
+                self.deadbulk2_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.deadbulk2_file.write(header)
+                self.deadbulk2_file.flush()
+                self.deadbulk2_line_count = 1
+                self.deadbulk2_file_size = len(header.encode("utf-8"))
+                self.log(f"DeadBulk2 file rotated; new file: {new_filename}")
+            self.deadbulk2_file.write(line)
+            self.deadbulk2_file.flush()
+            self.deadbulk2_line_count += 1
+            self.deadbulk2_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_deadwhitelist1_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.deadwhitelist1_line_count >= self.csv_max_lines or (self.deadwhitelist1_file_size + line_bytes) >= self.csv_max_size:
+                self.deadwhitelist1_file.close()
+                self.deadwhitelist1_file_index += 1
+                base, ext = os.path.splitext(self.out_deadwhitelist1_csv)
+                new_filename = f"{base}_{self.deadwhitelist1_file_index}{ext}"
+                self.deadwhitelist1_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.deadwhitelist1_file.write(header)
+                self.deadwhitelist1_file.flush()
+                self.deadwhitelist1_line_count = 1
+                self.deadwhitelist1_file_size = len(header.encode("utf-8"))
+                self.log(f"DeadWhitelist1 file rotated; new file: {new_filename}")
+            self.deadwhitelist1_file.write(line)
+            self.deadwhitelist1_file.flush()
+            self.deadwhitelist1_line_count += 1
+            self.deadwhitelist1_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_deadwhitelist2_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.deadwhitelist2_line_count >= self.csv_max_lines or (self.deadwhitelist2_file_size + line_bytes) >= self.csv_max_size:
+                self.deadwhitelist2_file.close()
+                self.deadwhitelist2_file_index += 1
+                base, ext = os.path.splitext(self.out_deadwhitelist2_csv)
+                new_filename = f"{base}_{self.deadwhitelist2_file_index}{ext}"
+                self.deadwhitelist2_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.deadwhitelist2_file.write(header)
+                self.deadwhitelist2_file.flush()
+                self.deadwhitelist2_line_count = 1
+                self.deadwhitelist2_file_size = len(header.encode("utf-8"))
+                self.log(f"DeadWhitelist2 file rotated; new file: {new_filename}")
+            self.deadwhitelist2_file.write(line)
+            self.deadwhitelist2_file.flush()
+            self.deadwhitelist2_line_count += 1
+            self.deadwhitelist2_file_size += line_bytes
+            self.total_seeds += 1
 
     def write_bulk_line(self, line):
         with self.lock:
@@ -361,7 +479,7 @@ class ScannerWorker(QObject):
             return
 
         if self.my_public_ip and seed.ip == self.my_public_ip:
-            self.log(f"Skipping my own public IP: {ip}")
+            self.log(f"Skipping my own public IP: {seed.ip}")
             return
 
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
@@ -384,26 +502,56 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()  # Default discovered URL
 
-        # Call is_active_and_static only once.
+        # Call the HTTP checker (assumed to exist)
         status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
-        
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
-        # Duplicate flag
-        duplicate_flag = False 
+        # --- New handling for HTTP error codes ---
+        if 400 <= status <= 499:
+            base_category = seed.source_type.split("_")[0]
+            if cat.startswith("whitelist"):
+                dead_category = f"deadwhitelist {base_category}"
+                comment = f"Dead (Client Error): HTTP {status}"
+                line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_deadwhitelist1_line(line)
+                self.log(f"Dead whitelist1 output written for {seed.ip} with status {status}.")
+            else:
+                dead_category = f"deadbulk {base_category}"
+                comment = f"Dead (Client Error): HTTP {status}"
+                line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_deadbulk1_line(line)
+                self.log(f"Dead bulk1 output written for {seed.ip} with status {status}.")
+            return
 
-        # If duplicate, log duplicate with the same status and return.
+        if 500 <= status <= 599:
+            base_category = seed.source_type.split("_")[0]
+            if cat.startswith("whitelist"):
+                dead_category = f"deadwhitelist {base_category}"
+                comment = f"Dead2 (Server Error): HTTP {status}"
+                line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_deadwhitelist2_line(line)
+                self.log(f"Dead whitelist2 output written for {seed.ip} with status {status}.")
+            else:
+                dead_category = f"deadbulk {base_category}"
+                comment = f"Dead2 (Server Error): HTTP {status}"
+                line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_deadbulk2_line(line)
+                self.log(f"Dead bulk2 output written for {seed.ip} with status {status}.")
+            return
+        # --- End new handling ---
+
+        # Continue with existing processing logic for non-error status codes.
+        duplicate_flag = False
         if seed.ip in self.initial_ips.get(cat, set()):
-                duplicate_flag = True
+            duplicate_flag = True
 
         # Duplicate settings
         duplicate_settings = False
-
         allow_duplicate_key = f"AllowDuplicate{seed.source_type.capitalize()}"
         if self.settings.get(allow_duplicate_key, True):
-                duplicate_settings = True
+            duplicate_settings = True
 
         # Determine seed_verdict based on category and HTTP status.
         if cat.startswith("whitelist"):
@@ -447,9 +595,9 @@ class ScannerWorker(QObject):
                 self.write_whitelist_line(line)
                 self.log(f"Whitelist output written for {seed.ip}.")
             elif duplicate_flag and duplicate_settings:
-                 self.handle_duplicate(cat, seed, status, discovered_source_url)
+                self.handle_duplicate(cat, seed, status, discovered_source_url)
             elif duplicate_flag and not duplicate_settings:
-                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
+                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         else:
             if cat.startswith("phishing"):
                 cat_label = self.settings.get("CategoryPhishing", "7")
