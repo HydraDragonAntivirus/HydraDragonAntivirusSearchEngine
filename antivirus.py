@@ -899,6 +899,11 @@ class MainWindow(QMainWindow):
         # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
+        # New fields for Dead CSV outputs
+        add_field("Dead Bulk 1 Output File:", "DeadBulk1OutputFile", os.path.join(output_dir, "deadbulk1.csv"))
+        add_field("Dead Bulk 2 Output File:", "DeadBulk2OutputFile", os.path.join(output_dir, "deadbulk2.csv"))
+        add_field("Dead Whitelist 1 Output File:", "DeadWhitelist1OutputFile", os.path.join(output_dir, "deadwhitelist1.csv"))
+        add_field("Dead Whitelist 2 Output File:", "DeadWhitelist2OutputFile", os.path.join(output_dir, "deadwhitelist2.csv"))
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
