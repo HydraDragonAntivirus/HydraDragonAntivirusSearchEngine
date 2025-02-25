@@ -378,7 +378,6 @@ class ScannerWorker(QObject):
             self.out_winerror_whitelist_duplicate_file.flush()
             self.out_winerror_whitelist_duplicate_line_count += 1
             self.out_winerror_whitelist_duplicate_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_winerror_bulk_duplicate_line(self, line):
         with self.lock:
@@ -420,7 +419,6 @@ class ScannerWorker(QObject):
             self.out_winerror_whitelist_duplicate_file.flush()
             self.out_winerror_whitelist_duplicate_line_count += 1
             self.out_winerror_whitelist_duplicate_file_size += line_bytes
-            self.total_seeds += 1
 
     # New helper methods for duplicate dead outputs:
     def write_dead_bulk_duplicate_1_line(self, line):
@@ -442,7 +440,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_1_file.flush()
             self.dead_bulk_duplicate_1_line_count += 1
             self.dead_bulk_duplicate_1_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_dead_bulk_duplicate_2_line(self, line):
         with self.lock:
@@ -463,7 +460,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_2_file.flush()
             self.dead_bulk_duplicate_2_line_count += 1
             self.dead_bulk_duplicate_2_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_dead_whitelist_duplicate_1_line(self, line):
         with self.lock:
@@ -484,7 +480,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_1_file.flush()
             self.dead_bulk_duplicate_1_line_count += 1
             self.dead_bulk_duplicate_1_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_dead_bulk_duplicate_2_line(self, line):
         with self.lock:
@@ -505,7 +500,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_2_file.flush()
             self.dead_bulk_duplicate_2_line_count += 1
             self.dead_bulk_duplicate_2_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_dead_bulk_1_line(self, line):
         with self.lock:
