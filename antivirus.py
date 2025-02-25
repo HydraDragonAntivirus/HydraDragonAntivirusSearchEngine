@@ -341,89 +341,85 @@ class ScannerWorker(QObject):
     def write_winerror_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.winerror_bulk_line_count >= self.csv_max_lines or (
-                    self.winerror_bulk_file_size + line_bytes) >= self.csv_max_size:
-                self.winerror_bulk_file.close()
-                self.winerror_bulk_file_index += 1
+            if self.out_winerror_bulk_line_count >= self.csv_max_lines or (self.out_winerror_bulk_file_size + line_bytes) >= self.csv_max_size:
+                self.out_winerror_bulk_file.close()
+                self.out_winerror_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_winerror_bulk_csv)
-                new_filename = f"{base}_{self.winerror_bulk_file_index}{ext}"
-                self.winerror_bulk_file = open(new_filename, "w", encoding="utf-8")
+                new_filename = f"{base}_{self.out_winerror_bulk_file_index}{ext}"
+                self.out_winerror_bulk_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.winerror_bulk_file.write(header)
-                self.winerror_bulk_file.flush()
-                self.winerror_bulk_line_count = 1
-                self.winerror_bulk_file_size = len(header.encode("utf-8"))
+                self.out_winerror_bulk_file.write(header)
+                self.out_winerror_bulk_file.flush()
+                self.out_winerror_bulk_line_count = 1
+                self.out_winerror_bulk_file_size = len(header.encode("utf-8"))
                 self.log(f"WinError Bulk file rotated; new file: {new_filename}")
-            self.winerror_bulk_file.write(line)
-            self.winerror_bulk_file.flush()
-            self.winerror_bulk_line_count += 1
-            self.winerror_bulk_file_size += line_bytes
-            self.total_seeds += 1
-
-    def write_winerror_whitelist_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.winerror_whitelist_line_count >= self.csv_max_lines or (
-                    self.winerror_whitelist_file_size + line_bytes) >= self.csv_max_size:
-                self.winerror_whitelist_file.close()
-                self.winerror_whitelist_file_index += 1
-                base, ext = os.path.splitext(self.out_winerror_whitelist_csv)
-                new_filename = f"{base}_{self.winerror_whitelist_file_index}{ext}"
-                self.winerror_whitelist_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.winerror_whitelist_file.write(header)
-                self.winerror_whitelist_file.flush()
-                self.winerror_whitelist_line_count = 1
-                self.winerror_whitelist_file_size = len(header.encode("utf-8"))
-                self.log(f"WinError Whitelist file rotated; new file: {new_filename}")
-            self.winerror_whitelist_file.write(line)
-            self.winerror_whitelist_file.flush()
-            self.winerror_whitelist_line_count += 1
-            self.winerror_whitelist_file_size += line_bytes
-            self.total_seeds += 1
-
-    def write_winerror_bulk_duplicate_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.winerror_bulk_duplicate_line_count >= self.csv_max_lines or (
-                    self.winerror_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.winerror_bulk_duplicate_file.close()
-                self.winerror_bulk_duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_winerror_bulk_duplicate_csv)
-                new_filename = f"{base}_{self.winerror_bulk_duplicate_file_index}{ext}"
-                self.winerror_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.winerror_bulk_duplicate_file.write(header)
-                self.winerror_bulk_duplicate_file.flush()
-                self.winerror_bulk_duplicate_line_count = 1
-                self.winerror_bulk_duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"WinError Bulk Duplicate file rotated; new file: {new_filename}")
-            self.winerror_bulk_duplicate_file.write(line)
-            self.winerror_bulk_duplicate_file.flush()
-            self.winerror_bulk_duplicate_line_count += 1
-            self.winerror_bulk_duplicate_file_size += line_bytes
+            self.out_winerror_bulk_file.write(line)
+            self.out_winerror_bulk_file.flush()
+            self.out_winerror_bulk_line_count += 1
+            self.out_winerror_bulk_file_size += line_bytes
             self.total_seeds += 1
 
     def write_winerror_whitelist_duplicate_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (
-                    self.winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.winerror_whitelist_duplicate_file.close()
-                self.winerror_whitelist_duplicate_file_index += 1
+            if self.out_winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (self.out_winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.out_winerror_whitelist_duplicate_file.close()
+                self.out_winerror_whitelist_duplicate_file_index += 1
                 base, ext = os.path.splitext(self.out_winerror_whitelist_duplicate_csv)
-                new_filename = f"{base}_{self.winerror_whitelist_duplicate_file_index}{ext}"
-                self.winerror_whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
+                new_filename = f"{base}_{self.out_winerror_whitelist_duplicate_file_index}{ext}"
+                self.out_winerror_whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.winerror_whitelist_duplicate_file.write(header)
-                self.winerror_whitelist_duplicate_file.flush()
-                self.winerror_whitelist_duplicate_line_count = 1
-                self.winerror_whitelist_duplicate_file_size = len(header.encode("utf-8"))
+                self.out_winerror_whitelist_duplicate_file.write(header)
+                self.out_winerror_whitelist_duplicate_file.flush()
+                self.out_winerror_whitelist_duplicate_line_count = 1
+                self.out_winerror_whitelist_duplicate_file_size = len(header.encode("utf-8"))
                 self.log(f"WinError Whitelist Duplicate file rotated; new file: {new_filename}")
-            self.winerror_whitelist_duplicate_file.write(line)
-            self.winerror_whitelist_duplicate_file.flush()
-            self.winerror_whitelist_duplicate_line_count += 1
-            self.winerror_whitelist_
+            self.out_winerror_whitelist_duplicate_file.write(line)
+            self.out_winerror_whitelist_duplicate_file.flush()
+            self.out_winerror_whitelist_duplicate_line_count += 1
+            self.out_winerror_whitelist_duplicate_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_winerror_bulk_duplicate_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.out_winerror_bulk_duplicate_line_count >= self.csv_max_lines or (self.out_winerror_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.out_winerror_bulk_duplicate_file.close()
+                self.out_winerror_bulk_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_bulk_duplicate_csv)
+                new_filename = f"{base}_{self.out_winerror_bulk_duplicate_file_index}{ext}"
+                self.out_winerror_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.out_winerror_bulk_duplicate_file.write(header)
+                self.out_winerror_bulk_duplicate_file.flush()
+                self.out_winerror_bulk_duplicate_line_count = 1
+                self.out_winerror_bulk_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Bulk Duplicate file rotated; new file: {new_filename}")
+            self.out_winerror_bulk_duplicate_file.write(line)
+            self.out_winerror_bulk_duplicate_file.flush()
+            self.out_winerror_bulk_duplicate_line_count += 1
+            self.out_winerror_bulk_duplicate_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_winerror_whitelist_duplicate_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.out_winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (self.out_winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.out_winerror_whitelist_duplicate_file.close()
+                self.out_winerror_whitelist_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_whitelist_duplicate_csv)
+                new_filename = f"{base}_{self.out_winerror_whitelist_duplicate_file_index}{ext}"
+                self.out_winerror_whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.out_winerror_whitelist_duplicate_file.write(header)
+                self.out_winerror_whitelist_duplicate_file.flush()
+                self.out_winerror_whitelist_duplicate_line_count = 1
+                self.out_winerror_whitelist_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Whitelist Duplicate file rotated; new file: {new_filename}")
+            self.out_winerror_whitelist_duplicate_file.write(line)
+            self.out_winerror_whitelist_duplicate_file.flush()
+            self.out_winerror_whitelist_duplicate_line_count += 1
+            self.out_winerror_whitelist_
 
     # New helper methods for duplicate dead outputs:
     def write_deadbulk_duplicate1_line(self, line):
