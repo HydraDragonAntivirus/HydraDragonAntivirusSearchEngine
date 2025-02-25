@@ -822,12 +822,6 @@ class ScannerWorker(QObject):
                     line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_deadmalware_duplicate1_line(line)
                     self.log(f"Dead malware duplicate1 output written for {seed.ip} with status {status}.")
-                else:
-                    dead_category = f"deadbulk duplicate {base_category}"
-                    comment = f"Dead (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_deadbulk_duplicate1_line(line)
-                    self.log(f"Dead bulk duplicate1 output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
                     dead_category = f"deadwhitelist {base_category}"
@@ -859,12 +853,6 @@ class ScannerWorker(QObject):
                     line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_deadmalware_line(line)
                     self.log(f"Dead malware output written for {seed.ip} with status {status}.")
-                else:
-                    dead_category = f"deadbulk {base_category}"
-                    comment = f"Dead (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{dead_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_deadbulk1_line(line)
-                    self.log(f"Dead bulk output written for {seed.ip} with status {status}.")
             return
 
         if 500 <= status <= 599:
