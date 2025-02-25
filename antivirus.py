@@ -399,12 +399,12 @@ class ScannerWorker(QObject):
             self.out_winerror_bulk_duplicate_file.flush()
             self.out_winerror_bulk_duplicate_line_count += 1
             self.out_winerror_bulk_duplicate_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_winerror_whitelist_duplicate_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.out_winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (self.out_winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
+            if self.out_winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (
+                    self.out_winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
                 self.out_winerror_whitelist_duplicate_file.close()
                 self.out_winerror_whitelist_duplicate_file_index += 1
                 base, ext = os.path.splitext(self.out_winerror_whitelist_duplicate_csv)
@@ -419,7 +419,8 @@ class ScannerWorker(QObject):
             self.out_winerror_whitelist_duplicate_file.write(line)
             self.out_winerror_whitelist_duplicate_file.flush()
             self.out_winerror_whitelist_duplicate_line_count += 1
-            self.out_winerror_whitelist_
+            self.out_winerror_whitelist_duplicate_file_size += line_bytes
+            self.total_seeds += 1
 
     # New helper methods for duplicate dead outputs:
     def write_dead_bulk_duplicate_1_line(self, line):
@@ -504,48 +505,6 @@ class ScannerWorker(QObject):
             self.dead_bulk_duplicate_2_file.flush()
             self.dead_bulk_duplicate_2_line_count += 1
             self.dead_bulk_duplicate_2_file_size += line_bytes
-            self.total_seeds += 1
-
-    def write_dead_bulk_1_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_1_line_count >= self.csv_max_lines or (self.dead_bulk_1_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_1_file.close()
-                self.dead_bulk_1_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_1_csv)
-                new_filename = f"{base}_{self.dead_bulk_1_file_index}{ext}"
-                self.dead_bulk_1_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_1_file.write(header)
-                self.dead_bulk_1_file.flush()
-                self.dead_bulk_1_line_count = 1
-                self.dead_bulk_1_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulk_1 file rotated; new file: {new_filename}")
-            self.dead_bulk_1_file.write(line)
-            self.dead_bulk_1_file.flush()
-            self.dead_bulk_1_line_count += 1
-            self.dead_bulk_1_file_size += line_bytes
-            self.total_seeds += 1
-
-    def write_dead_bulk_2_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_2_line_count >= self.csv_max_lines or (self.dead_bulk_2_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_2_file.close()
-                self.dead_bulk_2_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_2_csv)
-                new_filename = f"{base}_{self.dead_bulk_2_file_index}{ext}"
-                self.dead_bulk_2_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_2_file.write(header)
-                self.dead_bulk_2_file.flush()
-                self.dead_bulk_2_line_count = 1
-                self.dead_bulk_2_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulk_2 file rotated; new file: {new_filename}")
-            self.dead_bulk_2_file.write(line)
-            self.dead_bulk_2_file.flush()
-            self.dead_bulk_2_line_count += 1
-            self.dead_bulk_2_file_size += line_bytes
             self.total_seeds += 1
 
     def write_dead_bulk_1_line(self, line):
