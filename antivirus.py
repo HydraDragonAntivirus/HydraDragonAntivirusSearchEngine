@@ -153,7 +153,6 @@ class ScannerWorker(QObject):
             "CommentTemplateNoZeroday",
             "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate"
         )
-        self.allow_auto_verdict = settings.get("AllowAutoVerdict", True)
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
@@ -167,6 +166,11 @@ class ScannerWorker(QObject):
         self.out_deadbulk_duplicate2_csv = settings.get("DeadBulkDuplicate2OutputFile", os.path.join(output_dir, "deadbulk_duplicate2.csv"))
         self.out_deadwhitelist_duplicate1_csv = settings.get("DeadWhitelistDuplicate1OutputFile", os.path.join(output_dir, "deadwhitelist_duplicate1.csv"))
         self.out_deadwhitelist_duplicate2_csv = settings.get("DeadWhitelistDuplicate2OutputFile", os.path.join(output_dir, "deadwhitelist_duplicate2.csv"))
+
+        self.out_winerror_bulk_csv = settings.get("WinErrorBulk1OutputFile", os.path.join(output_dir, "winerror_bulk1.csv"))
+        self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelist1OutputFile", os.path.join(output_dir, "winerror_whitelist1.csv"))
+        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkDuplicate1OutputFile", os.path.join(output_dir, "winerror_bulk_duplicate1.csv"))
+        self.out_winerror_whitelist_duplicate_csv = settings.get("WinErrorWhitelistDuplicate1OutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate1.csv"))
 
         # Duplicate file paths from settings.
         self.duplicate_whitelist_file_ipv4 = settings.get("DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
@@ -333,6 +337,93 @@ class ScannerWorker(QObject):
             if info.get("handle"):
                 info["handle"].close()
                 info["handle"] = None
+
+    def write_winerror_bulk_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.winerror_bulk_line_count >= self.csv_max_lines or (
+                    self.winerror_bulk_file_size + line_bytes) >= self.csv_max_size:
+                self.winerror_bulk_file.close()
+                self.winerror_bulk_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_bulk_csv)
+                new_filename = f"{base}_{self.winerror_bulk_file_index}{ext}"
+                self.winerror_bulk_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.winerror_bulk_file.write(header)
+                self.winerror_bulk_file.flush()
+                self.winerror_bulk_line_count = 1
+                self.winerror_bulk_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Bulk file rotated; new file: {new_filename}")
+            self.winerror_bulk_file.write(line)
+            self.winerror_bulk_file.flush()
+            self.winerror_bulk_line_count += 1
+            self.winerror_bulk_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_winerror_whitelist_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.winerror_whitelist_line_count >= self.csv_max_lines or (
+                    self.winerror_whitelist_file_size + line_bytes) >= self.csv_max_size:
+                self.winerror_whitelist_file.close()
+                self.winerror_whitelist_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_whitelist_csv)
+                new_filename = f"{base}_{self.winerror_whitelist_file_index}{ext}"
+                self.winerror_whitelist_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.winerror_whitelist_file.write(header)
+                self.winerror_whitelist_file.flush()
+                self.winerror_whitelist_line_count = 1
+                self.winerror_whitelist_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Whitelist file rotated; new file: {new_filename}")
+            self.winerror_whitelist_file.write(line)
+            self.winerror_whitelist_file.flush()
+            self.winerror_whitelist_line_count += 1
+            self.winerror_whitelist_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_winerror_bulk_duplicate_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.winerror_bulk_duplicate_line_count >= self.csv_max_lines or (
+                    self.winerror_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.winerror_bulk_duplicate_file.close()
+                self.winerror_bulk_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_bulk_duplicate_csv)
+                new_filename = f"{base}_{self.winerror_bulk_duplicate_file_index}{ext}"
+                self.winerror_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.winerror_bulk_duplicate_file.write(header)
+                self.winerror_bulk_duplicate_file.flush()
+                self.winerror_bulk_duplicate_line_count = 1
+                self.winerror_bulk_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Bulk Duplicate file rotated; new file: {new_filename}")
+            self.winerror_bulk_duplicate_file.write(line)
+            self.winerror_bulk_duplicate_file.flush()
+            self.winerror_bulk_duplicate_line_count += 1
+            self.winerror_bulk_duplicate_file_size += line_bytes
+            self.total_seeds += 1
+
+    def write_winerror_whitelist_duplicate_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if self.winerror_whitelist_duplicate_line_count >= self.csv_max_lines or (
+                    self.winerror_whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.winerror_whitelist_duplicate_file.close()
+                self.winerror_whitelist_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_winerror_whitelist_duplicate_csv)
+                new_filename = f"{base}_{self.winerror_whitelist_duplicate_file_index}{ext}"
+                self.winerror_whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.winerror_whitelist_duplicate_file.write(header)
+                self.winerror_whitelist_duplicate_file.flush()
+                self.winerror_whitelist_duplicate_line_count = 1
+                self.winerror_whitelist_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"WinError Whitelist Duplicate file rotated; new file: {new_filename}")
+            self.winerror_whitelist_duplicate_file.write(line)
+            self.winerror_whitelist_duplicate_file.flush()
+            self.winerror_whitelist_duplicate_line_count += 1
+            self.winerror_whitelist_
 
     # New helper methods for duplicate dead outputs:
     def write_deadbulk_duplicate1_line(self, line):
@@ -601,7 +692,7 @@ class ScannerWorker(QObject):
         self.log("Scan completed.")
         self.finished_signal.emit()
 
-    # Updated process_seed method with separation of dead duplicate vs non-duplicate responses
+    # Updated process_seed method with winerror handling
     def process_seed(self, seed, discovered_source_url=None):
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
@@ -624,16 +715,49 @@ class ScannerWorker(QObject):
             return
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
-        status = self.is_active_and_static(seed.ip, seed.port, category=cat,
-                                           discovered_source_url=discovered_source_url)
+        try:
+            status = self.is_active_and_static(seed.ip, seed.port, category=cat,
+                                               discovered_source_url=discovered_source_url)
+        except requests.exceptions.ConnectionError as ce:
+            # Catch connection errors (winerrors) and mark with a special status.
+            status = "WINERROR"
+            winerror_msg = str(ce)
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
-        # Determine duplicate_flag
+        # Determine duplicate_flag based on whether this IP was in the initially loaded seeds.
         duplicate_flag = seed.ip in self.initial_ips.get(cat, set())
 
-        # --- New handling for HTTP error codes ---
+        # --- New handling for winerrors ---
+        if status == "WINERROR":
+            base_category = seed.source_type.split("_")[0]
+            if duplicate_flag:
+                if cat.startswith("whitelist"):
+                    winerror_cat = f"winerror whitelist duplicate {base_category}"
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    self.write_winerror_whitelist_duplicate_line(line)
+                    self.log(f"WinError whitelist duplicate output written for {seed.ip}.")
+                else:
+                    winerror_cat = f"winerror bulk duplicate {base_category}"
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    self.write_winerror_bulk_duplicate_line(line)
+                    self.log(f"WinError bulk duplicate output written for {seed.ip}.")
+            else:
+                if cat.startswith("whitelist"):
+                    winerror_cat = f"winerror whitelist {base_category}"
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    self.write_winerror_whitelist_line(line)
+                    self.log(f"WinError whitelist output written for {seed.ip}.")
+                else:
+                    winerror_cat = f"winerror bulk {base_category}"
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    self.write_winerror_bulk_line(line)
+                    self.log(f"WinError bulk output written for {seed.ip}.")
+            return
+        # --- End winerror handling ---
+
+        # --- Existing handling for HTTP error codes (dead responses) ---
         if 400 <= status <= 499:
             base_category = seed.source_type.split("_")[0]
             if duplicate_flag:
@@ -693,13 +817,11 @@ class ScannerWorker(QObject):
                     self.write_deadbulk2_line(line)
                     self.log(f"Dead bulk2 output written for {seed.ip} with status {status}.")
             return
-        # --- End new handling ---
+            # --- End error handling ---
 
         # Continue with processing non-error responses...
         duplicate_settings = self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True)
         seed_verdict = seed.source_type
-
-        # Determine seed_verdict based on category and HTTP status.
         if cat.startswith("whitelist"):
             seed_verdict = "whitelist (auto verdict 2)" if 200 <= status <= 299 else "whitelist (auto verdict 3)"
         elif cat.startswith("phishing"):
@@ -730,7 +852,6 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
-        # Build the comment using the updated template (includes {status}).
         if seed_verdict.startswith("whitelist"):
             comment = self.comment_template_zeroday.format(
                 ip=seed.ip,
@@ -738,7 +859,6 @@ class ScannerWorker(QObject):
                 verdict=seed_verdict,
                 status=status
             )
-            # Instead of leaving Category empty, we set it to "whitelist"
             line = f'{seed.ip},"whitelist",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_whitelist_line(line)
@@ -1003,7 +1123,11 @@ class MainWindow(QMainWindow):
             "DuplicateSpamFileIPv4", "DuplicateSpamFileIPv6",
             "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6",
             "DeadBulkDuplicate1OutputFile", "DeadBulkDuplicate2OutputFile",
-            "DeadWhitelistDuplicate1OutputFile", "DeadWhitelistDuplicate2OutputFile"
+            "DeadWhitelistDuplicate1OutputFile", "DeadWhitelistDuplicate2OutputFile",
+            "WinErrorBulk1OutputFile", "WinErrorBulk2OutputFile",
+            "WinErrorWhitelist1OutputFile", "WinErrorWhitelist2OutputFile",
+            "WinErrorBulkDuplicate1OutputFile", "WinErrorBulkDuplicate2OutputFile",
+            "WinErrorWhitelistDuplicate1OutputFile", "WinErrorWhitelistDuplicate2OutputFile"
         }
 
         directory_keys = {"LastPath"}
@@ -1063,6 +1187,15 @@ class MainWindow(QMainWindow):
         add_field("Dead Bulk Duplicate 2 Output File:", "DeadBulkDuplicate2OutputFile", os.path.join(output_dir, "deadbulk_duplicate2.csv"))
         add_field("Dead Whitelist Duplicate 1 Output File:", "DeadWhitelistDuplicate1OutputFile", os.path.join(output_dir, "deadwhitelist_duplicate1.csv"))
         add_field("Dead Whitelist Duplicate 2 Output File:", "DeadWhitelistDuplicate2OutputFile", os.path.join(output_dir, "deadwhitelist_duplicate2.csv"))
+        # New fields for WinError CSV outputs:
+        add_field("WinError Bulk 1 Output File:", "WinErrorBulk1OutputFile", os.path.join(output_dir, "winerror_bulk1.csv"))
+        add_field("WinError Bulk 2 Output File:", "WinErrorBulk2OutputFile", os.path.join(output_dir, "winerror_bulk2.csv"))
+        add_field("WinError Whitelist 1 Output File:", "WinErrorWhitelist1OutputFile", os.path.join(output_dir, "winerror_whitelist1.csv"))
+        add_field("WinError Whitelist 2 Output File:", "WinErrorWhitelist2OutputFile", os.path.join(output_dir, "winerror_whitelist2.csv"))
+        add_field("WinError Bulk Duplicate 1 Output File:", "WinErrorBulkDuplicate1OutputFile", os.path.join(output_dir, "winerror_bulk_duplicate1.csv"))
+        add_field("WinError Bulk Duplicate 2 Output File:", "WinErrorBulkDuplicate2OutputFile", os.path.join(output_dir, "winerror_bulk_duplicate2.csv"))
+        add_field("WinError Whitelist Duplicate 1 Output File:", "WinErrorWhitelistDuplicate1OutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate1.csv"))
+        add_field("WinError Whitelist Duplicate 2 Output File:", "WinErrorWhitelistDuplicate2OutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate2.csv"))
 
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
@@ -1112,6 +1245,7 @@ class MainWindow(QMainWindow):
         add_field("Duplicate Spam File IPv6:", "DuplicateSpameFileIPv6", "output\\spam_ipv6_duplicates.csv")
         add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setWidget(settings_group)
@@ -1154,8 +1288,7 @@ class MainWindow(QMainWindow):
 
     def get_settings_from_fields(self):
         settings = {}
-        bool_keys = ("AllowAutoVerdict",
-                     "AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
+        bool_keys = ("AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
                      "AllowDuplicatePhishingIPv4", "AllowDuplicatePhishingIPv6",
                      "AllowDuplicateBruteForceIPv4", "AllowDuplicateBruteForceIPv6",
                      "AllowDuplicateMaliciousIPv4", "AllowDuplicateMaliciousIPv6")
