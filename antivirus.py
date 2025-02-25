@@ -856,6 +856,8 @@ class MainWindow(QMainWindow):
         # Define keys for which a browse button should be added.
         file_keys = {
             "OutputFile", "WhiteListOutputFile",
+            "DeadBulk1OutputFile", "DeadBulk2OutputFile",
+            "DeadWhitelist1OutputFile", "DeadWhitelist2OutputFile",
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
             "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
