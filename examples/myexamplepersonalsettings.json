@@ -1,7 +1,5 @@
 {
     "MaxThreads": 200,
-    "CsvMaxLines": 10000,
-    "CsvMaxSize": 2097152,
     "OutputFile": "output\\BulkReport.csv",
     "WhiteListOutputFile": "output\\WhitelistReport.csv",
     "DeadBulk1OutputFile": "output\\dead_bulk_1.csv",
