@@ -47,6 +47,14 @@ logging.basicConfig(
     filemode="a"
 )
 
+log_file = os.path.join(log_dir, "antivirus.log")
+
+# Redirect stdout to console log
+sys.stdout = open(log_file, "w", encoding="utf-8", errors="ignore")
+
+# Redirect stderr to console log
+sys.stderr = open(log_file, "w", encoding="utf-8", errors="ignore")
+
 # -----------------------------
 # Antivirus Style
 # -----------------------------
@@ -1446,12 +1454,19 @@ class MainWindow(QMainWindow):
         self.log_text.moveCursor(QTextCursor.End)
 
 def main():
-    app = QApplication(sys.argv)
-    app.setStyleSheet(antivirus_style)
-    window = MainWindow()
-    window.resize(800, 600)
-    window.show()
-    sys.exit(app.exec())
+    try:
+        app = QApplication(sys.argv)
+        app.setStyleSheet(antivirus_style)
+        window = MainWindow()
+        window.resize(800, 600)
+        window.show()
+        sys.exit(app.exec())
+    except Exception as e:
+        logging.critical(f"Critical error in main: {e}", exc_info=True)
+
+if __name__ == "__main__":
+    main()
+
 
 if __name__ == "__main__":
     main()
