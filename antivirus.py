@@ -665,7 +665,7 @@ class ScannerWorker(QObject):
             parsed_ip = urlparse(response.url).hostname
             if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
                 new_seed = Seed(parsed_ip, category, port=port)
-                self.log(f"Processing redirected IP: {new_seed} (Category: {category}) - HTTP {code}")
+                self.log(f"Processing redirected IP: {new_seed.ip} (Category: {category}) - HTTP {code}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
             # Extract discovered IPs from the response content.
             found_ips = self.extract_ip_and_port(response.text)
@@ -680,7 +680,7 @@ class ScannerWorker(QObject):
                 parse_extracted = urlparse(candidate).hostname
                 discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
                 new_seed = Seed(discovered_ip, parse_extracted, port=extracted_port)
-                self.log(f"Processing discovered IP: {new_seed} (Category: {category}) - HTTP {code}")
+                self.log(f"Processing discovered IP: {new_seed.ip} (Category: {category}) - HTTP {code}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
         elif 400 <= code <= 499:
             self.log(f"Client error: HTTP {code} for {url}")
