@@ -679,7 +679,7 @@ class ScannerWorker(QObject):
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
                 discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                new_seed = Seed(discovered_ip, parse_extracted, port=extracted_port)
+                new_seed = Seed(discovered_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {new_seed.ip} (Category: {category}) - HTTP {code}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
         elif 400 <= code <= 499:
