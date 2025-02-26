@@ -652,7 +652,7 @@ class ScannerWorker(QObject):
             response = requests.get(url, timeout=timeout, allow_redirects=True)
         except requests.exceptions.Timeout as e:
             self.log(f"Timeout for {url}: {e}")
-            return None  # or you might return a specific code like "TIMEOUT"
+            return None
         except requests.exceptions.RequestException as e:
             self.log(f"Request failed for {url}: {e}")
             return None
@@ -661,12 +661,20 @@ class ScannerWorker(QObject):
 
         # Process responses in the active range: 200-399.
         if 200 <= code <= 399:
-            # Always extract the final hostname from the response URL.
-            parsed_ip = urlparse(response.url).hostname
-            if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
-                new_seed = Seed(parsed_ip, category, port=port)
-                self.log(f"Processing redirected IP: {new_seed.ip} (Category: {category}) - HTTP {code}")
-                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+            # Handle redirected URL.
+            redirected_url = response.url
+            if redirected_url.startswith("http://") or redirected_url.startswith("https://"):
+                parsed_ip = urlparse(redirected_url).hostname
+                if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
+                    # Format display for IPv6.
+                    if self.is_valid_ip(parsed_ip) == "ipv6":
+                        display_ip = f"[{parsed_ip}]"
+                    else:
+                        display_ip = parsed_ip
+                    new_seed = Seed(parsed_ip, category, port=port)
+                    self.log(f"Processing redirected IP: {display_ip} (Category: {category}) - HTTP {code}")
+                    self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+
             # Extract discovered IPs from the response content.
             found_ips = self.extract_ip_and_port(response.text)
             for extracted_ip, extracted_port, ip_version in found_ips:
@@ -679,8 +687,15 @@ class ScannerWorker(QObject):
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
                 discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
+
+                # Format display for IPv6.
+                if self.is_valid_ip(discovered_ip) == "ipv6":
+                    display_ip = f"[{discovered_ip}]"
+                else:
+                    display_ip = discovered_ip
+
                 new_seed = Seed(discovered_ip, category, port=extracted_port)
-                self.log(f"Processing discovered IP: {new_seed.ip} (Category: {category}) - HTTP {code}")
+                self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
         elif 400 <= code <= 499:
             self.log(f"Client error: HTTP {code} for {url}")
