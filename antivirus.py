@@ -47,7 +47,7 @@ logging.basicConfig(
     filemode="a"
 )
 
-log_file = os.path.join(log_dir, "antivirus.log")
+log_file = os.path.join(log_dir, "antiviruscritical.log")
 
 # Redirect stdout to console log
 sys.stdout = open(log_file, "w", encoding="utf-8", errors="ignore")
