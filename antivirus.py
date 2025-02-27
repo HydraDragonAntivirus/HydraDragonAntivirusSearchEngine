@@ -610,21 +610,20 @@ class ScannerWorker(QObject):
             response = requests.get(url, timeout=timeout, allow_redirects=True)
         except requests.exceptions.Timeout as e:
             self.log(f"Timeout for {url}: {e}")
-            return "TIMEOUT"
+            return f"TIMEOUT: {e}"
         except requests.exceptions.ConnectionError as e:
             if "[WinError 10061]" in str(e):
-                self.log(f"Connection refused (WinError 10061) for {url} – treating as up.")
-                return "up"
+                self.log(f"Connection refused (WinError 10061) for {url} – firewall detected.")
+                return "WINERROR: Firewall detected"
             else:
                 self.log(f"Connection error for {url}: {e}")
-                return "WINERROR"
+                return f"WINERROR: {e}"
         except requests.exceptions.RequestException as e:
             self.log(f"Request failed for {url}: {e}")
-            return "WINERROR"
+            return f"WINERROR: {e}"
 
         code = response.status_code
         code_str = f"{code:03d}"
-        # Load HTTP status code lists from settings (comma-separated strings)
         http_up_codes = [s.strip() for s in self.settings.get("HTTPUpCodes",
                                                               "100,101,102,200,201,202,203,204,205,206,207,208,226,429").split(
             ",")]
@@ -636,64 +635,48 @@ class ScannerWorker(QObject):
             ",")]
 
         if code_str in http_up_codes:
-            # Process redirects as before
+            # Process any redirects first
             if response.url.startswith("http://") or response.url.startswith("https://"):
                 parsed_ip = urlparse(response.url).hostname
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
-                    if self.is_valid_ip(parsed_ip) == "ipv6":
-                        display_ip = f"[{parsed_ip}]"
-                    else:
-                        display_ip = parsed_ip
+                    display_ip = f"[{parsed_ip}]" if self.is_valid_ip(parsed_ip) == "ipv6" else parsed_ip
                     new_seed = Seed(parsed_ip, category, port=port)
                     self.log(f"Processing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
 
-            # Extract IPs from main HTML using regex extractor
+            # Extract IPs from the main HTML
             found_ips = self.extract_ip_and_port(response.text)
             for extracted_ip, extracted_port, ip_version in found_ips:
                 if ip_version == "ipv6":
-                    if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')):
-                        candidate = "http://[" + extracted_ip + "]"
-                    else:
-                        candidate = "http://" + extracted_ip[1:-1]
+                    candidate = f"http://[{extracted_ip}]" if not (
+                                extracted_ip.startswith('[') and extracted_ip.endswith(
+                            ']')) else f"http://{extracted_ip[1:-1]}"
                 else:
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
                 discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                if self.is_valid_ip(discovered_ip) == "ipv6":
-                    display_ip = f"[{discovered_ip}]"
-                else:
-                    display_ip = discovered_ip
+                display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
                 new_seed = Seed(discovered_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
 
-            # Parse HTML using BeautifulSoup to extract resource URLs
+            # Also parse resource URLs from the HTML
             soup = BeautifulSoup(response.text, "html.parser")
             resource_urls = set()
-
-            # Extract JavaScript resources from <script> tags
             for script in soup.find_all("script", src=True):
                 src = script.get("src")
                 if src:
-                    full_url = urljoin(url, src)
-                    resource_urls.add(full_url)
-
-            # Extract CSS or other linked files from <link> tags
+                    resource_urls.add(urljoin(url, src))
             for link in soup.find_all("link", href=True):
                 href = link.get("href")
                 if href:
-                    full_url = urljoin(url, href)
-                    resource_urls.add(full_url)
-
-            # Extract images (or other resources) from <img> tags
+                    resource_urls.add(urljoin(url, href))
             for img in soup.find_all("img", src=True):
                 src = img.get("src")
                 if src:
-                    full_url = urljoin(url, src)
-                    resource_urls.add(full_url)
+                    resource_urls.add(urljoin(url, src))
 
-            # Download each additional resource and extract IPs from their content
+            # Process additional resources
             for resource_url in resource_urls:
                 try:
                     res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
@@ -701,19 +684,16 @@ class ScannerWorker(QObject):
                         resource_ips = self.extract_ip_and_port(res.text)
                         for extracted_ip, extracted_port, ip_version in resource_ips:
                             if ip_version == "ipv6":
-                                if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')):
-                                    candidate = "http://[" + extracted_ip + "]"
-                                else:
-                                    candidate = "http://" + extracted_ip[1:-1]
+                                candidate = f"http://[{extracted_ip}]" if not (
+                                            extracted_ip.startswith('[') and extracted_ip.endswith(
+                                        ']')) else f"http://{extracted_ip[1:-1]}"
                             else:
                                 candidate = extracted_ip if extracted_ip.lower().startswith(
                                     "http") else "http://" + extracted_ip
                             parse_extracted = urlparse(candidate).hostname
                             discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                            if self.is_valid_ip(discovered_ip) == "ipv6":
-                                display_ip = f"[{discovered_ip}]"
-                            else:
-                                display_ip = discovered_ip
+                            display_ip = f"[{discovered_ip}]" if self.is_valid_ip(
+                                discovered_ip) == "ipv6" else discovered_ip
                             new_seed = Seed(discovered_ip, category, port=extracted_port)
                             self.log(
                                 f"Processing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
@@ -723,19 +703,18 @@ class ScannerWorker(QObject):
                 except Exception as ex:
                     self.log(f"Failed to fetch resource {resource_url}: {ex}")
 
-            return "up"
+            return f"up: HTTP {code_str}"
 
         elif code_str in http_potentially_up_codes:
             self.log(f"Potentially Up status for {url}: HTTP {code_str}")
-            return "potentially up"
+            return f"potentially up: HTTP {code_str}"
         elif code_str in http_potentially_down_codes:
             self.log(f"Potentially Down status for {url}: HTTP {code_str}")
-            return "potentially down"
+            return f"potentially down: HTTP {code_str}"
         else:
             self.log(f"Unhandled HTTP status code {code_str} for {url}")
-            return code_str
+            return f"unhandled: HTTP {code_str}"
 
-    # Modified process_seed to use new status categories
     def process_seed(self, seed, discovered_source_url=None):
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
             seed.ip = urlparse(seed.ip).hostname
@@ -746,9 +725,7 @@ class ScannerWorker(QObject):
             self.log(f"Skipping my own public IP: {seed.ip}")
             return
 
-        # Add the seed IP to the visited set.
         self.visited_ips.add(seed.ip)
-
         cat = seed.source_type.lower().strip()
         allowed_categories = ["whitelist_ipv6", "whitelist_ipv4",
                               "phishing_ipv6", "phishing_ipv4",
@@ -768,279 +745,175 @@ class ScannerWorker(QObject):
             status = self.is_active_and_static(seed.ip, seed.port, category=cat,
                                                discovered_source_url=discovered_source_url)
         except requests.exceptions.ConnectionError as ce:
-            status = "WINERROR"
+            status = f"WINERROR: {ce}"
             winerror_msg = str(ce)
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
         duplicate_flag = seed.ip in self.initial_ips.get(cat, set())
-
-        # If the IP wasn't already in the initial set, add it.
-        # This ensures that any future occurrence of this IP will be flagged as duplicate.
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
 
         base_category = seed.source_type.split("_")[0].lower()
 
-        # Handle WINERROR first
-        if status == "WINERROR":
+        # Handle WINERROR responses
+        if status.startswith("WINERROR"):
             if duplicate_flag:
                 if cat.startswith("whitelist"):
                     winerror_cat = f"winerror whitelist duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"WinError whitelist duplicate output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
                     winerror_cat = f"winerror phishing duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError phishing duplicate output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     winerror_cat = f"winerror ddos duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     winerror_cat = f"winerror bruteforce duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError bruteforce duplicate output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     winerror_cat = f"winerror malware duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError malware duplicate output written for {seed.ip}.")
             else:
                 if cat.startswith("whitelist"):
                     winerror_cat = f"winerror whitelist {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_line(line)
                     self.log(f"WinError whitelist output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
                     winerror_cat = f"winerror phishing {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError phishing output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     winerror_cat = f"winerror ddos {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     winerror_cat = f"winerror bruteforce {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError bruteforce output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     winerror_cat = f"winerror malware {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"WinError: {winerror_msg}"\n'
+                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError malware output written for {seed.ip}.")
             return
 
-        # New branch for TIMEOUT
-        if status == "TIMEOUT":
+        # Handle TIMEOUT responses similarly
+        if status.startswith("TIMEOUT"):
             if duplicate_flag:
                 if cat.startswith("whitelist"):
                     timeout_cat = f"timeout whitelist duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"Timeout whitelist duplicate output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
                     timeout_cat = f"timeout phishing duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout phishing duplicate output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     timeout_cat = f"timeout ddos duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     timeout_cat = f"timeout bruteforce duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout bruteforce duplicate output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     timeout_cat = f"timeout malware duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout malware duplicate output written for {seed.ip}.")
             else:
                 if cat.startswith("whitelist"):
                     timeout_cat = f"timeout whitelist {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_line(line)
                     self.log(f"Timeout whitelist output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
                     timeout_cat = f"timeout phishing {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout phishing output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
                     timeout_cat = f"timeout ddos {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
-                    self.write_winerror_bulk_line(line)
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
+                    self.write_winerror_bulkLine(line)
                     self.log(f"Timeout ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     timeout_cat = f"timeout bruteforce {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout bruteforce output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
                     timeout_cat = f"timeout malware {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"Timeout occurred"\n'
+                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout malware output written for {seed.ip}.")
             return
 
-        # Handle potentially up responses (formerly client errors, i.e. 400-range)
-        if status == "potentially up":
+        # Handle potentially up/down responses
+        if status.startswith("potentially up"):
             if duplicate_flag:
-                if cat.startswith("whitelist"):
-                    new_category = f"potentially up duplicate {base_category}"
-                    comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up whitelist duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("phishing"):
-                    new_category = f"potentially up duplicate {base_category}"
-                    comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_up_duplicate_line(line)
-                    self.log(f"Potentially Up phishing duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("ddos"):
-                    new_category = f"potentially up duplicate {base_category}"
-                    comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_up_duplicate_line(line)
-                    self.log(f"Potentially Up ddos duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("bruteforce"):
-                    new_category = f"potentially up duplicate {base_category}"
-                    comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_up_duplicate_line(line)
-                    self.log(f"Potentially Up bruteforce duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("malicious"):
-                    new_category = f"potentially up duplicate {base_category}"
-                    comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_up_duplicate_line(line)
-                    self.log(f"Potentially Up malware duplicate output written for {seed.ip} with status {status}.")
+                new_category = f"potentially up duplicate {base_category}"
+                comment = f"Potentially up: {status}"
+                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_potentially_up_whitelist_line(line)
+                self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
             else:
-                if cat.startswith("whitelist"):
-                    new_category = f"potentially up {base_category}"
-                    comment = f"Potentially Up (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up whitelist output written for {seed.ip} with status {status}.")
-                elif cat.startswith("phishing"):
-                    new_category = f"potentially up {base_category}"
-                    comment = f"Potentially Up (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up phishing output written for {seed.ip} with status {status}.")
-                elif cat.startswith("ddos"):
-                    new_category = f"potentially up {base_category}"
-                    comment = f"Potentially Up (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up ddos output written for {seed.ip} with status {status}.")
-                elif cat.startswith("bruteforce"):
-                    new_category = f"potentially up {base_category}"
-                    comment = f"Potentially Up (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up bruteforce output written for {seed.ip} with status {status}.")
-                elif cat.startswith("malicious"):
-                    new_category = f"potentially up {base_category}"
-                    comment = f"Potentially Up (Client Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up malware output written for {seed.ip} with status {status}.")
+                new_category = f"potentially up {base_category}"
+                comment = f"Potentially up: {status}"
+                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_potentially_up_whitelist_line(line)
+                self.log(f"Potentially Up output written for {seed.ip} with status {status}.")
             return
 
-        # Handle potentially down responses (formerly server errors, i.e. 500-range)
-        if status == "potentially down":
+        if status.startswith("potentially down"):
             if duplicate_flag:
-                if cat.startswith("whitelist"):
-                    new_category = f"potentially down duplicate {base_category}"
-                    comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down whitelist duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("phishing"):
-                    new_category = f"potentially down duplicate {base_category}"
-                    comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_down_duplicate_line(line)
-                    self.log(f"Potentially Down phishing duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("ddos"):
-                    new_category = f"potentially down duplicate {base_category}"
-                    comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_down_duplicate_line(line)
-                    self.log(f"Potentially Down ddos duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("bruteforce"):
-                    new_category = f"potentially down duplicate {base_category}"
-                    comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_down_duplicate_line(line)
-                    self.log(f"Potentially Down bruteforce duplicate output written for {seed.ip} with status {status}.")
-                elif cat.startswith("malicious"):
-                    new_category = f"potentially down duplicate {base_category}"
-                    comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_bulk_down_duplicate_line(line)
-                    self.log(f"Potentially Down malware duplicate output written for {seed.ip} with status {status}.")
+                new_category = f"potentially down duplicate {base_category}"
+                comment = f"Potentially down: {status}"
+                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_potentially_down_whitelist_line(line)
+                self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
             else:
-                if cat.startswith("whitelist"):
-                    new_category = f"potentially down {base_category}"
-                    comment = f"Potentially Down (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down whitelist output written for {seed.ip} with status {status}.")
-                elif cat.startswith("phishing"):
-                    new_category = f"potentially down {base_category}"
-                    comment = f"Potentially Down (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down phishing output written for {seed.ip} with status {status}.")
-                elif cat.startswith("ddos"):
-                    new_category = f"potentially down {base_category}"
-                    comment = f"Potentially Down (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down ddos output written for {seed.ip} with status {status}.")
-                elif cat.startswith("bruteforce"):
-                    new_category = f"potentially down {base_category}"
-                    comment = f"Potentially Down (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down bruteforce output written for {seed.ip} with status {status}.")
-                elif cat.startswith("malicious"):
-                    new_category = f"potentially down {base_category}"
-                    comment = f"Potentially Down (Server Error): HTTP {status}"
-                    line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down malware output written for {seed.ip} with status {status}.")
+                new_category = f"potentially down {base_category}"
+                comment = f"Potentially down: {status}"
+                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_potentially_down_whitelist_line(line)
+                self.log(f"Potentially Down output written for {seed.ip} with status {status}.")
             return
 
-        # For "up" status (successful responses) process as normal
+        # For a successful ("up") response, decide on the verdict
         duplicate_settings = self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True)
         if cat.startswith("whitelist"):
-            seed_verdict = "whitelist (auto verdict 2)" if status == "up" else "whitelist (auto verdict 3)"
+            seed_verdict = "whitelist (auto verdict 2)" if status.startswith("up") else "whitelist (auto verdict 3)"
         elif cat.startswith("phishing"):
-            seed_verdict = "phishing (auto verdict 5)" if status == "up" else "phishing (auto verdict 6)"
+            seed_verdict = "phishing (auto verdict 5)" if status.startswith("up") else "phishing (auto verdict 6)"
         elif cat.startswith("spam"):
-            seed_verdict = "spam (auto verdict 5)" if status == "up" else "spam (auto verdict 6)"
+            seed_verdict = "spam (auto verdict 5)" if status.startswith("up") else "spam (auto verdict 6)"
         elif cat.startswith("ddos"):
-            seed_verdict = "ddos (auto verdict 5)" if status == "up" else "ddos (auto verdict 6)"
+            seed_verdict = "ddos (auto verdict 5)" if status.startswith("up") else "ddos (auto verdict 6)"
         elif cat.startswith("bruteforce"):
-            seed_verdict = "bruteforce (auto verdict 5)" if status == "up" else "bruteforce (auto verdict 6)"
+            seed_verdict = "bruteforce (auto verdict 5)" if status.startswith("up") else "bruteforce (auto verdict 6)"
         elif cat.startswith("malicious"):
-            seed_verdict = "malicious (auto verdict 5)" if status == "up" else "malicious (auto verdict 6)"
+            seed_verdict = "malicious (auto verdict 5)" if status.startswith("up") else "malicious (auto verdict 6)"
         else:
             seed_verdict = seed.source_type
 
@@ -1087,6 +960,7 @@ class ScannerWorker(QObject):
                 self.handle_duplicate(cat, seed, status, discovered_source_url)
             else:
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
+
         with self.lock:
             self.processed_count += 1
             self.update_progress()
