@@ -164,16 +164,16 @@ class ScannerWorker(QObject):
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
-        # New output files for dead (non-duplicate) responses
-        self.out_dead_bulk_1_csv = settings.get("DeadBulk1OutputFile", os.path.join(output_dir, "dea_dbulk_1.csv"))
-        self.out_dead_bulk_2_csv = settings.get("DeadBulk2OutputFile", os.path.join(output_dir, "dead_bulk_2.csv"))
-        self.out_dead_whitelist1_csv = settings.get("DeadWhiteList1OutputFile", os.path.join(output_dir, "dead_whitelist_1.csv"))
-        self.out_dead_whitelist2_csv = settings.get("DeadWhiteList2OutputFile", os.path.join(output_dir, "dead_whitelist_2.csv"))
-        # New output files for dead duplicate responses
-        self.out_dead_bulk_duplicate_1_csv = settings.get("DeadBulkDuplicate1OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_1.csv"))
-        self.out_dead_bulk_duplicate_2_csv = settings.get("DeadBulkDuplicate2OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_2.csv"))
-        self.out_dead_whitelist_duplicate_1_csv = settings.get("DeadWhitelistDuplicate1OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_1.csv"))
-        self.out_dead_whitelist_duplicate_2_csv = settings.get("DeadWhitelistDuplicate2OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_2.csv"))
+        # New output files for pottentially up or down (non-duplicate) responses
+        self.out_potentially_up_whitelist_csv = settings.get("PottentiallyBulk1OutputFile", os.path.join(output_dir, "potentially_up.csv"))
+        self.out_potentially_down_whitelist_csv = settings.get("PottentiallyBulk2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        self.out_potentially_up_whitelist_csv = settings.get("PottentiallyWhiteList1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        self.out_potentially_down_whitelist_csv = settings.get("PottentiallyWhiteList2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        # New output files for pottentially up or down duplicate responses
+        self.out_pottentially_bulk_duplicate_1_csv = settings.get("PottentiallyBulkDuplicate1OutputFile", os.path.join(output_dir, "pottentially_bulk_duplicate_1.csv"))
+        self.out_pottentially_bulk_duplicate_2_csv = settings.get("PottentiallyBulkDuplicate2OutputFile", os.path.join(output_dir, "pottentially_bulk_duplicate_2.csv"))
+        self.out_potentially_up_whitelist_csv = settings.get("PottentiallyWhitelistDuplicate1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        self.out_potentially_down_whitelist_csv = settings.get("PottentiallyWhitelistDuplicate2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
 
         self.out_winerror_bulk_csv = settings.get("WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
@@ -216,22 +216,22 @@ class ScannerWorker(QObject):
 
         # Main output rotation info
         self.bulk_file_index = 0
-        self.dead_whitelist_1_file_index = 0
-        self.dead_whitelist_2_file_index = 0
-        self.dead_bulk_1_file_index = 0
-        self.dead_bulk_2_file_index = 0
+        self.potentially_up_whitelist_file_index = 0
+        self.potentially_down_whitelist_file_index = 0
+        self.potentially_up_whitelist_file_index = 0
+        self.potentially_down_whitelist_file_index = 0
         self.whitelist_file_index = 0
         self.bulk_line_count = 0
-        self.dead_bulk_2_line_count = 0
+        self.potentially_down_whitelist_line_count = 0
         self.whitelist_line_count = 0
         self.out_winerror_whitelist_file_index = 0
         self.out_winerror_bulk_file_index = 0
         self.out_winerror_whitelist_duplicate_file_index = 0
         self.out_winerror_bulk_duplicate_file_index = 0
-        self.dead_whitelist_duplicate_1_file_index = 0
-        self.dead_whitelist_duplicate_2_file_index = 0
-        self.dead_bulk_duplicate_1_file_index = 0
-        self.dead_bulk_duplicate_2_file_index = 0
+        self.potentially_up_whitelist_file_index = 0
+        self.potentially_down_whitelist_file_index = 0
+        self.pottentially_bulk_duplicate_1_file_index = 0
+        self.pottentially_bulk_duplicate_2_file_index = 0
         self.bulk_file = None
         self.whitelist_file = None
         self.processed_count = 0
@@ -269,10 +269,10 @@ class ScannerWorker(QObject):
         # Ensure directories exist for all files
         file_paths = [
             self.out_bulk_csv, self.out_whitelist_csv,
-            self.out_dead_bulk_1_csv, self.out_dead_bulk_2_csv,
-            self.out_dead_whitelist1_csv, self.out_dead_whitelist2_csv,
-            self.out_dead_bulk_duplicate_1_csv, self.out_dead_bulk_duplicate_2_csv,
-            self.out_dead_whitelist_duplicate_1_csv, self.out_dead_whitelist_duplicate_2_csv,
+            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
+            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
+            self.out_pottentially_bulk_duplicate_1_csv, self.out_pottentially_bulk_duplicate_2_csv,
+            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
             self.out_winerror_bulk_csv, self.out_winerror_whitelist_csv,
             self.out_winerror_bulk_duplicate_csv, self.out_winerror_whitelist_duplicate_csv
         ]
@@ -288,15 +288,15 @@ class ScannerWorker(QObject):
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
 
-        self.dead_bulk_1_file = open(self.out_dead_bulk_1_csv, "w", encoding="utf-8")
-        self.dead_bulk_2_file = open(self.out_dead_bulk_2_csv, "w", encoding="utf-8")
-        self.dead_whitelist_1_file = open(self.out_dead_whitelist1_csv, "w", encoding="utf-8")
-        self.dead_whitelist_2_file = open(self.out_dead_whitelist2_csv, "w", encoding="utf-8")
+        self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
+        self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
+        self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
+        self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
 
-        self.dead_bulk_duplicate_1_file = open(self.out_dead_bulk_duplicate_1_csv, "w", encoding="utf-8")
-        self.dead_bulk_duplicate_2_file = open(self.out_dead_bulk_duplicate_2_csv, "w", encoding="utf-8")
-        self.dead_whitelist_duplicate_1_file = open(self.out_dead_whitelist_duplicate_1_csv, "w", encoding="utf-8")
-        self.dead_whitelist_duplicate_2_file = open(self.out_dead_whitelist_duplicate_2_csv, "w", encoding="utf-8")
+        self.pottentially_bulk_duplicate_1_file = open(self.out_pottentially_bulk_duplicate_1_csv, "w", encoding="utf-8")
+        self.pottentially_bulk_duplicate_2_file = open(self.out_pottentially_bulk_duplicate_2_csv, "w", encoding="utf-8")
+        self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
+        self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
 
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
@@ -306,10 +306,10 @@ class ScannerWorker(QObject):
         # Write header to each file and flush immediately
         for file in [
             self.bulk_file, self.whitelist_file,
-            self.dead_bulk_1_file, self.dead_bulk_2_file,
-            self.dead_whitelist_1_file, self.dead_whitelist_2_file,
-            self.dead_bulk_duplicate_1_file, self.dead_bulk_duplicate_2_file,
-            self.dead_whitelist_duplicate_1_file, self.dead_whitelist_duplicate_2_file,
+            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
+            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
+            self.pottentially_bulk_duplicate_1_file, self.pottentially_bulk_duplicate_2_file,
+            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
             self.out_winerror_bulk_file, self.out_winerror_whitelist_file,
             self.out_winerror_bulk_duplicate_file, self.out_winerror_whitelist_duplicate_file
         ]:
@@ -322,14 +322,14 @@ class ScannerWorker(QObject):
         # Initialize file size and line count attributes
         self.bulk_file_size = hsize
         self.whitelist_file_size = hsize
-        self.dead_bulk_1_file_size = hsize
-        self.dead_bulk_2_file_size = hsize
-        self.dead_whitelist_1_file_size = hsize
-        self.dead_whitelist_2_file_size = hsize
-        self.dead_bulk_duplicate_1_file_size = hsize
-        self.dead_bulk_duplicate_2_file_size = hsize
-        self.dead_whitelist_duplicate_1_file_size = hsize
-        self.dead_whitelist_duplicate_2_file_size = hsize
+        self.potentially_up_whitelist_file_size = hsize
+        self.potentially_down_whitelist_file_size = hsize
+        self.potentially_up_whitelist_file_size = hsize
+        self.potentially_down_whitelist_file_size = hsize
+        self.pottentially_bulk_duplicate_1_file_size = hsize
+        self.pottentially_bulk_duplicate_2_file_size = hsize
+        self.potentially_up_whitelist_file_size = hsize
+        self.potentially_down_whitelist_file_size = hsize
         self.out_winerror_bulk_file_size = hsize
         self.out_winerror_whitelist_file_size = hsize
         self.out_winerror_bulk_duplicate_file_size = hsize
@@ -337,14 +337,14 @@ class ScannerWorker(QObject):
 
         self.bulk_line_count = 1
         self.whitelist_line_count = 1
-        self.dead_bulk_1_line_count = 1
-        self.dead_bulk_2_line_count = 1
-        self.dead_whitelist_1_line_count = 1
-        self.dead_whitelist_2_line_count = 1
-        self.dead_bulk_duplicate_1_line_count = 1
-        self.dead_bulk_duplicate_2_line_count = 1
-        self.dead_whitelist_duplicate_1_line_count = 1
-        self.dead_whitelist_duplicate_2_line_count = 1
+        self.potentially_up_whitelist_line_count = 1
+        self.potentially_down_whitelist_line_count = 1
+        self.potentially_up_whitelist_line_count = 1
+        self.potentially_down_whitelist_line_count = 1
+        self.pottentially_bulk_duplicate_1_line_count = 1
+        self.pottentially_bulk_duplicate_2_line_count = 1
+        self.potentially_up_whitelist_line_count = 1
+        self.potentially_down_whitelist_line_count = 1
         self.out_winerror_bulk_line_count = 1
         self.out_winerror_whitelist_line_count = 1
         self.out_winerror_bulk_duplicate_line_count = 1
@@ -355,10 +355,10 @@ class ScannerWorker(QObject):
             self.bulk_file.close()
         if self.whitelist_file:
             self.whitelist_file.close()
-        if self.dead_bulk_1_file:
-            self.dead_bulk_1_file.close()
-        if self.dead_bulk_2_file:
-            self.dead_bulk_2_file.close()
+        if self.potentially_up_whitelist_file:
+            self.potentially_up_whitelist_file.close()
+        if self.potentially_down_whitelist_file:
+            self.potentially_down_whitelist_file.close()
         if self.out_winerror_whitelist_file:
             self.out_winerror_whitelist_file.close()
         if self.out_winerror_bulk_file:
@@ -428,116 +428,116 @@ class ScannerWorker(QObject):
             self.out_winerror_bulk_duplicate_line_count += 1
             self.out_winerror_bulk_duplicate_file_size += line_bytes
 
-    # New helper methods for duplicate dead outputs:
-    def write_dead_bulk_duplicate_1_line(self, line):
+    # New helper methods for duplicate pottentially outputs:
+    def write_pottentially_bulk_duplicate_1_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_duplicate_1_line_count >= self.csv_max_lines or (self.dead_bulk_duplicate_1_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_duplicate_1_file.close()
-                self.dead_bulk_duplicate_1_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_duplicate_1_csv)
-                new_filename = f"{base}_{self.dead_bulk_duplicate_1_file_index}{ext}"
-                self.dead_bulk_duplicate_1_file = open(new_filename, "w", encoding="utf-8")
+            if self.pottentially_bulk_duplicate_1_line_count >= self.csv_max_lines or (self.pottentially_bulk_duplicate_1_file_size + line_bytes) >= self.csv_max_size:
+                self.pottentially_bulk_duplicate_1_file.close()
+                self.pottentially_bulk_duplicate_1_file_index += 1
+                base, ext = os.path.splitext(self.out_pottentially_bulk_duplicate_1_csv)
+                new_filename = f"{base}_{self.pottentially_bulk_duplicate_1_file_index}{ext}"
+                self.pottentially_bulk_duplicate_1_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_duplicate_1_file.write(header)
-                self.dead_bulk_duplicate_1_file.flush()
-                self.dead_bulk_duplicate_1_line_count = 1
-                self.dead_bulk_duplicate_1_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulkduplicate_1 file rotated; new file: {new_filename}")
-            self.dead_bulk_duplicate_1_file.write(line)
-            self.dead_bulk_duplicate_1_file.flush()
-            self.dead_bulk_duplicate_1_line_count += 1
-            self.dead_bulk_duplicate_1_file_size += line_bytes
+                self.pottentially_bulk_duplicate_1_file.write(header)
+                self.pottentially_bulk_duplicate_1_file.flush()
+                self.pottentially_bulk_duplicate_1_line_count = 1
+                self.pottentially_bulk_duplicate_1_file_size = len(header.encode("utf-8"))
+                self.log(f"pottentially_bulkduplicate_1 file rotated; new file: {new_filename}")
+            self.pottentially_bulk_duplicate_1_file.write(line)
+            self.pottentially_bulk_duplicate_1_file.flush()
+            self.pottentially_bulk_duplicate_1_line_count += 1
+            self.pottentially_bulk_duplicate_1_file_size += line_bytes
 
-    def write_dead_bulk_duplicate_2_line(self, line):
+    def write_pottentially_bulk_duplicate_2_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_duplicate_2_line_count >= self.csv_max_lines or (self.dead_bulk_duplicate_2_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_duplicate_2_file.close()
-                self.dead_bulk_duplicate_2_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_duplicate_2_csv)
-                new_filename = f"{base}_{self.dead_bulk_duplicate_2_file_index}{ext}"
-                self.dead_bulk_duplicate_2_file = open(new_filename, "w", encoding="utf-8")
+            if self.pottentially_bulk_duplicate_2_line_count >= self.csv_max_lines or (self.pottentially_bulk_duplicate_2_file_size + line_bytes) >= self.csv_max_size:
+                self.pottentially_bulk_duplicate_2_file.close()
+                self.pottentially_bulk_duplicate_2_file_index += 1
+                base, ext = os.path.splitext(self.out_pottentially_bulk_duplicate_2_csv)
+                new_filename = f"{base}_{self.pottentially_bulk_duplicate_2_file_index}{ext}"
+                self.pottentially_bulk_duplicate_2_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_duplicate_2_file.write(header)
-                self.dead_bulk_duplicate_2_file.flush()
-                self.dead_bulk_duplicate_2_line_count = 1
-                self.dead_bulk_duplicate_2_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulkduplicate_2 file rotated; new file: {new_filename}")
-            self.dead_bulk_duplicate_2_file.write(line)
-            self.dead_bulk_duplicate_2_file.flush()
-            self.dead_bulk_duplicate_2_line_count += 1
+                self.pottentially_bulk_duplicate_2_file.write(header)
+                self.pottentially_bulk_duplicate_2_file.flush()
+                self.pottentially_bulk_duplicate_2_line_count = 1
+                self.pottentially_bulk_duplicate_2_file_size = len(header.encode("utf-8"))
+                self.log(f"pottentially_bulkduplicate_2 file rotated; new file: {new_filename}")
+            self.pottentially_bulk_duplicate_2_file.write(line)
+            self.pottentially_bulk_duplicate_2_file.flush()
+            self.pottentially_bulk_duplicate_2_line_count += 1
 
-    def write_dead_whitelist_1_line(self, line):
+    def write_potentially_up_whitelist_line(self, line):
         with self.lock:
-            self.dead_whitelist_1_file.write(line)
-            self.dead_whitelist_1_file.flush()
-            self.dead_whitelist_1_line_count += 1
-            self.dead_whitelist_1_file_size += len(line.encode("utf-8"))
+            self.potentially_up_whitelist_file.write(line)
+            self.potentially_up_whitelist_file.flush()
+            self.potentially_up_whitelist_line_count += 1
+            self.potentially_up_whitelist_file_size += len(line.encode("utf-8"))
             self.total_seeds += 1
 
-    def write_dead_whitelist_2_line(self, line):
+    def write_potentially_down_whitelist_line(self, line):
         with self.lock:
-            self.dead_whitelist_2_file.write(line)
-            self.dead_whitelist_2_file.flush()
-            self.dead_whitelist_2_line_count += 1
-            self.dead_whitelist_2_file_size += len(line.encode("utf-8"))
+            self.potentially_down_whitelist_file.write(line)
+            self.potentially_down_whitelist_file.flush()
+            self.potentially_down_whitelist_line_count += 1
+            self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
             self.total_seeds += 1
 
-    def write_dead_whitelist_duplicate_1_line(self, line):
+    def write_potentially_up_whitelist_line(self, line):
         with self.lock:
-            self.dead_whitelist_duplicate_1_file.write(line)
-            self.dead_whitelist_duplicate_1_file.flush()
-            self.dead_whitelist_duplicate_1_line_count += 1
-            self.dead_whitelist_duplicate_1_file_size += len(line.encode("utf-8"))
+            self.potentially_up_whitelist_file.write(line)
+            self.potentially_up_whitelist_file.flush()
+            self.potentially_up_whitelist_line_count += 1
+            self.potentially_up_whitelist_file_size += len(line.encode("utf-8"))
 
-    def write_dead_whitelist_duplicate_2_line(self, line):
+    def write_potentially_down_whitelist_line(self, line):
         with self.lock:
-            self.dead_whitelist_duplicate_2_file.write(line)
-            self.dead_whitelist_duplicate_2_file.flush()
-            self.dead_whitelist_duplicate_2_line_count += 1
-            self.dead_whitelist_duplicate_2_file_size += len(line.encode("utf-8"))
+            self.potentially_down_whitelist_file.write(line)
+            self.potentially_down_whitelist_file.flush()
+            self.potentially_down_whitelist_line_count += 1
+            self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
 
-    def write_dead_bulk_1_line(self, line):
+    def write_potentially_up_whitelist_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_1_line_count >= self.csv_max_lines or (self.dead_bulk_1_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_1_file.close()
-                self.dead_bulk_1_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_1_csv)
-                new_filename = f"{base}_{self.dead_bulk_1_file_index}{ext}"
-                self.dead_bulk_1_file = open(new_filename, "w", encoding="utf-8")
+            if self.potentially_up_whitelist_line_count >= self.csv_max_lines or (self.potentially_up_whitelist_file_size + line_bytes) >= self.csv_max_size:
+                self.potentially_up_whitelist_file.close()
+                self.potentially_up_whitelist_file_index += 1
+                base, ext = os.path.splitext(self.out_potentially_up_whitelist_csv)
+                new_filename = f"{base}_{self.potentially_up_whitelist_file_index}{ext}"
+                self.potentially_up_whitelist_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_1_file.write(header)
-                self.dead_bulk_1_file.flush()
-                self.dead_bulk_1_line_count = 1
-                self.dead_bulk_1_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulk_1 file rotated; new file: {new_filename}")
-            self.dead_bulk_1_file.write(line)
-            self.dead_bulk_1_file.flush()
-            self.dead_bulk_1_line_count += 1
-            self.dead_bulk_1_file_size += line_bytes
+                self.potentially_up_whitelist_file.write(header)
+                self.potentially_up_whitelist_file.flush()
+                self.potentially_up_whitelist_line_count = 1
+                self.potentially_up_whitelist_file_size = len(header.encode("utf-8"))
+                self.log(f"potentially_up_whitelist file rotated; new file: {new_filename}")
+            self.potentially_up_whitelist_file.write(line)
+            self.potentially_up_whitelist_file.flush()
+            self.potentially_up_whitelist_line_count += 1
+            self.potentially_up_whitelist_file_size += line_bytes
             self.total_seeds += 1
 
-    def write_dead_bulk_2_line(self, line):
+    def write_potentially_down_whitelist_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.dead_bulk_2_line_count >= self.csv_max_lines or (self.dead_bulk_2_file_size + line_bytes) >= self.csv_max_size:
-                self.dead_bulk_2_file.close()
-                self.dead_bulk_2_file_index += 1
-                base, ext = os.path.splitext(self.out_dead_bulk_2_csv)
-                new_filename = f"{base}_{self.dead_bulk_2_file_index}{ext}"
-                self.dead_bulk_2_file = open(new_filename, "w", encoding="utf-8")
+            if self.potentially_down_whitelist_line_count >= self.csv_max_lines or (self.potentially_down_whitelist_file_size + line_bytes) >= self.csv_max_size:
+                self.potentially_down_whitelist_file.close()
+                self.potentially_down_whitelist_file_index += 1
+                base, ext = os.path.splitext(self.out_potentially_down_whitelist_csv)
+                new_filename = f"{base}_{self.potentially_down_whitelist_file_index}{ext}"
+                self.potentially_down_whitelist_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.dead_bulk_2_file.write(header)
-                self.dead_bulk_2_file.flush()
-                self.dead_bulk_2_line_count = 1
-                self.dead_bulk_2_file_size = len(header.encode("utf-8"))
-                self.log(f"dead_bulk_2 file rotated; new file: {new_filename}")
-            self.dead_bulk_2_file.write(line)
-            self.dead_bulk_2_file.flush()
-            self.dead_bulk_2_line_count += 1
-            self.dead_bulk_2_file_size += line_bytes
+                self.potentially_down_whitelist_file.write(header)
+                self.potentially_down_whitelist_file.flush()
+                self.potentially_down_whitelist_line_count = 1
+                self.potentially_down_whitelist_file_size = len(header.encode("utf-8"))
+                self.log(f"potentially_down_whitelist file rotated; new file: {new_filename}")
+            self.potentially_down_whitelist_file.write(line)
+            self.potentially_down_whitelist_file.flush()
+            self.potentially_down_whitelist_line_count += 1
+            self.potentially_down_whitelist_file_size += line_bytes
             self.total_seeds += 1
 
     def write_bulk_line(self, line):
@@ -862,62 +862,62 @@ class ScannerWorker(QObject):
                     new_category = f"potentially up duplicate {base_category}"
                     comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_whitelist_duplicate_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up whitelist duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("phishing"):
                     new_category = f"potentially up duplicate {base_category}"
                     comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_1_line(line)
+                    self.write_pottentially_bulk_duplicate_1_line(line)
                     self.log(f"Potentially Up phishing duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("ddos"):
                     new_category = f"potentially up duplicate {base_category}"
                     comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_1_line(line)
+                    self.write_pottentially_bulk_duplicate_1_line(line)
                     self.log(f"Potentially Up ddos duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("bruteforce"):
                     new_category = f"potentially up duplicate {base_category}"
                     comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_1_line(line)
+                    self.write_pottentially_bulk_duplicate_1_line(line)
                     self.log(f"Potentially Up bruteforce duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("malicious"):
                     new_category = f"potentially up duplicate {base_category}"
                     comment = f"Potentially Up (Client Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_1_line(line)
+                    self.write_pottentially_bulk_duplicate_1_line(line)
                     self.log(f"Potentially Up malware duplicate output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
                     new_category = f"potentially up {base_category}"
                     comment = f"Potentially Up (Client Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_whitelist_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up whitelist output written for {seed.ip} with status {status}.")
                 elif cat.startswith("phishing"):
                     new_category = f"potentially up {base_category}"
                     comment = f"Potentially Up (Client Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up phishing output written for {seed.ip} with status {status}.")
                 elif cat.startswith("ddos"):
                     new_category = f"potentially up {base_category}"
                     comment = f"Potentially Up (Client Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up ddos output written for {seed.ip} with status {status}.")
                 elif cat.startswith("bruteforce"):
                     new_category = f"potentially up {base_category}"
                     comment = f"Potentially Up (Client Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up bruteforce output written for {seed.ip} with status {status}.")
                 elif cat.startswith("malicious"):
                     new_category = f"potentially up {base_category}"
                     comment = f"Potentially Up (Client Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_1_line(line)
+                    self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up malware output written for {seed.ip} with status {status}.")
             return
 
@@ -928,62 +928,62 @@ class ScannerWorker(QObject):
                     new_category = f"potentially down duplicate {base_category}"
                     comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_whitelist_duplicate_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down whitelist duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("phishing"):
                     new_category = f"potentially down duplicate {base_category}"
                     comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_2_line(line)
+                    self.write_pottentially_bulk_duplicate_2_line(line)
                     self.log(f"Potentially Down phishing duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("ddos"):
                     new_category = f"potentially down duplicate {base_category}"
                     comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_2_line(line)
+                    self.write_pottentially_bulk_duplicate_2_line(line)
                     self.log(f"Potentially Down ddos duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("bruteforce"):
                     new_category = f"potentially down duplicate {base_category}"
                     comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_2_line(line)
+                    self.write_pottentially_bulk_duplicate_2_line(line)
                     self.log(f"Potentially Down bruteforce duplicate output written for {seed.ip} with status {status}.")
                 elif cat.startswith("malicious"):
                     new_category = f"potentially down duplicate {base_category}"
                     comment = f"Potentially Down (Server Error Duplicate): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_duplicate_2_line(line)
+                    self.write_pottentially_bulk_duplicate_2_line(line)
                     self.log(f"Potentially Down malware duplicate output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
                     new_category = f"potentially down {base_category}"
                     comment = f"Potentially Down (Server Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_whitelist_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down whitelist output written for {seed.ip} with status {status}.")
                 elif cat.startswith("phishing"):
                     new_category = f"potentially down {base_category}"
                     comment = f"Potentially Down (Server Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down phishing output written for {seed.ip} with status {status}.")
                 elif cat.startswith("ddos"):
                     new_category = f"potentially down {base_category}"
                     comment = f"Potentially Down (Server Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down ddos output written for {seed.ip} with status {status}.")
                 elif cat.startswith("bruteforce"):
                     new_category = f"potentially down {base_category}"
                     comment = f"Potentially Down (Server Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down bruteforce output written for {seed.ip} with status {status}.")
                 elif cat.startswith("malicious"):
                     new_category = f"potentially down {base_category}"
                     comment = f"Potentially Down (Server Error): HTTP {status}"
                     line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_dead_bulk_2_line(line)
+                    self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down malware output written for {seed.ip} with status {status}.")
             return
 
@@ -1211,10 +1211,10 @@ class MainWindow(QMainWindow):
         # Define keys for which a browse button should be added.
         file_keys = {
             "OutputFile", "WhiteListOutputFile",
-            "DeadBulk1OutputFile", "DeadBulk2OutputFile",
-            "DeadBulkDuplicate1OutputFile", "DeadBulkDuplicate2OutputFile",
-            "DeadWhiteList1OutputFile", "DeadWhiteList2OutputFile",
-            "DeadWhiteListDuplicate1OutputFile", "DeadWhiteListDuplicate2OutputFile",
+            "PottentiallyBulk1OutputFile", "PottentiallyBulk2OutputFile",
+            "PottentiallyBulkDuplicate1OutputFile", "PottentiallyBulkDuplicate2OutputFile",
+            "PottentiallyWhiteList1OutputFile", "PottentiallyWhiteList2OutputFile",
+            "PottentiallyWhiteListDuplicate1OutputFile", "PottentiallyWhiteListDuplicate2OutputFile",
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
             "DuplicateDDoSFileIPv4", "DuplicateDDoSFileIPv6",
@@ -1275,15 +1275,15 @@ class MainWindow(QMainWindow):
         # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
-        # New fields for Dead CSV outputs
-        add_field("Dead Bulk 1 Output File:", "DeadBulk1OutputFile", os.path.join(output_dir, "dead_bulk_1.csv"))
-        add_field("Dead Bulk 2 Output File:", "DeadBulk2OutputFile", os.path.join(output_dir, "dead_bulk_2.csv"))
-        add_field("Dead Whitelist 1 Output File:", "DeadWhiteList1OutputFile", os.path.join(output_dir, "dead_whitelist_1.csv"))
-        add_field("Dead Whitelist 2 Output File:", "DeadWhiteList2OutputFile", os.path.join(output_dir, "dead_whitelist_2.csv"))
-        add_field("Dead Bulk Duplicate 1 Output File:", "DeadBulkDuplicate1OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_1.csv"))
-        add_field("Dead Bulk Duplicate 2 Output File:", "DeadBulkDuplicate2OutputFile", os.path.join(output_dir, "dead_bulk_duplicate_2.csv"))
-        add_field("Dead Whitelist Duplicate 1 Output File:", "DeadWhiteListDuplicate1OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_1.csv"))
-        add_field("Dead Whitelist Duplicate 2 Output File:", "DeadWhiteListDuplicate2OutputFile", os.path.join(output_dir, "dead_whitelist_duplicate_2.csv"))
+        # New fields for Pottentially CSV outputs
+        add_field("Pottentially Bulk 1 Output File:", "PottentiallyBulk1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        add_field("Pottentially Bulk 2 Output File:", "PottentiallyBulk2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        add_field("Pottentially Whitelist 1 Output File:", "PottentiallyWhiteList1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        add_field("Pottentially Whitelist 2 Output File:", "PottentiallyWhiteList2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        add_field("Pottentially Bulk Duplicate 1 Output File:", "PottentiallyBulkDuplicate1OutputFile", os.path.join(output_dir, "pottentially_bulk_duplicate_1.csv"))
+        add_field("Pottentially Bulk Duplicate 2 Output File:", "PottentiallyBulkDuplicate2OutputFile", os.path.join(output_dir, "pottentially_bulk_duplicate_2.csv"))
+        add_field("Pottentially Whitelist Duplicate 1 Output File:", "PottentiallyWhiteListDuplicate1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        add_field("Pottentially Whitelist Duplicate 2 Output File:", "PottentiallyWhiteListDuplicate2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         # New fields for WinError CSV outputs:
         add_field("WinError Bulk Output File:", "WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         add_field("WinError Whitelist Output File:", "WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
