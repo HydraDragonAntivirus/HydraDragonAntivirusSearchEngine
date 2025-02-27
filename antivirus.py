@@ -737,15 +737,18 @@ class ScannerWorker(QObject):
 
     # Modified process_seed to use new status categories
     def process_seed(self, seed, discovered_source_url=None):
+        if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
+            seed.ip = urlparse(seed.ip).hostname
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
         if self.my_public_ip and seed.ip == self.my_public_ip:
             self.log(f"Skipping my own public IP: {seed.ip}")
             return
-        if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
-            seed.ip = urlparse(seed.ip).hostname
-            self.visited_ips.add(seed.ip)
+
+        # Add the seed IP to the visited set.
+        self.visited_ips.add(seed.ip)
+
         cat = seed.source_type.lower().strip()
         allowed_categories = ["whitelist_ipv6", "whitelist_ipv4",
                               "phishing_ipv6", "phishing_ipv4",
