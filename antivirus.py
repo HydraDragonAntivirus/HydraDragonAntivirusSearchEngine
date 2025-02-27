@@ -4,11 +4,12 @@ import sys
 import json
 import ipaddress
 import threading
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
 import requests
 import logging
 import time
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 import concurrent.futures
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
@@ -470,36 +471,6 @@ class ScannerWorker(QObject):
 
     def write_potentially_up_whitelist_line(self, line):
         with self.lock:
-            self.potentially_up_whitelist_file.write(line)
-            self.potentially_up_whitelist_file.flush()
-            self.potentially_up_whitelist_line_count += 1
-            self.potentially_up_whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
-
-    def write_potentially_down_whitelist_line(self, line):
-        with self.lock:
-            self.potentially_down_whitelist_file.write(line)
-            self.potentially_down_whitelist_file.flush()
-            self.potentially_down_whitelist_line_count += 1
-            self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
-
-    def write_potentially_up_whitelist_line(self, line):
-        with self.lock:
-            self.potentially_up_whitelist_file.write(line)
-            self.potentially_up_whitelist_file.flush()
-            self.potentially_up_whitelist_line_count += 1
-            self.potentially_up_whitelist_file_size += len(line.encode("utf-8"))
-
-    def write_potentially_down_whitelist_line(self, line):
-        with self.lock:
-            self.potentially_down_whitelist_file.write(line)
-            self.potentially_down_whitelist_file.flush()
-            self.potentially_down_whitelist_line_count += 1
-            self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
-
-    def write_potentially_up_whitelist_line(self, line):
-        with self.lock:
             line_bytes = len(line.encode("utf-8"))
             if self.potentially_up_whitelist_line_count >= self.csv_max_lines or (self.potentially_up_whitelist_file_size + line_bytes) >= self.csv_max_size:
                 self.potentially_up_whitelist_file.close()
@@ -637,11 +608,11 @@ class ScannerWorker(QObject):
         self.log("Scan completed.")
         self.finished_signal.emit()
 
-    # Modified: New is_active_and_static using status code lists from settings
     def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
         if timeout is None:
             timeout = self.request_timeout
 
+        # Construct URL based on IPv4 or IPv6 format
         if self.is_valid_ip(ip) == "ipv6":
             url = f"http://[{ip}]" + (f":{port}" if port else "")
         else:
@@ -659,12 +630,18 @@ class ScannerWorker(QObject):
         code = response.status_code
         code_str = f"{code:03d}"
         # Load HTTP status code lists from settings (comma-separated strings)
-        http_up_codes = [s.strip() for s in self.settings.get("HTTPUpCodes", "100,101,102,200,201,202,203,204,205,206,207,208,226,429").split(",")]
-        http_potentially_down_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyDownCodes", "400,402,404,409,410,412,414,415,416,451").split(",")]
-        http_potentially_up_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyUpCodes", "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511").split(",")]
+        http_up_codes = [s.strip() for s in self.settings.get("HTTPUpCodes",
+                                                              "100,101,102,200,201,202,203,204,205,206,207,208,226,429").split(
+            ",")]
+        http_potentially_down_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyDownCodes",
+                                                                            "400,402,404,409,410,412,414,415,416,451").split(
+            ",")]
+        http_potentially_up_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyUpCodes",
+                                                                          "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511").split(
+            ",")]
 
         if code_str in http_up_codes:
-            # Process redirects and discovered IP extraction as before
+            # Process redirects as before
             if response.url.startswith("http://") or response.url.startswith("https://"):
                 parsed_ip = urlparse(response.url).hostname
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
@@ -675,6 +652,8 @@ class ScannerWorker(QObject):
                     new_seed = Seed(parsed_ip, category, port=port)
                     self.log(f"Processing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                     self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+
+            # Extract IPs from main HTML using regex extractor
             found_ips = self.extract_ip_and_port(response.text)
             for extracted_ip, extracted_port, ip_version in found_ips:
                 if ip_version == "ipv6":
@@ -693,7 +672,64 @@ class ScannerWorker(QObject):
                 new_seed = Seed(discovered_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+
+            # Parse HTML using BeautifulSoup to extract resource URLs
+            soup = BeautifulSoup(response.text, "html.parser")
+            resource_urls = set()
+
+            # Extract JavaScript resources from <script> tags
+            for script in soup.find_all("script", src=True):
+                src = script.get("src")
+                if src:
+                    full_url = urljoin(url, src)
+                    resource_urls.add(full_url)
+
+            # Extract CSS or other linked files from <link> tags
+            for link in soup.find_all("link", href=True):
+                href = link.get("href")
+                if href:
+                    full_url = urljoin(url, href)
+                    resource_urls.add(full_url)
+
+            # Extract images (or other resources) from <img> tags
+            for img in soup.find_all("img", src=True):
+                src = img.get("src")
+                if src:
+                    full_url = urljoin(url, src)
+                    resource_urls.add(full_url)
+
+            # Download each additional resource and extract IPs from their content
+            for resource_url in resource_urls:
+                try:
+                    res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
+                    if res.status_code == 200:
+                        resource_ips = self.extract_ip_and_port(res.text)
+                        for extracted_ip, extracted_port, ip_version in resource_ips:
+                            if ip_version == "ipv6":
+                                if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')):
+                                    candidate = "http://[" + extracted_ip + "]"
+                                else:
+                                    candidate = "http://" + extracted_ip[1:-1]
+                            else:
+                                candidate = extracted_ip if extracted_ip.lower().startswith(
+                                    "http") else "http://" + extracted_ip
+                            parse_extracted = urlparse(candidate).hostname
+                            discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
+                            if self.is_valid_ip(discovered_ip) == "ipv6":
+                                display_ip = f"[{discovered_ip}]"
+                            else:
+                                display_ip = discovered_ip
+                            new_seed = Seed(discovered_ip, category, port=extracted_port)
+                            self.log(
+                                f"Processing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
+                            self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                    else:
+                        self.log(f"Resource {resource_url} returned HTTP {res.status_code}")
+                except Exception as ex:
+                    self.log(f"Failed to fetch resource {resource_url}: {ex}")
+
             return "up"
+
         elif code_str in http_potentially_up_codes:
             self.log(f"Potentially Up status for {url}: HTTP {code_str}")
             return "potentially up"
@@ -1130,7 +1166,7 @@ class ScannerWorker(QObject):
         def add_file(file, source_type):
             if file not in file_category_mapping:
                 file_category_mapping[file] = []
-            file_category_mapping[file].append((source_type))
+            file_category_mapping[file].append(source_type)
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
             add_file(file, "whitelist_ipv6")
         for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
