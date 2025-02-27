@@ -1180,6 +1180,7 @@ class MainWindow(QMainWindow):
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
             "DuplicateDDoSFileIPv4", "DuplicateDDoSFileIPv6",
+            "DuplicateDDoSFileIPv6", "DuplicateDDoSFileIPv4",
             "DuplicateBruteForceFileIPv4", "DuplicateBruteForceFileIPv6",
             "DuplicateSpamFileIPv4", "DuplicateSpamFileIPv6",
             "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6",
@@ -1298,65 +1299,88 @@ class MainWindow(QMainWindow):
         add_field("Duplicate Spam File IPv6:", "DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
         add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
-        # Last Directory Path uses a directory browse button
-        add_field("Last Directory Path:", "LastPath", "website")
-        add_plain_field("Allow Duplicate Whitelist IPv4 (true/false):", "AllowDuplicateWhitelistIPv4", "true")
-        add_plain_field("Allow Duplicate Whitelist IPv6 (true/false):", "AllowDuplicateWhitelistIPv6", "true")
-        add_plain_field("Allow Duplicate Phishing IPv4 (true/false):", "AllowDuplicatePhishingIPv4", "true")
-        add_plain_field("Allow Duplicate Phishing IPv6 (true/false):", "AllowDuplicatePhishingIPv6", "true")
-        add_plain_field("Allow Duplicate BruteForce IPv4 (true/false):", "AllowDuplicateBruteForceIPv4", "true")
-        add_plain_field("Allow Duplicate BruteForce IPv6 (true/false):", "AllowDuplicateBruteForceIPv6", "true")
-        add_plain_field("Allow Duplicate Spam IPv4 (true/false):", "AllowDuplicateSpamIPv4", "true")
-        add_plain_field("Allow Duplicate Spam IPv6 (true/false):", "AllowDuplicateSpamIPv6", "true")
-        add_plain_field("Allow Duplicate Malicious IPv4 (true/false):", "AllowDuplicateMaliciousIPv4", "true")
-        add_plain_field("Allow Duplicate Malicious IPv6 (true/false):", "AllowDuplicateMaliciousIPv6", "true")
-        # Duplicate file fields (CSV) use browse buttons
-        add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
-        add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
-        add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
-        add_field("Duplicate Phishing File IPv6:", "DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
-        add_field("Duplicate DDoS File IPv6:", "DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
-        add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
-        add_field("Duplicate BruteForce File IPv4:", "DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
-        add_field("Duplicate BruteForce File IPv6:", "DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
-        add_field("Duplicate Spam File IPv4:", "DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
-        add_field("Duplicate Spam File IPv6:", "DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
-        add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
-        add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
 
-        self.fields["LastPath"].setText("website")
-
-        layout = QVBoxLayout()
-        layout.addWidget(settings_group)
-        main_layout.addLayout(layout)
-
-        # Buttons
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(settings_group)
+        main_layout.addWidget(scroll)
+        btn_layout = QHBoxLayout()
+        self.load_btn = QPushButton("Load Settings")
+        self.load_btn.clicked.connect(self.load_settings)
+        self.save_btn = QPushButton("Save Settings")
+        self.save_btn.clicked.connect(self.save_settings)
+        btn_layout.addWidget(self.load_btn)
+        btn_layout.addWidget(self.save_btn)
+        main_layout.addLayout(btn_layout)
+        control_layout = QHBoxLayout()
         self.start_stop_button = QPushButton("Start Scan")
+        self.start_stop_button.clicked.connect(self.toggle_scan)
+        control_layout.addWidget(self.start_stop_button)
         self.pause_button = QPushButton("Pause Scan")
+        self.pause_button.clicked.connect(self.toggle_pause)
         self.pause_button.setVisible(False)
+        control_layout.addWidget(self.pause_button)
+        main_layout.addLayout(control_layout)
+        self.progress_bar = QProgressBar()
+        main_layout.addWidget(self.progress_bar)
+        search_layout = QHBoxLayout()
         self.search_line = QLineEdit()
         self.search_line.setPlaceholderText("Search log...")
+        self.search_button = QPushButton("Search")
+        self.search_button.clicked.connect(self.search_log)
+        self.clear_search_button = QPushButton("Clear Search")
+        self.clear_search_button.clicked.connect(self.clear_search)
+        search_layout.addWidget(QLabel("Log Search:"))
+        search_layout.addWidget(self.search_line)
+        search_layout.addWidget(self.search_button)
+        search_layout.addWidget(self.clear_search_button)
+        main_layout.addLayout(search_layout)
+        main_layout.addWidget(QLabel("Log:"))
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.progress_bar = QProgressBar()
-
-        buttons_layout = QHBoxLayout()
-        buttons_layout.addWidget(self.start_stop_button)
-        buttons_layout.addWidget(self.pause_button)
-        buttons_layout.addWidget(self.search_line)
-        main_layout.addLayout(buttons_layout)
-        main_layout.addWidget(self.progress_bar)
         main_layout.addWidget(self.log_text)
-
-        self.start_stop_button.clicked.connect(self.toggle_scan)
-        self.pause_button.clicked.connect(self.toggle_pause)
-        self.search_line.returnPressed.connect(self.search_log)
 
     def get_settings_from_fields(self):
         settings = {}
-        for key, widget in self.fields.items():
-            settings[key] = widget.text().strip()
+        bool_keys = ("AllowDuplicateWhitelistIPv4", "AllowDuplicateWhitelistIPv6",
+                     "AllowDuplicatePhishingIPv4", "AllowDuplicatePhishingIPv6",
+                     "AllowDuplicateBruteForceIPv4", "AllowDuplicateBruteForceIPv6",
+                     "AllowDuplicateMaliciousIPv4", "AllowDuplicateMaliciousIPv6")
+        for key, le in self.fields.items():
+            value = le.text().strip()
+            if key in ("MaxThreads", "CsvMaxLines", "CsvMaxSize"):
+                try:
+                    value = int(value)
+                except:
+                    value = 0
+            if key in bool_keys:
+                value = value.lower() == "true"
+            settings[key] = value
         return settings
+
+    def load_settings(self):
+        file_path, _ = QFileDialog.getOpenFileName(self, "Open Settings JSON", os.getcwd(), "JSON Files (*.json)")
+        if file_path:
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+                for key, value in settings.items():
+                    if key in self.fields:
+                        self.fields[key].setText(str(value))
+                self.append_log("Settings loaded successfully.")
+            except Exception as e:
+                self.append_log(f"Failed to load settings: {e}")
+
+    def save_settings(self):
+        settings = self.get_settings_from_fields()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Settings JSON", os.getcwd(), "JSON Files (*.json)")
+        if file_path:
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(settings, f, indent=4)
+                self.append_log("Settings saved successfully.")
+            except Exception as e:
+                self.append_log(f"Failed to save settings: {e}")
 
     def toggle_scan(self):
         if not self.is_scanning:
