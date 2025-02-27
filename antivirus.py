@@ -165,8 +165,8 @@ class ScannerWorker(QObject):
         self.out_bulk_csv = settings.get("OutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
         # New output files for pottentially up or down (non-duplicate) responses
-        self.out_potentially_up_whitelist_csv = settings.get("PottentiallyBulk1OutputFile", os.path.join(output_dir, "potentially_up.csv"))
-        self.out_potentially_down_whitelist_csv = settings.get("PottentiallyBulk2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        self.out_potentially_up_whitelist_csv = settings.get("PottentiallyUpOutputFile", os.path.join(output_dir, "potentially_up.csv"))
+        self.out_potentially_down_whitelist_csv = settings.get("PottentiallyDownOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         self.out_potentially_up_whitelist_csv = settings.get("PottentiallyWhiteList1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         self.out_potentially_down_whitelist_csv = settings.get("PottentiallyWhiteList2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         # New output files for pottentially up or down duplicate responses
@@ -1211,7 +1211,7 @@ class MainWindow(QMainWindow):
         # Define keys for which a browse button should be added.
         file_keys = {
             "OutputFile", "WhiteListOutputFile",
-            "PottentiallyBulk1OutputFile", "PottentiallyBulk2OutputFile",
+            "PottentiallyUpOutputFile", "PottentiallyDownOutputFile",
             "PottentiallyBulkDuplicate1OutputFile", "PottentiallyBulkDuplicate2OutputFile",
             "PottentiallyWhiteList1OutputFile", "PottentiallyWhiteList2OutputFile",
             "PottentiallyWhiteListDuplicate1OutputFile", "PottentiallyWhiteListDuplicate2OutputFile",
@@ -1276,8 +1276,8 @@ class MainWindow(QMainWindow):
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
         # New fields for Pottentially CSV outputs
-        add_field("Pottentially Bulk 1 Output File:", "PottentiallyBulk1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
-        add_field("Pottentially Bulk 2 Output File:", "PottentiallyBulk2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
+        add_field("Pottentially Bulk 1 Output File:", "PottentiallyUpOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
+        add_field("Pottentially Bulk 2 Output File:", "PottentiallyDownOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         add_field("Pottentially Whitelist 1 Output File:", "PottentiallyWhiteList1OutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         add_field("Pottentially Whitelist 2 Output File:", "PottentiallyWhiteList2OutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         add_field("Pottentially Bulk Duplicate 1 Output File:", "PottentiallyBulkDuplicate1OutputFile", os.path.join(output_dir, "pottentially_bulk_duplicate_1.csv"))
