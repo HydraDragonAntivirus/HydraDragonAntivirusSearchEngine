@@ -48,12 +48,15 @@
     "DuplicateWhitelistFileIPv6": "output\\whitelist_ipv6_duplicates.csv",
     "DuplicatePhishingFileIPv4": "output\\phishing_ipv4_duplicates.csv",
     "DuplicatePhishingFileIPv6": "output\\phishing_ipv6_duplicates.csv",
-    "DuplicateDDoSFileIPv6": "output\\ddos_ipv6_duplicates.csv",
     "DuplicateDDoSFileIPv4": "output\\ddos_ipv4_duplicates.csv",
+    "DuplicateDDoSFileIPv6": "output\\ddos_ipv6_duplicates.csv",
     "DuplicateBruteForceFileIPv4": "output\\bruteforce_ipv4_duplicates.csv",
     "DuplicateBruteForceFileIPv6": "output\\bruteforce_ipv6_duplicates.csv",
     "DuplicateSpamFileIPv4": "output\\spam_ipv4_duplicates.csv",
     "DuplicateSpamFileIPv6": "output\\spam_ipv6_duplicates.csv",
     "DuplicateMaliciousFileIPv4": "output\\malicious_ipv4_duplicates.csv",
-    "DuplicateMaliciousFileIPv6": "output\\malicious_ipv6_duplicates.csv"
+    "DuplicateMaliciousFileIPv6": "output\\malicious_ipv6_duplicates.csv",
+    "HTTPUpCodes": "100,101,102,200,201,202,203,204,205,206,207,208,226,429",
+    "HTTPPotentiallyDownCodes": "400,402,404,409,410,412,414,415,416,451",
+    "HTTPPotentiallyUpCodes": "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511"
 }
