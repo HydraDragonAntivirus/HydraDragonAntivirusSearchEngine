@@ -17,6 +17,7 @@ If you detect malware with your original IP, it's highly recommended to remove i
 - **AbuseIPDB Integration**: This tool is specifically designed to help improve the **AbuseIPDB** database by detecting malicious IPs that are not yet flagged.
 - **Example JSON Configuration**: You can use the example folder to load settings for the scan.
 - **GoodByeDPI**: To avoid country bans, use [GoodByeDPI](https://github.com/ValdikSS/GoodbyeDPI).
+- **Use Windows**: Due to the WinError 10061 check, we recommend using the Windows operating system.
 
 ### **What this Tool Does**:
 - **Malicious IP Finder**: It helps identify potentially malicious or unknown IPs (both IPv4 and IPv6).
@@ -131,6 +132,7 @@ The tool ensures that even the most **obscure and hidden malicious IPs** are ide
 
 ## TODO
 - Implement scanning from different locations to collect more data.
+- Interagate Snort 2.9.
 
 ## License
 

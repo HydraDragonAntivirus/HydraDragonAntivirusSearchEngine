@@ -611,6 +611,13 @@ class ScannerWorker(QObject):
         except requests.exceptions.Timeout as e:
             self.log(f"Timeout for {url}: {e}")
             return "TIMEOUT"
+        except requests.exceptions.ConnectionError as e:
+            if "[WinError 10061]" in str(e):
+                self.log(f"Connection refused (WinError 10061) for {url} – treating as up.")
+                return "up"
+            else:
+                self.log(f"Connection error for {url}: {e}")
+                return "WINERROR"
         except requests.exceptions.RequestException as e:
             self.log(f"Request failed for {url}: {e}")
             return "WINERROR"
