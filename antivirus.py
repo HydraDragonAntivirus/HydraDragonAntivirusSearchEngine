@@ -267,50 +267,47 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
-        # Ensure directories exist for all files
-        file_paths = [
-            self.out_bulk_csv, self.out_whitelist_csv,
-            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
-            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
-            self.out_pottentially_bulk_duplicate_1_csv, self.out_pottentially_bulk_duplicate_2_csv,
-            self.out_potentially_up_whitelist_csv, self.out_potentially_down_whitelist_csv,
-            self.out_winerror_bulk_csv, self.out_winerror_whitelist_csv,
-            self.out_winerror_bulk_duplicate_csv, self.out_winerror_whitelist_duplicate_csv
-        ]
-
-        for filename in file_paths:
+        # Collect unique file paths
+        unique_files = {
+            self.out_bulk_csv,
+            self.out_whitelist_csv,
+            self.out_potentially_up_whitelist_csv,
+            self.out_potentially_down_whitelist_csv,
+            self.out_pottentially_bulk_duplicate_1_csv,
+            self.out_pottentially_bulk_duplicate_2_csv,
+            self.out_winerror_bulk_csv,
+            self.out_winerror_whitelist_csv,
+            self.out_winerror_bulk_duplicate_csv,
+            self.out_winerror_whitelist_duplicate_csv
+        }
+        # Ensure directories exist for each unique file
+        for filename in unique_files:
             directory = os.path.dirname(filename)
             if directory and not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
 
         header = "IP,Categories,ReportDate,Comment\n"
 
-        # Open all files for writing with UTF-8 encoding
+        # Open each file only once
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
-
         self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
         self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
-        self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
-        self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
-
-        self.pottentially_bulk_duplicate_1_file = open(self.out_pottentially_bulk_duplicate_1_csv, "w", encoding="utf-8")
-        self.pottentially_bulk_duplicate_2_file = open(self.out_pottentially_bulk_duplicate_2_csv, "w", encoding="utf-8")
-        self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
-        self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
-
+        self.pottentially_bulk_duplicate_1_file = open(self.out_pottentially_bulk_duplicate_1_csv, "w",
+                                                       encoding="utf-8")
+        self.pottentially_bulk_duplicate_2_file = open(self.out_pottentially_bulk_duplicate_2_csv, "w",
+                                                       encoding="utf-8")
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
         self.out_winerror_bulk_duplicate_file = open(self.out_winerror_bulk_duplicate_csv, "w", encoding="utf-8")
-        self.out_winerror_whitelist_duplicate_file = open(self.out_winerror_whitelist_duplicate_csv, "w", encoding="utf-8")
+        self.out_winerror_whitelist_duplicate_file = open(self.out_winerror_whitelist_duplicate_csv, "w",
+                                                          encoding="utf-8")
 
-        # Write header to each file and flush immediately
+        # Write header only once to each file
         for file in [
             self.bulk_file, self.whitelist_file,
             self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
-            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
             self.pottentially_bulk_duplicate_1_file, self.pottentially_bulk_duplicate_2_file,
-            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
             self.out_winerror_bulk_file, self.out_winerror_whitelist_file,
             self.out_winerror_bulk_duplicate_file, self.out_winerror_whitelist_duplicate_file
         ]:
@@ -320,17 +317,12 @@ class ScannerWorker(QObject):
         # Calculate header size in bytes for initialization
         hsize = len(header.encode("utf-8"))
 
-        # Initialize file size and line count attributes
         self.bulk_file_size = hsize
         self.whitelist_file_size = hsize
         self.potentially_up_whitelist_file_size = hsize
         self.potentially_down_whitelist_file_size = hsize
-        self.potentially_up_whitelist_file_size = hsize
-        self.potentially_down_whitelist_file_size = hsize
         self.pottentially_bulk_duplicate_1_file_size = hsize
         self.pottentially_bulk_duplicate_2_file_size = hsize
-        self.potentially_up_whitelist_file_size = hsize
-        self.potentially_down_whitelist_file_size = hsize
         self.out_winerror_bulk_file_size = hsize
         self.out_winerror_whitelist_file_size = hsize
         self.out_winerror_bulk_duplicate_file_size = hsize
@@ -340,12 +332,8 @@ class ScannerWorker(QObject):
         self.whitelist_line_count = 1
         self.potentially_up_whitelist_line_count = 1
         self.potentially_down_whitelist_line_count = 1
-        self.potentially_up_whitelist_line_count = 1
-        self.potentially_down_whitelist_line_count = 1
         self.pottentially_bulk_duplicate_1_line_count = 1
         self.pottentially_bulk_duplicate_2_line_count = 1
-        self.potentially_up_whitelist_line_count = 1
-        self.potentially_down_whitelist_line_count = 1
         self.out_winerror_bulk_line_count = 1
         self.out_winerror_whitelist_line_count = 1
         self.out_winerror_bulk_duplicate_line_count = 1
