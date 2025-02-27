@@ -775,6 +775,12 @@ class ScannerWorker(QObject):
             return
 
         duplicate_flag = seed.ip in self.initial_ips.get(cat, set())
+
+        # If the IP wasn't already in the initial set, add it.
+        # This ensures that any future occurrence of this IP will be flagged as duplicate.
+        if not duplicate_flag:
+            self.initial_ips.setdefault(cat, set()).add(seed.ip)
+    
         base_category = seed.source_type.split("_")[0].lower()
 
         # Handle WINERROR first
