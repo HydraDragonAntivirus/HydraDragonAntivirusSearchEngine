@@ -780,7 +780,7 @@ class ScannerWorker(QObject):
         # This ensures that any future occurrence of this IP will be flagged as duplicate.
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
-    
+
         base_category = seed.source_type.split("_")[0].lower()
 
         # Handle WINERROR first
@@ -1029,7 +1029,6 @@ class ScannerWorker(QObject):
 
         # For "up" status (successful responses) process as normal
         duplicate_settings = self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True)
-        seed_verdict = seed.source_type
         if cat.startswith("whitelist"):
             seed_verdict = "whitelist (auto verdict 2)" if status == "up" else "whitelist (auto verdict 3)"
         elif cat.startswith("phishing"):
