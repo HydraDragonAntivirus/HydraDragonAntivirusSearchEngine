@@ -138,6 +138,7 @@ The tool ensures that even the most **obscure and hidden malicious IPs** are ide
 - Interagate Cloud Antivirus.
 - Interagate HydraDragonAntivirus.
 - Setup with Inno Setup.
+- Unite the project with HydraDragonAntivirus.
 
 ## License
 
