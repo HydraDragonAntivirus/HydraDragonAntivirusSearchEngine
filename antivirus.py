@@ -575,7 +575,7 @@ class ScannerWorker(QObject):
         except requests.exceptions.ConnectionError as e:
             if "[WinError 10061]" in str(e):
                 self.log(f"Connection refused (WinError 10061) for {url} – firewall detected.")
-                return "WINERROR: Firewall detected"
+                return "up: Firewall detected"
             else:
                 self.log(f"Connection error for {url}: {e}")
                 return f"WINERROR: {e}"
@@ -683,6 +683,10 @@ class ScannerWorker(QObject):
             seed.ip = urlparse(seed.ip).hostname
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
+            return
+        # Check if the IP is valid before processing
+        if not self.is_valid_ip(seed.ip):
+            self.log(f"Skipping seed with invalid IP: {seed.ip}")
             return
         if self.my_public_ip and seed.ip == self.my_public_ip:
             self.log(f"Skipping my own public IP: {seed.ip}")
