@@ -166,8 +166,8 @@ class ScannerWorker(QObject):
         self.out_bulk_csv = settings.get("BulkOutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
         # New output files for potentially up or down (non-duplicate) responses
-        self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
-        self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
+        self.out_potentially_up_bulk_csv = settings.get("PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
+        self.out_potentially_down_bulk_csv = settings.get("PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
         self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         # New output files for potentially up or down duplicate responses
@@ -857,7 +857,7 @@ class ScannerWorker(QObject):
                 elif cat.startswith("ddos"):
                     timeout_cat = f"timeout ddos {base_category}"
                     line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
-                    self.write_winerror_bulkLine(line)
+                    self.write_winerror_bulk_line(line)
                     self.log(f"Timeout ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
                     timeout_cat = f"timeout bruteforce {base_category}"
