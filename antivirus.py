@@ -679,35 +679,46 @@ class ScannerWorker(QObject):
             return f"unhandled: HTTP {code_str}"
 
     def process_seed(self, seed, discovered_source_url=None):
+        # Normalize seed IP if it starts with http:// or https://
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
             seed.ip = urlparse(seed.ip).hostname
+
+        # Skip if the seed IP matches our public IP
         if self.my_public_ip and seed.ip == self.my_public_ip:
             self.log(f"Skipping my own public IP: {seed.ip}")
             return
-        # Check if the IP is valid before processing
+
+        # Validate IP address
         if not self.is_valid_ip(seed.ip):
             self.log(f"Skipping seed with invalid IP: {seed.ip}")
             return
+
+        # Skip if already processed
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
-
         self.visited_ips.add(seed.ip)
+
+        # Ensure the category is allowed
         cat = seed.source_type.lower().strip()
-        allowed_categories = ["whitelist_ipv6", "whitelist_ipv4",
-                              "phishing_ipv6", "phishing_ipv4",
-                              "ddos_ipv6", "ddos_ipv4",
-                              "bruteforce_ipv6", "bruteforce_ipv4",
-                              "spam_ipv6", "spam_ipv4",
-                              "malicious_ipv6", "malicious_ipv4"]
+        allowed_categories = [
+            "whitelist_ipv6", "whitelist_ipv4",
+            "phishing_ipv6", "phishing_ipv4",
+            "ddos_ipv6", "ddos_ipv4",
+            "bruteforce_ipv6", "bruteforce_ipv4",
+            "spam_ipv6", "spam_ipv4",
+            "malicious_ipv6", "malicious_ipv4"
+        ]
         if cat not in allowed_categories:
             self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
             return
+
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
         winerror_msg = "WinError Happened"
 
+        # Determine status
         try:
             status = self.is_active_and_static(seed.ip, seed.port, category=cat,
                                                discovered_source_url=discovered_source_url)
@@ -718,6 +729,7 @@ class ScannerWorker(QObject):
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
+        # Duplicate flag: if the IP was in the initial set for this category
         duplicate_flag = seed.ip in self.initial_ips.get(cat, set())
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
@@ -867,7 +879,7 @@ class ScannerWorker(QObject):
                 self.log(f"Potentially Down output written for {seed.ip} with status {status}.")
             return
 
-        # For a successful ("up") response, decide on the verdict
+        # For a successful ("up") response, decide on the verdict and use a numeric category label.
         duplicate_settings = self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True)
         if cat.startswith("whitelist"):
             seed_verdict = "whitelist (auto verdict 2)" if status.startswith("up") else "whitelist (auto verdict 3)"
@@ -884,14 +896,31 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
+        # Mapping from base category to numeric category label
+        category_mapping = {
+            "whitelist": "0",
+            "phishing": self.settings.get("CategoryPhishing", "7"),
+            "ddos": self.settings.get("CategoryDDoS", "4"),
+            "bruteforce": self.settings.get("CategoryBruteForce", "18"),
+            "spam": self.settings.get("CategorySpam", "10"),
+            "malicious": self.settings.get("CategoryMalicious", "20")
+        }
+        base = seed.source_type.split("_")[0].lower()
+        cat_label = category_mapping.get(base)
+        if cat_label is None:
+            self.log("Invalid category base. Skipping...")
+            return
+
+        comment = self.comment_template_zeroday.format(
+            ip=seed.ip,
+            discovered_url=discovered_source_url,
+            verdict=seed_verdict,
+            status=status
+        )
+
         if seed_verdict.startswith("whitelist"):
-            comment = self.comment_template_zeroday.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status
-            )
-            line = f'{seed.ip},"whitelist",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            # Whitelist always uses its mapped numeric category (0)
+            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_whitelist_line(line)
                 self.log(f"Whitelist output written for {seed.ip}.")
@@ -900,25 +929,6 @@ class ScannerWorker(QObject):
             else:
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         else:
-            if cat.startswith("phishing"):
-                cat_label = self.settings.get("CategoryPhishing", "7")
-            elif cat.startswith("ddos"):
-                cat_label = self.settings.get("CategoryDDoS", "4")
-            elif cat.startswith("bruteforce"):
-                cat_label = self.settings.get("CategoryBruteForce", "18")
-            elif cat.startswith("spam"):
-                cat_label = self.settings.get("CategorySpam", "10")
-            elif cat.startswith("malicious"):
-                cat_label = self.settings.get("CategoryMalicious", "20")
-            else:
-                self.log("Invalid label returning...")
-                return
-            comment = self.comment_template_zeroday.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status
-            )
             line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_bulk_line(line)
