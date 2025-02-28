@@ -167,7 +167,7 @@ class ScannerWorker(QObject):
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
         # New output files for potentially up or down (non-duplicate) responses
         self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
-        self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
+        self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
         self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
         # New output files for potentially up or down duplicate responses
