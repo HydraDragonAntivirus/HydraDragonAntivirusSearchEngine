@@ -148,7 +148,7 @@ class ScannerWorker(QObject):
     def __init__(self, settings, parent=None):
         super().__init__(parent)
         self.settings = settings
-        self.max_workers = int(settings.get("MaxThreads", 200))
+        self.max_workers = int(settings.get("MaxThreads", 1000))
         self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
         self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
@@ -624,15 +624,16 @@ class ScannerWorker(QObject):
 
         code = response.status_code
         code_str = f"{code:03d}"
-        http_up_codes = [s.strip() for s in self.settings.get("HTTPUpCodes",
-                                                              "100,101,102,200,201,202,203,204,205,206,207,208,226,429").split(
-            ",")]
-        http_potentially_down_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyDownCodes",
-                                                                            "400,402,404,409,410,412,414,415,416,451").split(
-            ",")]
-        http_potentially_up_codes = [s.strip() for s in self.settings.get("HTTPPotentiallyUpCodes",
-                                                                          "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511").split(
-            ",")]
+        http_up_codes = [s.strip() for s in self.settings.get(
+            "HTTPUpCodes", "100,101,102,200,201,202,203,204,205,206,207,208,226,429"
+        ).split(",")]
+        http_potentially_down_codes = [s.strip() for s in self.settings.get(
+            "HTTPPotentiallyDownCodes", "400,402,404,409,410,412,414,415,416,451"
+        ).split(",")]
+        http_potentially_up_codes = [s.strip() for s in self.settings.get(
+            "HTTPPotentiallyUpCodes",
+            "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511"
+        ).split(",")]
 
         if code_str in http_up_codes:
             # Process any redirects first
@@ -649,8 +650,8 @@ class ScannerWorker(QObject):
             for extracted_ip, extracted_port, ip_version in found_ips:
                 if ip_version == "ipv6":
                     candidate = f"http://[{extracted_ip}]" if not (
-                                extracted_ip.startswith('[') and extracted_ip.endswith(
-                            ']')) else f"http://{extracted_ip[1:-1]}"
+                            extracted_ip.startswith('[') and extracted_ip.endswith(']')
+                    ) else f"http://{extracted_ip[1:-1]}"
                 else:
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
@@ -676,17 +677,18 @@ class ScannerWorker(QObject):
                 if src:
                     resource_urls.add(urljoin(url, src))
 
-            # Process additional resources
+            # Process additional resources, now checking for any "up" status, not just 200.
             for resource_url in resource_urls:
                 try:
                     res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
-                    if res.status_code == 200:
+                    res_code_str = f"{res.status_code:03d}"
+                    if res_code_str in http_up_codes:
                         resource_ips = self.extract_ip_and_port(res.text)
                         for extracted_ip, extracted_port, ip_version in resource_ips:
                             if ip_version == "ipv6":
                                 candidate = f"http://[{extracted_ip}]" if not (
-                                            extracted_ip.startswith('[') and extracted_ip.endswith(
-                                        ']')) else f"http://{extracted_ip[1:-1]}"
+                                        extracted_ip.startswith('[') and extracted_ip.endswith(']')
+                                ) else f"http://{extracted_ip[1:-1]}"
                             else:
                                 candidate = extracted_ip if extracted_ip.lower().startswith(
                                     "http") else "http://" + extracted_ip
@@ -1184,7 +1186,7 @@ class MainWindow(QMainWindow):
             row += 1
 
         # Basic settings (these remain unchanged)
-        add_plain_field("Max Threads:", "MaxThreads", "200")
+        add_plain_field("Max Threads:", "MaxThreads", "1000")
         # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "OutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)

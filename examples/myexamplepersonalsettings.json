@@ -1,5 +1,5 @@
 {
-    "MaxThreads": 200,
+    "MaxThreads": 1000,
     "OutputFile": "output\\BulkReport.csv",
     "WhiteListOutputFile": "output\\WhitelistReport.csv",
     "PottentiallyBulk1OutputFile": "output\\potentially_up_whitelist.csv",
