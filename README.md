@@ -137,6 +137,7 @@ The tool ensures that even the most **obscure and hidden malicious IPs** are ide
 - Interagate ClamAV.
 - Interagate Cloud Antivirus.
 - Interagate HydraDragonAntivirus.
+- Setup with Inno Setup.
 
 ## License
 
