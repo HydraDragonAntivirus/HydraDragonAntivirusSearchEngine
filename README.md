@@ -133,6 +133,10 @@ The tool ensures that even the most **obscure and hidden malicious IPs** are ide
 ## TODO
 - Implement scanning from different locations to collect more data.
 - Interagate Snort 2.9.
+- Interagate DeepSeek-Coder-1.3b.
+- Interagate ClamAV.
+- Interagate Cloud Antivirus.
+- Interagate HydraDragonAntivirus.
 
 ## License
 
