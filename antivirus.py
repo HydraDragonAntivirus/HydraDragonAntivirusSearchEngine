@@ -716,6 +716,21 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
+        # Compute the base category and numeric label early for all branches
+        base_category = seed.source_type.split("_")[0].lower()
+        category_mapping = {
+            "whitelist": "0",
+            "phishing": self.settings.get("CategoryPhishing", "7"),
+            "ddos": self.settings.get("CategoryDDoS", "4"),
+            "bruteforce": self.settings.get("CategoryBruteForce", "18"),
+            "spam": self.settings.get("CategorySpam", "10"),
+            "malicious": self.settings.get("CategoryMalicious", "20")
+        }
+        cat_label = category_mapping.get(base_category)
+        if cat_label is None:
+            self.log("Invalid category base. Skipping...")
+            return
+
         winerror_msg = "WinError Happened"
 
         # Determine status
@@ -734,147 +749,109 @@ class ScannerWorker(QObject):
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
 
-        base_category = seed.source_type.split("_")[0].lower()
-
-        # Handle WINERROR responses
+        # -- WINERROR Handling: Always use numeric cat_label --
         if status.startswith("WINERROR"):
             if duplicate_flag:
+                comment = f"WINERROR duplicate {seed.source_type} {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
-                    winerror_cat = f"winerror whitelist duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"WinError whitelist duplicate output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
-                    winerror_cat = f"winerror phishing duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError phishing duplicate output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
-                    winerror_cat = f"winerror ddos duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
-                    winerror_cat = f"winerror bruteforce duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError bruteforce duplicate output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
-                    winerror_cat = f"winerror malware duplicate {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"WinError malware duplicate output written for {seed.ip}.")
             else:
+                comment = f"WINERROR {seed.source_type} {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
-                    winerror_cat = f"winerror whitelist {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_line(line)
                     self.log(f"WinError whitelist output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
-                    winerror_cat = f"winerror phishing {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError phishing output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
-                    winerror_cat = f"winerror ddos {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
-                    winerror_cat = f"winerror bruteforce {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError bruteforce output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
-                    winerror_cat = f"winerror malware {base_category}"
-                    line = f'{seed.ip},"{winerror_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"WinError malware output written for {seed.ip}.")
             return
 
-        # Handle TIMEOUT responses similarly
+        # -- TIMEOUT Handling: Always use numeric cat_label --
         if status.startswith("TIMEOUT"):
             if duplicate_flag:
+                comment = f"TIMEOUT duplicate {seed.source_type} {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
-                    timeout_cat = f"timeout whitelist duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"Timeout whitelist duplicate output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
-                    timeout_cat = f"timeout phishing duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout phishing duplicate output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
-                    timeout_cat = f"timeout ddos duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout ddos duplicate output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
-                    timeout_cat = f"timeout bruteforce duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout bruteforce duplicate output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
-                    timeout_cat = f"timeout malware duplicate {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_duplicate_line(line)
                     self.log(f"Timeout malware duplicate output written for {seed.ip}.")
             else:
+                comment = f"TIMEOUT {seed.source_type} {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
-                    timeout_cat = f"timeout whitelist {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_whitelist_line(line)
                     self.log(f"Timeout whitelist output written for {seed.ip}.")
                 elif cat.startswith("phishing"):
-                    timeout_cat = f"timeout phishing {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout phishing output written for {seed.ip}.")
                 elif cat.startswith("ddos"):
-                    timeout_cat = f"timeout ddos {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout ddos output written for {seed.ip}.")
                 elif cat.startswith("bruteforce"):
-                    timeout_cat = f"timeout bruteforce {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout bruteforce output written for {seed.ip}.")
                 elif cat.startswith("malicious"):
-                    timeout_cat = f"timeout malware {base_category}"
-                    line = f'{seed.ip},"{timeout_cat}",{datetime.now(timezone.utc).isoformat()},"{status}"\n'
                     self.write_winerror_bulk_line(line)
                     self.log(f"Timeout malware output written for {seed.ip}.")
             return
 
-        # Handle potentially up/down responses
+        # -- Potentially Up/Down Handling: Always use numeric cat_label --
         if status.startswith("potentially up"):
             if duplicate_flag:
-                new_category = f"potentially up duplicate {base_category}"
-                comment = f"Potentially up: {status}"
-                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                comment = f"Potentially up duplicate: {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_potentially_up_whitelist_line(line)
                 self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
             else:
-                new_category = f"potentially up {base_category}"
                 comment = f"Potentially up: {status}"
-                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_potentially_up_whitelist_line(line)
                 self.log(f"Potentially Up output written for {seed.ip} with status {status}.")
             return
 
         if status.startswith("potentially down"):
             if duplicate_flag:
-                new_category = f"potentially down duplicate {base_category}"
-                comment = f"Potentially down: {status}"
-                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                comment = f"Potentially down duplicate: {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_potentially_down_whitelist_line(line)
                 self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
             else:
-                new_category = f"potentially down {base_category}"
                 comment = f"Potentially down: {status}"
-                line = f'{seed.ip},"{new_category}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 self.write_potentially_down_whitelist_line(line)
                 self.log(f"Potentially Down output written for {seed.ip} with status {status}.")
             return
@@ -896,21 +873,6 @@ class ScannerWorker(QObject):
         else:
             seed_verdict = seed.source_type
 
-        # Mapping from base category to numeric category label
-        category_mapping = {
-            "whitelist": "0",
-            "phishing": self.settings.get("CategoryPhishing", "7"),
-            "ddos": self.settings.get("CategoryDDoS", "4"),
-            "bruteforce": self.settings.get("CategoryBruteForce", "18"),
-            "spam": self.settings.get("CategorySpam", "10"),
-            "malicious": self.settings.get("CategoryMalicious", "20")
-        }
-        base = seed.source_type.split("_")[0].lower()
-        cat_label = category_mapping.get(base)
-        if cat_label is None:
-            self.log("Invalid category base. Skipping...")
-            return
-
         comment = self.comment_template_zeroday.format(
             ip=seed.ip,
             discovered_url=discovered_source_url,
@@ -929,7 +891,7 @@ class ScannerWorker(QObject):
             else:
                 self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
         else:
-            line = f'{seed.ip},"{cat_label}",{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if not duplicate_flag:
                 self.write_bulk_line(line)
                 self.log(f"Bulk output written for {seed.ip}.")
