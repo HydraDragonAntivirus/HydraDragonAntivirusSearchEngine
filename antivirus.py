@@ -217,24 +217,13 @@ class ScannerWorker(QObject):
 
         # Main output rotation info
         self.bulk_file_index = 0
-        self.potentially_up_whitelist_file_index = 0
         self.potentially_down_whitelist_file_index = 0
         self.potentially_up_whitelist_file_index = 0
-        self.potentially_down_whitelist_file_index = 0
         self.whitelist_file_index = 0
-        self.bulk_line_count = 0
-        self.potentially_down_whitelist_line_count = 0
-        self.whitelist_line_count = 0
-        self.out_winerror_whitelist_file_index = 0
         self.out_winerror_bulk_file_index = 0
-        self.out_winerror_whitelist_duplicate_file_index = 0
         self.out_winerror_bulk_duplicate_file_index = 0
-        self.potentially_up_whitelist_file_index = 0
-        self.potentially_down_whitelist_file_index = 0
         self.potentially_up_bulk_duplicate_file_index = 0
         self.potentially_down_bulk_duplicate_file_index = 0
-        self.bulk_file = None
-        self.whitelist_file = None
         self.processed_count = 0
         self.total_seeds = 0
 
