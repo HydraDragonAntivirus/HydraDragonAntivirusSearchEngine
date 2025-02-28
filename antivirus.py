@@ -173,8 +173,8 @@ class ScannerWorker(QObject):
         # New output files for potentially up or down duplicate responses
         self.out_potentially_up_bulk_duplicate_csv = settings.get("PotentiallyBulkDuplicate1OutputFile", os.path.join(output_dir, "potentially_up_bulk_duplicate.csv"))
         self.out_potentially_down_bulk_duplicate_csv = settings.get("PotentiallyDownBulkDuplicateOutputFile", os.path.join(output_dir, "potentially_down_bulk_duplicate.csv"))
-        self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_up_whitelist_duplicate.csv"))
-        self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_down_whitelist_duplicate.csv"))
+        self.out_potentially_up_whitelist_duplicate_csv = settings.get("PotentiallyUpWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_up_whitelist_duplicate.csv"))
+        self.out_potentially_down_whitelist_duplicate_csv = settings.get("PotentiallyDownWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_down_whitelist_duplicate.csv"))
 
         self.out_winerror_bulk_csv = settings.get("WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
