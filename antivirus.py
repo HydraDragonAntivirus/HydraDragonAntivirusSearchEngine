@@ -460,6 +460,22 @@ class ScannerWorker(QObject):
             self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
             self.total_seeds += 1
 
+    def write_potentially_up_whitelist_duplicate_line(self, line):
+        with self.lock:
+            self.potentially_up_whitelist_duplicate_file.write(line)
+            self.potentially_up_whitelist_duplicate_file.flush()
+            self.potentially_up_whitelist_duplicate_line_count += 1
+            self.potentially_up_whitelist_duplicate_file_size += len(line.encode("utf-8"))
+            self.total_seeds += 1
+
+    def write_potentially_down_whitelist_duplicate_line(self, line):
+        with self.lock:
+            self.potentially_down_whitelist_duplicate_file.write(line)
+            self.potentially_down_whitelist_duplicate_file.flush()
+            self.potentially_down_whitelist_duplicate_line_count += 1
+            self.potentially_down_whitelist_duplicate_file_size += len(line.encode("utf-8"))
+            self.total_seeds += 1
+
     def write_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
@@ -834,7 +850,7 @@ class ScannerWorker(QObject):
             if duplicate_flag:
                 comment = f"Potentially up duplicate: {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_potentially_up_whitelist_line(line)
+                self.write_potentially_up_whitelist_duplicate_line(line)
                 self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
             else:
                 comment = f"Potentially up: {status}"
@@ -847,7 +863,7 @@ class ScannerWorker(QObject):
             if duplicate_flag:
                 comment = f"Potentially down duplicate: {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_potentially_down_whitelist_line(line)
+                self.write_potentially_down_whitelist_duplicate_line(line)
                 self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
             else:
                 comment = f"Potentially down: {status}"
@@ -1065,7 +1081,7 @@ class MainWindow(QMainWindow):
             "BulkOutputFile", "WhiteListOutputFile",
             "PotentiallyUpBulkOutputFile", "PotentiallyDownBulkOutputFile",
             "PotentiallyUpBulkDuplicateOutputFile", "PotentiallyDownBulkDuplicateOutputFile",
-            "PotentiallyWhiteList1OutputFile", "PotentiallyWhiteList2OutputFile",
+            "PotentiallyUpWhiteListOutputFile", "PotentiallyDownWhiteListOutputFile",
             "PotentiallyUpWhiteListDuplicateOutputFile", "PotentiallyDownWhiteListDuplicateOutputFile",
             "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
             "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
