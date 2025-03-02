@@ -254,7 +254,7 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
-        # Collect unique file paths
+        # Collect unique file paths (include whitelist duplicate files)
         unique_files = {
             self.out_bulk_csv,
             self.out_whitelist_csv,
@@ -262,6 +262,8 @@ class ScannerWorker(QObject):
             self.out_potentially_down_whitelist_csv,
             self.out_potentially_up_bulk_duplicate_csv,
             self.out_potentially_down_bulk_duplicate_csv,
+            self.out_potentially_up_whitelist_duplicate_csv,
+            self.out_potentially_down_whitelist_duplicate_csv,
             self.out_winerror_bulk_csv,
             self.out_winerror_whitelist_csv,
             self.out_winerror_bulk_duplicate_csv,
@@ -283,7 +285,12 @@ class ScannerWorker(QObject):
         self.potentially_up_bulk_duplicate_file = open(self.out_potentially_up_bulk_duplicate_csv, "w",
                                                        encoding="utf-8")
         self.potentially_down_bulk_duplicate_file = open(self.out_potentially_down_bulk_duplicate_csv, "w",
-                                                       encoding="utf-8")
+                                                         encoding="utf-8")
+        # Added missing whitelist duplicate file handles:
+        self.potentially_up_whitelist_duplicate_file = open(self.out_potentially_up_whitelist_duplicate_csv, "w",
+                                                            encoding="utf-8")
+        self.potentially_down_whitelist_duplicate_file = open(self.out_potentially_down_whitelist_duplicate_csv, "w",
+                                                              encoding="utf-8")
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
         self.out_winerror_bulk_duplicate_file = open(self.out_winerror_bulk_duplicate_csv, "w", encoding="utf-8")
@@ -295,6 +302,7 @@ class ScannerWorker(QObject):
             self.bulk_file, self.whitelist_file,
             self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
             self.potentially_up_bulk_duplicate_file, self.potentially_down_bulk_duplicate_file,
+            self.potentially_up_whitelist_duplicate_file, self.potentially_down_whitelist_duplicate_file,
             self.out_winerror_bulk_file, self.out_winerror_whitelist_file,
             self.out_winerror_bulk_duplicate_file, self.out_winerror_whitelist_duplicate_file
         ]:
@@ -310,6 +318,8 @@ class ScannerWorker(QObject):
         self.potentially_down_whitelist_file_size = hsize
         self.potentially_up_bulk_duplicate_file_size = hsize
         self.potentially_down_bulk_duplicate_file_size = hsize
+        self.potentially_up_whitelist_duplicate_file_size = hsize
+        self.potentially_down_whitelist_duplicate_file_size = hsize
         self.out_winerror_bulk_file_size = hsize
         self.out_winerror_whitelist_file_size = hsize
         self.out_winerror_bulk_duplicate_file_size = hsize
@@ -321,6 +331,8 @@ class ScannerWorker(QObject):
         self.potentially_down_whitelist_line_count = 1
         self.potentially_up_bulk_duplicate_line_count = 1
         self.potentially_down_bulk_duplicate_line_count = 1
+        self.potentially_up_whitelist_duplicate_line_count = 1
+        self.potentially_down_whitelist_duplicate_line_count = 1
         self.out_winerror_bulk_line_count = 1
         self.out_winerror_whitelist_line_count = 1
         self.out_winerror_bulk_duplicate_line_count = 1
