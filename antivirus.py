@@ -956,23 +956,25 @@ class ScannerWorker(QObject):
                 "malicious": "malicious (auto verdict 6)"
             }
             seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
-            comment = self.comment_template_zeroday.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status
-            )
-            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
 
-            # Compute and log content similarity only if a reference URL is provided and
-            # the status does NOT indicate a firewall (even though the overall status starts with "up:")
+            # Compute similarity and create a string to append to the comment.
+            similarity_str = ""
             if discovered_source_url and "Firewall" not in status:
                 new_url = seed.get_url()
                 new_content = self.fetch_content(new_url)
                 ref_content = self.fetch_content(discovered_source_url)
                 if new_content and ref_content:
                     similarity = compute_content_similarity(ref_content, new_content)
-                    self.log(f"Content similarity for {seed.ip} compared to {discovered_source_url}: {similarity:.2f}%")
+                    similarity_str = f" HTML similarity: {similarity:.2f}%"
+
+            # Append the similarity string to the default comment.
+            comment = self.comment_template_zeroday.format(
+                ip=seed.ip,
+                discovered_url=discovered_source_url,
+                verdict=seed_verdict,
+                status=status
+            ) + similarity_str
+            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
 
             # Write output based on category and duplicate status.
             if cat.startswith("whitelist"):
@@ -1239,8 +1241,8 @@ class MainWindow(QMainWindow):
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
         add_plain_field("Category Spam:", "CategorySpam", "10")
         add_plain_field("Category Malicious:", "CategoryMalicious", "20")
-        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
-        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
+        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
+        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: No it's duplicate")
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
