@@ -165,11 +165,15 @@ class ScannerWorker(QObject):
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
         self.comment_template_zeroday = settings.get(
             "CommentTemplateZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate"
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, Zeroday: Yes it's not duplicate"
         )
         self.comment_template_nozeroday = settings.get(
             "CommentTemplateNoZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate"
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, Zeroday: No it's duplicate"
+        )
+        self.comment_template_zeroday_up = settings.get(
+            "CommentTemplateZerodayUp",
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate"
         )
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("BulkOutputFile", default_bulk)
@@ -968,7 +972,7 @@ class ScannerWorker(QObject):
                     similarity_str = f" HTML similarity: {similarity:.2f}%"
 
             # Append the similarity string to the default comment.
-            comment = self.comment_template_zeroday.format(
+            comment = self.comment_template_zeroday_up.format(
                 ip=seed.ip,
                 discovered_url=discovered_source_url,
                 verdict=seed_verdict,
@@ -1242,8 +1246,9 @@ class MainWindow(QMainWindow):
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
         add_plain_field("Category Spam:", "CategorySpam", "10")
         add_plain_field("Category Malicious:", "CategoryMalicious", "20")
-        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
-        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: No it's duplicate")
+        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
+        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
+        add_plain_field("Comment Template Zeroday:", "CommentTemplateZerodayUp", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
