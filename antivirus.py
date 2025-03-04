@@ -946,48 +946,51 @@ class ScannerWorker(QObject):
             return
 
         # Confirmed "up" response
-        auto_verdict_mapping_confirmed = {
-            "whitelist": "whitelist (auto verdict 1)",
-            "phishing": "phishing (auto verdict 2)",
-            "spam": "spam (auto verdict 3)",
-            "ddos": "ddos (auto verdict 4)",
-            "bruteforce": "bruteforce (auto verdict 5)",
-            "malicious": "malicious (auto verdict 6)"
-        }
-        seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
-        comment = self.comment_template_zeroday.format(
-            ip=seed.ip,
-            discovered_url=discovered_source_url,
-            verdict=seed_verdict,
-            status=status
-        )
-        line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+        if status.startswith("up:"):
+            auto_verdict_mapping_confirmed = {
+                "whitelist": "whitelist (auto verdict 1)",
+                "phishing": "phishing (auto verdict 2)",
+                "spam": "spam (auto verdict 3)",
+                "ddos": "ddos (auto verdict 4)",
+                "bruteforce": "bruteforce (auto verdict 5)",
+                "malicious": "malicious (auto verdict 6)"
+            }
+            seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
+            comment = self.comment_template_zeroday.format(
+                ip=seed.ip,
+                discovered_url=discovered_source_url,
+                verdict=seed_verdict,
+                status=status
+            )
+            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
 
-        # NEW: Compute and log content similarity if a reference URL is provided.
-        if discovered_source_url:
-            new_url = seed.get_url()
-            new_content = self.fetch_content(new_url)
-            ref_content = self.fetch_content(discovered_source_url)
-            if new_content and ref_content:
-                similarity = compute_content_similarity(ref_content, new_content)
-                self.log(f"Content similarity for {seed.ip} compared to {discovered_source_url}: {similarity:.2f}%")
+            # Compute and log content similarity only if a reference URL is provided and
+            # the status does NOT indicate a firewall (even though the overall status starts with "up:")
+            if discovered_source_url and "Firewall" not in status:
+                new_url = seed.get_url()
+                new_content = self.fetch_content(new_url)
+                ref_content = self.fetch_content(discovered_source_url)
+                if new_content and ref_content:
+                    similarity = compute_content_similarity(ref_content, new_content)
+                    self.log(f"Content similarity for {seed.ip} compared to {discovered_source_url}: {similarity:.2f}%")
 
-        if cat.startswith("whitelist"):
-            if not duplicate_flag:
-                self.write_whitelist_line(line)
-                self.log(f"Whitelist output written for {seed.ip}.")
-            elif duplicate_flag and self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True):
-                self.handle_duplicate(cat, seed, status, discovered_source_url)
+            # Write output based on category and duplicate status.
+            if cat.startswith("whitelist"):
+                if not duplicate_flag:
+                    self.write_whitelist_line(line)
+                    self.log(f"Whitelist output written for {seed.ip}.")
+                elif duplicate_flag and self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True):
+                    self.handle_duplicate(cat, seed, status, discovered_source_url)
+                else:
+                    self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
             else:
-                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
-        else:
-            if not duplicate_flag:
-                self.write_bulk_line(line)
-                self.log(f"Bulk output written for {seed.ip}.")
-            elif duplicate_flag and self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True):
-                self.handle_duplicate(cat, seed, status, discovered_source_url)
-            else:
-                self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
+                if not duplicate_flag:
+                    self.write_bulk_line(line)
+                    self.log(f"Bulk output written for {seed.ip}.")
+                elif duplicate_flag and self.settings.get(f"AllowDuplicate{seed.source_type.capitalize()}", True):
+                    self.handle_duplicate(cat, seed, status, discovered_source_url)
+                else:
+                    self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
 
         with self.lock:
             self.processed_count += 1
