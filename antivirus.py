@@ -456,6 +456,46 @@ class ScannerWorker(QObject):
             self.potentially_down_bulk_duplicate_file.flush()
             self.potentially_down_bulk_duplicate_line_count += 1
 
+    def write_potentially_up_bulk_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if (self.potentially_up_bulk_line_count >= self.csv_max_lines or
+                    (self.potentially_up_bulk_file_size + line_bytes) >= self.csv_max_size):
+                self.potentially_up_bulk_file.close()
+                self.potentially_up_bulk_file_index += 1
+                base, ext = os.path.splitext(self.out_potentially_up_bulk_csv)
+                new_filename = f"{base}_{self.potentially_up_bulk_file_index}{ext}"
+                self.potentially_up_bulk_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.potentially_up_bulk_file.write(header)
+                self.potentially_up_bulk_file.flush()
+                self.potentially_up_bulk_line_count = 1
+                self.potentially_up_bulk_file_size = len(header.encode("utf-8"))
+                self.log(f"potentially_bulkup file rotated; new file: {new_filename}")
+            self.potentially_up_bulk_file.write(line)
+            self.potentially_up_bulk_file.flush()
+            self.potentially_up_bulk_line_count += 1
+
+    def write_potentially_down_bulk_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            if (self.potentially_down_bulk_line_count >= self.csv_max_lines or
+                    (self.potentially_down_bulk_file_size + line_bytes) >= self.csv_max_size):
+                self.potentially_down_bulk_file.close()
+                self.potentially_down_bulk_file_index += 1
+                base, ext = os.path.splitext(self.out_potentially_down_bulk_csv)
+                new_filename = f"{base}_{self.potentially_down_bulk_file_index}{ext}"
+                self.potentially_down_bulk_file = open(new_filename, "w", encoding="utf-8")
+                header = "IP,Categories,ReportDate,Comment\n"
+                self.potentially_down_bulk_file.write(header)
+                self.potentially_down_bulk_file.flush()
+                self.potentially_down_bulk_line_count = 1
+                self.potentially_down_bulk_file_size = len(header.encode("utf-8"))
+                self.log(f"potentially_bulkdown file rotated; new file: {new_filename}")
+            self.potentially_down_bulk_file.write(line)
+            self.potentially_down_bulk_file.flush()
+            self.potentially_down_bulk_line_count += 1
+
     def write_potentially_up_whitelist_line(self, line):
         with self.lock:
             self.potentially_up_whitelist_file.write(line)
@@ -853,7 +893,7 @@ class ScannerWorker(QObject):
                     self.write_potentially_up_bulk_duplicate_line(line)
                     self.log(f"Potentially Up duplicate (bulk) output written for {seed.ip} with status {status}.")
                 else:
-                    self.write_bulk_line(line)
+                    self.write_potentially_up_bulk_line(line)
                     self.log(f"Potentially Up (bulk) output written for {seed.ip} with status {status}.")
             return
 
@@ -880,7 +920,7 @@ class ScannerWorker(QObject):
                 else:
                     comment = f"Potentially down: {status}"
                     line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_bulk_line(line)
+                    self.write_potentially_down_bulk_line(line)
                     self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
             return
 
