@@ -328,7 +328,9 @@ class ScannerWorker(QObject):
         self.bulk_line_count = 1
         self.whitelist_line_count = 1
         self.potentially_up_whitelist_line_count = 1
+        self.potentially_up_bulk_line_count = 1
         self.potentially_down_whitelist_line_count = 1
+        self.potentially_down_bulk_line_count = 1
         self.potentially_up_bulk_duplicate_line_count = 1
         self.potentially_down_bulk_duplicate_line_count = 1
         self.potentially_up_whitelist_duplicate_line_count = 1
