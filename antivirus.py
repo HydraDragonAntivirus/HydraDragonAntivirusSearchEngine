@@ -143,7 +143,7 @@ class SeedRunnable(QRunnable):
         self.worker = worker
 
     def run(self):
-        self.worker.process_seed(self.seed)
+        self.worker.process_seed(self.seed, duplicate_flag=True)
 
 # -----------------------------
 # ScannerWorker: Main scanning logic, duplicate rotation, and optimization.
@@ -774,7 +774,7 @@ class ScannerWorker(QObject):
             self.log(f"Unhandled HTTP status code {code_str} for {url}")
             return f"unhandled: HTTP {code_str}"
 
-    def process_seed(self, seed, discovered_source_url=None):
+    def process_seed(self, seed, discovered_source_url=None, duplicate_flag=None)):
         # Normalize seed IP if it starts with http:// or https://
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
             seed.ip = urlparse(seed.ip).hostname
@@ -841,7 +841,8 @@ class ScannerWorker(QObject):
             return
 
         # Duplicate flag: check if the IP was seen in any category list.
-        duplicate_flag = any(seed.ip in ip_set for ip_set in self.initial_ips.values())
+        if duplicate_flag is None:
+            duplicate_flag = any(seed.ip in ip_set for ip_set in self.initial_ips.values())
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
 
