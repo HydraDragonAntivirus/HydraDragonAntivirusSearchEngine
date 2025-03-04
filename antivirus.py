@@ -784,7 +784,7 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
-        # Compute the base category and original numeric label.
+        # Compute the base category and label.
         base_category = seed.source_type.split("_")[0].lower()
         category_mapping = {
             "whitelist": "0",
@@ -817,11 +817,11 @@ class ScannerWorker(QObject):
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
 
-        # -- WINERROR Handling: Always use the original numeric label --
+        # -- WINERROR Handling: Always use cat_label --
         if status.startswith("WINERROR"):
             if duplicate_flag:
                 comment = f"WINERROR duplicate {seed.source_type} {status}"
-                line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"WinError whitelist duplicate output written for {seed.ip}.")
@@ -830,7 +830,7 @@ class ScannerWorker(QObject):
                     self.log(f"WinError bulk duplicate output written for {seed.ip}.")
             else:
                 comment = f"WINERROR {seed.source_type} {status}"
-                line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
                     self.write_winerror_whitelist_line(line)
                     self.log(f"WinError whitelist output written for {seed.ip}.")
@@ -839,11 +839,11 @@ class ScannerWorker(QObject):
                     self.log(f"WinError bulk output written for {seed.ip}.")
             return
 
-        # -- TIMEOUT Handling: Always use the original numeric label --
+        # -- TIMEOUT Handling: Always use cat_label --
         if status.startswith("TIMEOUT"):
             if duplicate_flag:
                 comment = f"TIMEOUT duplicate {seed.source_type} {status}"
-                line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
                     self.write_winerror_whitelist_duplicate_line(line)
                     self.log(f"Timeout whitelist duplicate output written for {seed.ip}.")
@@ -852,7 +852,7 @@ class ScannerWorker(QObject):
                     self.log(f"Timeout bulk duplicate output written for {seed.ip}.")
             else:
                 comment = f"TIMEOUT {seed.source_type} {status}"
-                line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                 if cat.startswith("whitelist"):
                     self.write_winerror_whitelist_line(line)
                     self.log(f"Timeout whitelist output written for {seed.ip}.")
@@ -879,7 +879,6 @@ class ScannerWorker(QObject):
                 verdict=seed_verdict,
                 status=status
             )
-            # Continue using the original cat_label
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if cat.startswith("whitelist"):
                 if duplicate_flag:
@@ -902,30 +901,29 @@ class ScannerWorker(QObject):
             if cat.startswith("whitelist"):
                 if duplicate_flag:
                     comment = f"Potentially down duplicate: {status}"
-                    line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_potentially_down_whitelist_duplicate_line(line)
                     self.log(
                         f"Potentially Down duplicate (whitelist) output written for {seed.ip} with status {status}.")
                 else:
                     comment = f"Potentially down: {status}"
-                    line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down (whitelist) output written for {seed.ip} with status {status}.")
             else:
                 if duplicate_flag:
                     comment = f"Potentially down duplicate: {status}"
-                    line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_potentially_down_bulk_duplicate_line(line)
                     self.log(f"Potentially Down duplicate (bulk) output written for {seed.ip} with status {status}.")
                 else:
                     comment = f"Potentially down: {status}"
-                    line = f'{seed.ip},{self.settings.get("DefaultNumericLabel", "0")},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_potentially_down_bulk_line(line)
                     self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
             return
 
-        # At this point, status is a confirmed "up" response.
-        # For confirmed up responses, use the auto verdict mapping in the range 1–6.
+        # Confirmed "up" response
         auto_verdict_mapping_confirmed = {
             "whitelist": "whitelist (auto verdict 1)",
             "phishing": "phishing (auto verdict 2)",
