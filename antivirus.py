@@ -108,17 +108,6 @@ def compute_content_similarity(text1, text2):
     ratio = difflib.SequenceMatcher(None, text1, text2).ratio()
     return ratio * 100
 
-def fetch_content(self, url):
-    """
-    Fetches the text content from a given URL.
-    """
-    try:
-        response = requests.get(url, timeout=self.request_timeout, allow_redirects=True)
-        return response.text
-    except Exception as e:
-        self.log(f"Error fetching content from {url}: {e}")
-        return ""
-
 # -----------------------------
 # Helper: Return canonical forms for an IP address.
 # -----------------------------
@@ -646,6 +635,17 @@ class ScannerWorker(QObject):
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
+
+    def fetch_content(self, url):
+        """
+        Fetches the text content from a given URL.
+        """
+        try:
+            response = requests.get(url, timeout=self.request_timeout, allow_redirects=True)
+            return response.text
+        except Exception as e:
+            self.log(f"Error fetching content from {url}: {e}")
+            return ""
 
     def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
         if timeout is None:
