@@ -774,7 +774,7 @@ class ScannerWorker(QObject):
             self.log(f"Unhandled HTTP status code {code_str} for {url}")
             return f"unhandled: HTTP {code_str}"
 
-    def process_seed(self, seed, discovered_source_url=None, duplicate_flag=None)):
+    def process_seed(self, seed, discovered_source_url=None, duplicate_flag=None):
         # Normalize seed IP if it starts with http:// or https://
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
             seed.ip = urlparse(seed.ip).hostname
