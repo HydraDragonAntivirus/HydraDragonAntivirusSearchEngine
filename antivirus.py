@@ -763,7 +763,7 @@ class ScannerWorker(QObject):
             self.log(f"Skipping seed with invalid IP: {seed.ip}")
             return
 
-        # Skip if already processed
+        # Skip if already processed (global duplicate)
         if seed.ip in self.visited_ips:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
@@ -814,8 +814,8 @@ class ScannerWorker(QObject):
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
-        # Duplicate flag: if the IP was in the initial set for this category
-        duplicate_flag = seed.ip in self.initial_ips.get(cat, set())
+        # Duplicate flag: check if the IP was seen in any category list.
+        duplicate_flag = any(seed.ip in ip_set for ip_set in self.initial_ips.values())
         if not duplicate_flag:
             self.initial_ips.setdefault(cat, set()).add(seed.ip)
 
