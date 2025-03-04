@@ -329,10 +329,12 @@ class ScannerWorker(QObject):
         self.whitelist_file_size = hsize
         self.potentially_up_whitelist_file_size = hsize
         self.potentially_down_whitelist_file_size = hsize
-        self.potentially_up_bulk_duplicate_file_size = hsize
-        self.potentially_down_bulk_duplicate_file_size = hsize
         self.potentially_up_whitelist_duplicate_file_size = hsize
         self.potentially_down_whitelist_duplicate_file_size = hsize
+        self.potentially_up_bulk_file_size = hsize
+        self.potentially_down_bulk_file_size = hsize
+        self.potentially_up_bulk_duplicate_file_size = hsize
+        self.potentially_down_bulk_duplicate_file_size = hsize
         self.out_winerror_bulk_file_size = hsize
         self.out_winerror_whitelist_file_size = hsize
         self.out_winerror_bulk_duplicate_file_size = hsize
