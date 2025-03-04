@@ -972,8 +972,9 @@ class ScannerWorker(QObject):
                 ip=seed.ip,
                 discovered_url=discovered_source_url,
                 verdict=seed_verdict,
-                status=status
-            ) + similarity_str
+                status=status,
+                similarity = similarity_str
+            )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
 
             # Write output based on category and duplicate status.
