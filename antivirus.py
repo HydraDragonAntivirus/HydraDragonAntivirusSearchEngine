@@ -11,6 +11,7 @@ import logging
 import time
 from datetime import datetime, timezone
 import concurrent.futures
+import difflib
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
 from PySide6.QtGui import QIcon, QTextCursor
@@ -98,6 +99,25 @@ QScrollArea {
     background-color: #2b2b2b;
 }
 """
+
+def compute_content_similarity(text1, text2):
+    """
+    Computes a similarity score between two text strings.
+    Returns a percentage (0% to 100%) where 100% means identical.
+    """
+    ratio = difflib.SequenceMatcher(None, text1, text2).ratio()
+    return ratio * 100
+
+def fetch_content(self, url):
+    """
+    Fetches the text content from a given URL.
+    """
+    try:
+        response = requests.get(url, timeout=self.request_timeout, allow_redirects=True)
+        return response.text
+    except Exception as e:
+        self.log(f"Error fetching content from {url}: {e}")
+        return ""
 
 # -----------------------------
 # Helper: Return canonical forms for an IP address.
@@ -942,6 +962,16 @@ class ScannerWorker(QObject):
             status=status
         )
         line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+
+        # NEW: Compute and log content similarity if a reference URL is provided.
+        if discovered_source_url:
+            new_url = seed.get_url()
+            new_content = self.fetch_content(new_url)
+            ref_content = self.fetch_content(discovered_source_url)
+            if new_content and ref_content:
+                similarity = compute_content_similarity(ref_content, new_content)
+                self.log(f"Content similarity for {seed.ip} compared to {discovered_source_url}: {similarity:.2f}%")
+
         if cat.startswith("whitelist"):
             if not duplicate_flag:
                 self.write_whitelist_line(line)
