@@ -4,15 +4,15 @@ import sys
 import json
 import ipaddress
 import threading
-from bs4 import BeautifulSoup
+from datetime import datetime, timezone
+import difflib
+import queue
+import time
+import concurrent.futures
 from urllib.parse import urljoin, urlparse
 import requests
 import logging
-import time
-from datetime import datetime, timezone
-import concurrent.futures
-import difflib
-import queue
+from bs4 import BeautifulSoup
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
 from PySide6.QtGui import QIcon, QTextCursor
@@ -23,12 +23,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QProgressBar,
-    QFileDialog,
-    QGridLayout,
-    QScrollArea,
     QTextEdit,
 )
 
@@ -51,8 +47,6 @@ logging.basicConfig(
 )
 
 log_file = os.path.join(log_dir, "antiviruscritical.log")
-
-# Redirect stdout and stderr to console log
 sys.stdout = open(log_file, "w", encoding="utf-8", errors="ignore")
 sys.stderr = open(log_file, "w", encoding="utf-8", errors="ignore")
 
@@ -89,13 +83,13 @@ QPushButton:pressed {
 QLabel {
     color: #e0e0e0;
 }
-QLineEdit, QTextEdit {
+QTextEdit {
     background-color: #3c3c3c;
     border: 1px solid #5a5a5a;
     padding: 4px;
 }
-QScrollArea {
-    background-color: #2b2b2b;
+QProgressBar {
+    text-align: center;
 }
 """
 
@@ -108,14 +102,57 @@ def compute_content_similarity(text1, text2):
     return ratio * 100
 
 # -----------------------------
-# Helper: Return canonical forms for an IP address.
+# Global Default Settings (Hard-Coded)
+# -----------------------------
+DEFAULT_SETTINGS = {
+    "MaxThreads": 1000,
+    "CsvMaxLines": 10000,
+    "CsvMaxSize": 2097152,
+    "CommentTemplateZeroday": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
+    "CommentTemplateNoZeroday": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate",
+    "CommentTemplateZerodayUp": "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate",
+    "RequestTimeout": 10,
+    "BulkOutputFile": default_bulk,
+    "WhiteListOutputFile": default_whitelist,
+    "PotentiallyUpBulkOutputFile": os.path.join(output_dir, "potentially_up_bulk.csv"),
+    "PotentiallyDownBulkOutputFile": os.path.join(output_dir, "potentially_down_bulk.csv"),
+    "PotentiallyUpWhiteListOutputFile": os.path.join(output_dir, "potentially_up_whitelist.csv"),
+    "PotentiallyDownWhiteListOutputFile": os.path.join(output_dir, "potentially_down_whitelist.csv"),
+    "WinErrorBulkOutputFile": os.path.join(output_dir, "winerror_bulk.csv"),
+    "WinErrorWhitelistOutputFile": os.path.join(output_dir, "winerror_whitelist.csv"),
+    "BulkDuplicateOutputFile": os.path.join(output_dir, "bulk_duplicates.csv"),
+    "WhitelistDuplicateOutputFile": os.path.join(output_dir, "whitelist_duplicates.csv"),
+    "ZeroDayExecutableDetection": "true",
+    "ZeroDayExecutableOutputFile": os.path.join(output_dir, "ZeroDayExecutables.csv"),
+    "HTTPUpCodes": "100,101,102,200,201,202,203,204,205,206,207,208,226,429",
+    "HTTPPotentiallyDownCodes": "400,402,404,409,410,412,414,415,416,451",
+    "HTTPPotentiallyUpCodes": "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511",
+    # Fixed category numbers
+    "CategoryPhishing": "7",
+    "CategoryDDoS": "4",
+    "CategoryBruteForce": "18",
+    "CategorySpam": "10",
+    "CategoryMalicious": "20",
+    "WhiteListFilesIPv6": "website/IPv6WhiteList.txt",
+    "WhiteListFilesIPv4": "website/IPv4WhiteList.txt",
+    "PhishingFilesIPv6": "",
+    "PhishingFilesIPv4": "website/IPv4PhishingActive.txt, website/IPv4PhishingInActive.txt",
+    "DDoSFilesIPv6": "website/IPv6DDoS.txt",
+    "DDoSFilesIPv4": "website/IPv4DDoS.txt",
+    "BruteForceFilesIPv6": "",
+    "BruteForceFilesIPv4": "website/IPv4BruteForce.txt",
+    "SpamFilesIPv6": "website/IPv6Spam.txt",
+    "SpamFilesIPv4": "website/IPv4Spam.txt",
+    "MalwareFilesIPv6": "website/IPv6Malware.txt",
+    "MalwareFilesIPv4": "website/IPv4Malware.txt",
+}
+
+# -----------------------------
+# Helper Functions
 # -----------------------------
 def canonical_urls(ip):
     return f"http://{ip}".rstrip('/'), f"https://{ip}".rstrip('/')
 
-# -----------------------------
-# Helper: Strip protocol from URL.
-# -----------------------------
 def strip_protocol(url):
     return re.sub(r'^https?://', '', url, flags=re.IGNORECASE).rstrip('/')
 
@@ -125,7 +162,7 @@ def strip_protocol(url):
 class Seed:
     def __init__(self, ip, source_type, port=None):
         self.ip = ip.lower()
-        self.source_type = source_type  # e.g., "malicious ipv4/v6", "bruteforce ipv4/v6", etc.
+        self.source_type = source_type  # e.g., "malicious_ipv4", "phishing_ipv6", etc.
         self.port = port
 
     def get_url(self):
@@ -144,7 +181,7 @@ class SeedRunnable(QRunnable):
         self.worker.process_seed(self.seed, duplicate_flag=True)
 
 # -----------------------------
-# ScannerWorker: Main scanning logic, duplicate rotation, and optimization.
+# ScannerWorker: Main scanning logic
 # -----------------------------
 class ScannerWorker(QObject):
     log_signal = Signal(str)
@@ -152,62 +189,41 @@ class ScannerWorker(QObject):
     finished_signal = Signal()
     failure = Signal(str)
 
-    def __init__(self, settings, parent=None):
+    def __init__(self, settings=None, parent=None):
         super().__init__(parent)
-        self.settings = settings
-        self.max_workers = int(settings.get("MaxThreads", 1000))
-        self.user_csv_max_lines = int(settings.get("CsvMaxLines", 10000))
+        self.settings = settings if settings is not None else DEFAULT_SETTINGS
+        self.max_workers = int(self.settings["MaxThreads"])
+        self.user_csv_max_lines = int(self.settings["CsvMaxLines"])
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
-        self.csv_max_size = int(settings.get("CsvMaxSize", 2097152))
+        self.csv_max_size = int(self.settings["CsvMaxSize"])
         if self.user_csv_max_lines > 10000:
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
-        self.comment_template_zeroday = settings.get(
-            "CommentTemplateZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate"
-        )
-        self.comment_template_nozeroday = settings.get(
-            "CommentTemplateNoZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate"
-        )
-        self.comment_template_zeroday_up = settings.get(
-            "CommentTemplateZerodayUp",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate"
-        )
-        self.request_timeout = int(settings.get("RequestTimeout", 10))
-        self.out_bulk_csv = settings.get("BulkOutputFile", default_bulk)
-        self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
-        self.out_potentially_up_bulk_csv = settings.get("PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
-        self.out_potentially_down_bulk_csv = settings.get("PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
-        self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
-        self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
-        self.out_winerror_bulk_csv = settings.get("WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
-        self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-
-        # New duplicate output files (do not split by IPv4/IPv6)
-        self.out_bulk_duplicate_csv = settings.get("BulkDuplicateOutputFile", os.path.join(output_dir, "bulk_duplicates.csv"))
-        self.out_whitelist_duplicate_csv = settings.get("WhitelistDuplicateOutputFile", os.path.join(output_dir, "whitelist_duplicates.csv"))
-
-        self.zeroday_exe_enabled = settings.get("ZeroDayExecutableDetection", "false").lower() == "true"
-        self.out_zeroday_exe_csv = settings.get("ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
+        self.comment_template_zeroday = self.settings["CommentTemplateZeroday"]
+        self.comment_template_nozeroday = self.settings["CommentTemplateNoZeroday"]
+        self.comment_template_zeroday_up = self.settings["CommentTemplateZerodayUp"]
+        self.request_timeout = int(self.settings["RequestTimeout"])
+        self.out_bulk_csv = self.settings["BulkOutputFile"]
+        self.out_whitelist_csv = self.settings["WhiteListOutputFile"]
+        self.out_potentially_up_bulk_csv = self.settings["PotentiallyUpBulkOutputFile"]
+        self.out_potentially_down_bulk_csv = self.settings["PotentiallyDownBulkOutputFile"]
+        self.out_potentially_up_whitelist_csv = self.settings["PotentiallyUpWhiteListOutputFile"]
+        self.out_potentially_down_whitelist_csv = self.settings["PotentiallyDownWhiteListOutputFile"]
+        self.out_winerror_bulk_csv = self.settings["WinErrorBulkOutputFile"]
+        self.out_winerror_whitelist_csv = self.settings["WinErrorWhitelistOutputFile"]
+        self.out_bulk_duplicate_csv = self.settings["BulkDuplicateOutputFile"]
+        self.out_whitelist_duplicate_csv = self.settings["WhitelistDuplicateOutputFile"]
+        self.zeroday_exe_enabled = self.settings["ZeroDayExecutableDetection"].lower() == "true"
+        self.out_zeroday_exe_csv = self.settings["ZeroDayExecutableOutputFile"]
 
         self.my_public_ip = None
         self.lock = threading.Lock()
         self.cancelled = False
-        self.visited_ips = set()  # for processing only once
-        # Main output rotation info
-        self.bulk_file_index = 0
-        self.whitelist_file_index = 0
-        self.out_winerror_bulk_file_index = 0
-        self.potentially_up_bulk_duplicate_file_index = 0
-        self.potentially_down_bulk_duplicate_file_index = 0
+        self.visited_ips = set()  # to keep track of processed IPs
         self.processed_count = 0
         self.total_seeds = 0
 
-        self.pause_event = threading.Event()
-        self.pause_event.set()
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(self.max_workers)
-
         self.seed_queue = queue.Queue()
 
     def log(self, message):
@@ -218,7 +234,6 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
-        # Ensure directories exist for each unique file
         unique_files = {
             self.out_bulk_csv,
             self.out_whitelist_csv,
@@ -233,24 +248,20 @@ class ScannerWorker(QObject):
             directory = os.path.dirname(filename)
             if directory and not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
-
         header = "IP,Categories,ReportDate,Comment\n"
 
-        # Open non-duplicate output files
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
         self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
         self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
-
         for file in [self.bulk_file, self.whitelist_file,
                      self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
                      self.out_winerror_bulk_file, self.out_winerror_whitelist_file]:
             file.write(header)
             file.flush()
 
-        # Open duplicate files (one for bulk and one for whitelist)
         self.bulk_duplicate_file = open(self.out_bulk_duplicate_csv, "w", encoding="utf-8")
         self.bulk_duplicate_file.write(header)
         self.bulk_duplicate_file.flush()
@@ -280,19 +291,25 @@ class ScannerWorker(QObject):
         try:
             response = requests.get(url, timeout=self.request_timeout, stream=True)
             if response.status_code == 200:
-                header_bytes = response.raw.read(2)
-                if header_bytes == b'MZ':
+                # Read first 4 bytes to check for both PE and ELF signatures.
+                header_bytes = response.raw.read(4)
+                if header_bytes.startswith(b'MZ'):
                     report_date = datetime.now(timezone.utc).isoformat()
                     comment = "ZeroDay Executable detected (MZ signature)"
                     line = f'{originating_ip},{url},{report_date},"{comment}"\n'
                     self.write_zeroday_exe_line(line)
-                    self.log(f"ZeroDay executable detected at {url}")
+                    self.log(f"ZeroDay executable detected (MZ) at {url}")
+                elif header_bytes == b'\x7FELF':
+                    report_date = datetime.now(timezone.utc).isoformat()
+                    comment = "ZeroDay Executable detected (ELF signature)"
+                    line = f'{originating_ip},{url},{report_date},"{comment}"\n'
+                    self.write_zeroday_exe_line(line)
+                    self.log(f"ZeroDay executable detected (ELF) at {url}")
         except Exception as e:
             self.log(f"Error in ZeroDay executable check for {url}: {e}")
 
     def write_zeroday_exe_line(self, line):
         with self.lock:
-            line_bytes = len(line.encode("utf-8"))
             self.zeroday_exe_file.write(line)
             self.zeroday_exe_file.flush()
 
@@ -304,7 +321,7 @@ class ScannerWorker(QObject):
     def write_winerror_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if getattr(self, "out_winerror_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "out_winerror_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
+            if getattr(self, "out_winerror_bulk_line_count", 1) >= self.csv_max_lines:
                 self.out_winerror_bulk_file.close()
                 self.out_winerror_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_winerror_bulk_csv)
@@ -314,13 +331,11 @@ class ScannerWorker(QObject):
                 self.out_winerror_bulk_file.write(header)
                 self.out_winerror_bulk_file.flush()
                 self.out_winerror_bulk_line_count = 1
-                self.out_winerror_bulk_file_size = len(header.encode("utf-8"))
                 self.log(f"WinError Bulk file rotated; new file: {new_filename}")
             self.out_winerror_bulk_file.write(line)
             self.out_winerror_bulk_file.flush()
             self.out_winerror_bulk_line_count = getattr(self, "out_winerror_bulk_line_count", 1) + 1
 
-    # New duplicate file writers (one for bulk and one for whitelist)
     def write_bulk_duplicate_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
@@ -364,7 +379,7 @@ class ScannerWorker(QObject):
     def write_potentially_up_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if getattr(self, "potentially_up_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "potentially_up_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
+            if getattr(self, "potentially_up_bulk_line_count", 1) >= self.csv_max_lines:
                 self.potentially_up_bulk_file.close()
                 self.potentially_up_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_potentially_up_bulk_csv)
@@ -374,7 +389,6 @@ class ScannerWorker(QObject):
                 self.potentially_up_bulk_file.write(header)
                 self.potentially_up_bulk_file.flush()
                 self.potentially_up_bulk_line_count = 1
-                self.potentially_up_bulk_file_size = len(header.encode("utf-8"))
                 self.log(f"Potentially Up Bulk file rotated; new file: {new_filename}")
             self.potentially_up_bulk_file.write(line)
             self.potentially_up_bulk_file.flush()
@@ -383,7 +397,7 @@ class ScannerWorker(QObject):
     def write_potentially_down_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if getattr(self, "potentially_down_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "potentially_down_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
+            if getattr(self, "potentially_down_bulk_line_count", 1) >= self.csv_max_lines:
                 self.potentially_down_bulk_file.close()
                 self.potentially_down_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_potentially_down_bulk_csv)
@@ -393,7 +407,6 @@ class ScannerWorker(QObject):
                 self.potentially_down_bulk_file.write(header)
                 self.potentially_down_bulk_file.flush()
                 self.potentially_down_bulk_line_count = 1
-                self.potentially_down_bulk_file_size = len(header.encode("utf-8"))
                 self.log(f"Potentially Down Bulk file rotated; new file: {new_filename}")
             self.potentially_down_bulk_file.write(line)
             self.potentially_down_bulk_file.flush()
@@ -412,7 +425,7 @@ class ScannerWorker(QObject):
     def write_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.bulk_line_count >= self.csv_max_lines or (getattr(self, "bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
+            if getattr(self, "bulk_line_count", 1) >= self.csv_max_lines:
                 self.bulk_file.close()
                 self.bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_bulk_csv)
@@ -422,11 +435,10 @@ class ScannerWorker(QObject):
                 self.bulk_file.write(header)
                 self.bulk_file.flush()
                 self.bulk_line_count = 1
-                self.bulk_file_size = len(header.encode("utf-8"))
                 self.log(f"Bulk file rotated; new file: {new_filename}")
             self.bulk_file.write(line)
             self.bulk_file.flush()
-            self.bulk_line_count += 1
+            self.bulk_line_count = getattr(self, "bulk_line_count", 1) + 1
 
     def write_whitelist_line(self, line):
         with self.lock:
@@ -445,7 +457,6 @@ class ScannerWorker(QObject):
             self.total_seeds = len(seeds)
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
-
         for seed in seeds:
             self.seed_queue.put(seed)
 
@@ -460,16 +471,14 @@ class ScannerWorker(QObject):
 
         num_consumers = 10
         consumer_threads = []
-        for i in range(num_consumers):
+        for _ in range(num_consumers):
             t = threading.Thread(target=seed_consumer)
             t.start()
             consumer_threads.append(t)
-
         self.seed_queue.join()
         self.threadpool.waitForDone()
         for t in consumer_threads:
             t.join()
-
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
@@ -485,12 +494,10 @@ class ScannerWorker(QObject):
     def is_active_and_static(self, ip, port, timeout=None, category=None, discovered_source_url=None):
         if timeout is None:
             timeout = self.request_timeout
-
         if self.is_valid_ip(ip) == "ipv6":
             url = f"http://[{ip}]" + (f":{port}" if port else "")
         else:
             url = f"http://{ip}" + (f":{port}" if port else "")
-
         try:
             response = requests.get(url, timeout=timeout, allow_redirects=True)
         except requests.exceptions.Timeout as e:
@@ -510,53 +517,30 @@ class ScannerWorker(QObject):
         code = response.status_code
         code_str = f"{code:03d}"
 
-        resource_urls = set()
-
-        http_up_codes = [s.strip() for s in self.settings.get(
-            "HTTPUpCodes", "100,101,102,200,201,202,203,204,205,206,207,208,226,429"
-        ).split(",")]
-        http_potentially_down_codes = [s.strip() for s in self.settings.get(
-            "HTTPPotentiallyDownCodes", "400,402,404,409,410,412,414,415,416,451"
-        ).split(",")]
-        http_potentially_up_codes = [s.strip() for s in self.settings.get(
-            "HTTPPotentiallyUpCodes",
-            "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511"
-        ).split(",")]
+        http_up_codes = [s.strip() for s in self.settings["HTTPUpCodes"].split(",")]
+        http_potentially_down_codes = [s.strip() for s in self.settings["HTTPPotentiallyDownCodes"].split(",")]
+        http_potentially_up_codes = [s.strip() for s in self.settings["HTTPPotentiallyUpCodes"].split(",")]
 
         if code_str in http_up_codes:
             if response.url.startswith("http://") or response.url.startswith("https://"):
                 parsed_ip = urlparse(response.url).hostname
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
-                    display_ip = f"[{parsed_ip}]" if self.is_valid_ip(parsed_ip) == "ipv6" else parsed_ip
                     new_seed = Seed(parsed_ip, category, port=port)
-                    self.log(f"Queueing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
+                    self.log(f"Queueing redirected IP: {parsed_ip} (Category: {category}) - HTTP {code_str}")
                     self.seed_queue.put(new_seed)
             found_ips = self.extract_ip_and_port(response.text)
             for extracted_ip, extracted_port, ip_version in found_ips:
-                if ip_version == "ipv6":
-                    candidate = f"http://[{extracted_ip}]" if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')) else f"http://{extracted_ip[1:-1]}"
-                else:
-                    candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
-                parse_extracted = urlparse(candidate).hostname
-                discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
-                new_seed = Seed(discovered_ip, category, port=extracted_port)
-                self.log(f"Queueing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
+                candidate = extracted_ip if ip_version == "ipv4" else f"[{extracted_ip}]"
+                new_seed = Seed(extracted_ip, category, port=extracted_port)
+                self.log(f"Queueing discovered IP: {candidate} (Category: {category}) - HTTP {code_str}")
                 self.seed_queue.put(new_seed)
             soup = BeautifulSoup(response.text, "html.parser")
             resource_urls = set()
-            for script in soup.find_all("script", src=True):
-                src = script.get("src")
-                if src:
-                    resource_urls.add(urljoin(url, src))
-            for link in soup.find_all("link", href=True):
-                href = link.get("href")
-                if href:
-                    resource_urls.add(urljoin(url, href))
-            for img in soup.find_all("img", src=True):
-                src = img.get("src")
-                if src:
-                    resource_urls.add(urljoin(url, src))
+            for tag in soup.find_all(["script", "link", "img"]):
+                attr = "src" if tag.name in ["script", "img"] else "href"
+                url_val = tag.get(attr)
+                if url_val:
+                    resource_urls.add(urljoin(url, url_val))
             for resource_url in resource_urls:
                 try:
                     res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
@@ -564,15 +548,8 @@ class ScannerWorker(QObject):
                     if res_code_str in http_up_codes:
                         resource_ips = self.extract_ip_and_port(res.text)
                         for extracted_ip, extracted_port, ip_version in resource_ips:
-                            if ip_version == "ipv6":
-                                candidate = f"http://[{extracted_ip}]" if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')) else f"http://{extracted_ip[1:-1]}"
-                            else:
-                                candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
-                            parse_extracted = urlparse(candidate).hostname
-                            discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                            display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
-                            new_seed = Seed(discovered_ip, category, port=extracted_port)
-                            self.log(f"Queueing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
+                            new_seed = Seed(extracted_ip, category, port=extracted_port)
+                            self.log(f"Queueing discovered IP from resource {resource_url}: {extracted_ip} (Category: {category}) - HTTP {code_str}")
                             self.seed_queue.put(new_seed)
                     else:
                         self.log(f"Resource {resource_url} returned HTTP {res.status_code}")
@@ -583,7 +560,6 @@ class ScannerWorker(QObject):
         if self.zeroday_exe_enabled:
             for resource_url in resource_urls:
                 self.check_zeroday_executable(resource_url, ip)
-
         elif code_str in http_potentially_up_codes:
             self.log(f"Potentially Up status for {url}: HTTP {code_str}")
             return f"potentially up: HTTP {code_str}"
@@ -622,23 +598,23 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
-        base_category = seed.source_type.split("_")[0].lower()
+        # Fixed category mapping (hard-coded defaults)
         category_mapping = {
             "whitelist": "0",
-            "phishing": self.settings.get("CategoryPhishing", "7"),
-            "ddos": self.settings.get("CategoryDDoS", "4"),
-            "bruteforce": self.settings.get("CategoryBruteForce", "18"),
-            "spam": self.settings.get("CategorySpam", "10"),
-            "malicious": self.settings.get("CategoryMalicious", "20")
+            "phishing": "7",
+            "ddos": "4",
+            "bruteforce": "18",
+            "spam": "10",
+            "malicious": "20"
         }
+        base_category = seed.source_type.split("_")[0].lower()
         cat_label = category_mapping.get(base_category)
         if cat_label is None:
             self.log("Invalid category base. Skipping...")
             return
 
         try:
-            status = self.is_active_and_static(seed.ip, seed.port, category=cat,
-                                               discovered_source_url=discovered_source_url)
+            status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
         except requests.exceptions.ConnectionError as ce:
             status = f"WINERROR: {ce}"
         if status is None:
@@ -764,7 +740,6 @@ class ScannerWorker(QObject):
             similarity_str = ""
             if discovered_source_url:
                 new_url = seed.get_url()
-                # Only compute similarity if the URLs are different
                 if new_url != discovered_source_url:
                     new_content = self.fetch_content(new_url)
                     ref_content = self.fetch_content(discovered_source_url)
@@ -828,15 +803,9 @@ class ScannerWorker(QObject):
 
     def extract_ip_and_port(self, text):
         found_ips = []
-        ipv4_pattern = re.compile(
-            r'\b(?P<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?P<port>[0-9]{1,5}))?\b'
-        )
-        ipv6_bracket_pattern = re.compile(
-            r'\[(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?P<port>[0-9]{1,5}))?'
-        )
-        ipv6_pattern = re.compile(
-            r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b'
-        )
+        ipv4_pattern = re.compile(r'\b(?P<ip>(?:[0-9]{1,3}\.){3}[0-9]{1,3})(?::(?P<port>[0-9]{1,5}))?\b')
+        ipv6_bracket_pattern = re.compile(r'\[(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})(?::(?P<port>[0-9]{1,5}))?')
+        ipv6_pattern = re.compile(r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b')
         for match in ipv6_bracket_pattern.finditer(text):
             ip = match.group("ip")
             port_str = match.group("port")
@@ -887,30 +856,18 @@ class ScannerWorker(QObject):
                 file_category_mapping[file] = []
             file_category_mapping[file].append(source_type)
 
-        for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "whitelist_ipv6")
-        for file in [x.strip() for x in self.settings.get("WhiteListFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "whitelist_ipv4")
-        for file in [x.strip() for x in self.settings.get("PhishingFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "phishing_ipv6")
-        for file in [x.strip() for x in self.settings.get("PhishingFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "phishing_ipv4")
-        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "ddos_ipv6")
-        for file in [x.strip() for x in self.settings.get("DDoSFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "ddos_ipv4")
-        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "bruteforce_ipv6")
-        for file in [x.strip() for x in self.settings.get("BruteForceFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "bruteforce_ipv4")
-        for file in [x.strip() for x in self.settings.get("SpamFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "spam_ipv6")
-        for file in [x.strip() for x in self.settings.get("SpamFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "spam_ipv4")
-        for file in [x.strip() for x in self.settings.get("MalwareFilesIPv6", "").split(",") if x.strip()]:
-            add_file(file, "malicious_ipv6")
-        for file in [x.strip() for x in self.settings.get("MalwareFilesIPv4", "").split(",") if x.strip()]:
-            add_file(file, "malicious_ipv4")
+        add_file(self.settings["WhiteListFilesIPv6"], "whitelist_ipv6")
+        add_file(self.settings["WhiteListFilesIPv4"], "whitelist_ipv4")
+        add_file(self.settings["PhishingFilesIPv6"], "phishing_ipv6")
+        add_file(self.settings["PhishingFilesIPv4"], "phishing_ipv4")
+        add_file(self.settings["DDoSFilesIPv6"], "ddos_ipv6")
+        add_file(self.settings["DDoSFilesIPv4"], "ddos_ipv4")
+        add_file(self.settings["BruteForceFilesIPv6"], "bruteforce_ipv6")
+        add_file(self.settings["BruteForceFilesIPv4"], "bruteforce_ipv4")
+        add_file(self.settings["SpamFilesIPv6"], "spam_ipv6")
+        add_file(self.settings["SpamFilesIPv4"], "spam_ipv4")
+        add_file(self.settings["MalwareFilesIPv6"], "malicious_ipv6")
+        add_file(self.settings["MalwareFilesIPv4"], "malicious_ipv4")
 
         results = {}
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -933,16 +890,8 @@ class ScannerWorker(QObject):
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
 
-    def pause(self):
-        self.pause_event.clear()
-        self.log("Scan paused.")
-
-    def resume(self):
-        self.pause_event.set()
-        self.log("Scan resumed.")
-
 # -----------------------------
-# MainWindow: Settings GUI
+# MainWindow: Simplified GUI (No Pause)
 # -----------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -952,211 +901,43 @@ class MainWindow(QMainWindow):
         self.worker = None
         self.thread = None
         self.is_scanning = False
-        self.is_paused = False
         self.setup_ui()
 
     def setup_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
-        settings_group = QWidget()
-        settings_layout = QGridLayout(settings_group)
-        row = 0
 
-        file_keys = {
-            "BulkOutputFile", "WhiteListOutputFile",
-            "PotentiallyUpBulkOutputFile", "PotentiallyDownBulkOutputFile",
-            "PotentiallyUpWhiteListOutputFile", "PotentiallyDownWhiteListOutputFile",
-            "BulkDuplicateOutputFile", "WhitelistDuplicateOutputFile",
-            "WinErrorBulkOutputFile", "WinErrorWhitelistOutputFile",
-            "ZeroDayExecutableOutputFile",
-            "MalwareFilesIPv6", "MalwareFilesIPv4",
-            "BruteForceFilesIPv4", "BruteForceFilesIPv6",
-            "SpamFilesIPv4", "SpamFilesIPv6",
-            "PhishingFilesIPv4", "PhishingFilesIPv6",
-            "DDoSFilesIPv4", "DDoSFilesIPv6",
-            "WhiteListFilesIPv4", "WhiteListFilesIPv6"
-        }
-        directory_keys = {"LastPath"}
-
-        def add_field(label_text, key, default=""):
-            nonlocal row
-            current_row = row
-            lbl = QLabel(label_text)
-            le = QLineEdit(str(default))
-            settings_layout.addWidget(lbl, current_row, 0)
-            settings_layout.addWidget(le, current_row, 1)
-            if key in file_keys:
-                browse_btn = QPushButton("Browse File")
-                def browse_file():
-                    file_path, _ = QFileDialog.getSaveFileName(self, "Select CSV File", le.text(), "CSV Files (*.csv)")
-                    if file_path:
-                        le.setText(file_path)
-                browse_btn.clicked.connect(browse_file)
-                settings_layout.addWidget(browse_btn, current_row, 2)
-            elif key in directory_keys:
-                browse_btn = QPushButton("Browse Directory")
-                def browse_directory():
-                    directory = QFileDialog.getExistingDirectory(self, "Select Directory", le.text())
-                    if directory:
-                        le.setText(directory)
-                browse_btn.clicked.connect(browse_directory)
-                settings_layout.addWidget(browse_btn, current_row, 2)
-            self.fields[key] = le
-            row = current_row + 1
-
-        self.fields = {}
-        def add_plain_field(label_text, key, default=""):
-            nonlocal row
-            lbl = QLabel(label_text)
-            le = QLineEdit(str(default))
-            settings_layout.addWidget(lbl, row, 0)
-            settings_layout.addWidget(le, row, 1)
-            self.fields[key] = le
-            row += 1
-
-        add_plain_field("Max Threads:", "MaxThreads", "1000")
-        add_field("Bulk Report File:", "BulkOutputFile", default_bulk)
-        add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
-        add_field("Potentially Bulk 1 Output File:", "PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
-        add_field("Potentially Bulk 2 Output File:", "PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
-        add_field("Potentially Whitelist 1 Output File:", "PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
-        add_field("Potentially Whitelist 2 Output File:", "PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
-        add_field("Bulk Duplicate Output File:", "BulkDuplicateOutputFile", os.path.join(output_dir, "bulk_duplicates.csv"))
-        add_field("Whitelist Duplicate Output File:", "WhitelistDuplicateOutputFile", os.path.join(output_dir, "whitelist_duplicates.csv"))
-        add_field("WinError Bulk Output File:", "WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
-        add_field("WinError Whitelist Output File:", "WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        add_plain_field("Category Phishing:", "CategoryPhishing", "7")
-        add_plain_field("Category DDoS:", "CategoryDDoS", "4")
-        add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
-        add_plain_field("Category Spam:", "CategorySpam", "10")
-        add_plain_field("Category Malicious:", "CategoryMalicious", "20")
-        add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
-        add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
-        add_plain_field("Comment Template Zeroday Up:", "CommentTemplateZerodayUp", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
-        add_plain_field("Enable ZeroDay Executable Detection (true/false):", "ZeroDayExecutableDetection", "true")
-        add_field("ZeroDay Executable Output CSV File:", "ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
-        add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
-        add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
-        add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
-        add_field("BruteForceFilesIPv4 (comma-separated):", "BruteForceFilesIPv4", "website\\IPv4BruteForce.txt")
-        add_field("SpamFilesIPv6 (comma-separated):", "SpamFilesIPv6", "website\\IPv6Spam.txt")
-        add_field("SpamFilesIPv4 (comma-separated):", "SpamFilesIPv4", "website\\IPv4Spam.txt")
-        add_field("PhishingFilesIPv6 (comma-separated):", "PhishingFilesIPv6", "")
-        add_field("PhishingFilesIPv4 (comma-separated):", "PhishingFilesIPv4", "website\\IPv4PhishingActive.txt, website\\IPv4PhishingInActive.txt")
-        add_field("DDoSFilesIPv6 (comma-separated):", "DDoSFilesIPv6", "website\\IPv6DDoS.txt")
-        add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
-        add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
-        add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
-        add_field("Last Directory Path:", "LastPath", "website")
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(settings_group)
-        main_layout.addWidget(scroll)
-        btn_layout = QHBoxLayout()
-        self.load_btn = QPushButton("Load Settings")
-        self.load_btn.clicked.connect(self.load_settings)
-        self.save_btn = QPushButton("Save Settings")
-        self.save_btn.clicked.connect(self.save_settings)
-        btn_layout.addWidget(self.load_btn)
-        btn_layout.addWidget(self.save_btn)
-        main_layout.addLayout(btn_layout)
+        # Only Start/Stop button is used now.
         control_layout = QHBoxLayout()
         self.start_stop_button = QPushButton("Start Scan")
         self.start_stop_button.clicked.connect(self.toggle_scan)
         control_layout.addWidget(self.start_stop_button)
-        self.pause_button = QPushButton("Pause Scan")
-        self.pause_button.clicked.connect(self.toggle_pause)
-        self.pause_button.setVisible(False)
-        control_layout.addWidget(self.pause_button)
         main_layout.addLayout(control_layout)
+
+        # Progress bar
         self.progress_bar = QProgressBar()
         main_layout.addWidget(self.progress_bar)
-        search_layout = QHBoxLayout()
-        self.search_line = QLineEdit()
-        self.search_line.setPlaceholderText("Search log...")
-        self.search_button = QPushButton("Search")
-        self.search_button.clicked.connect(self.search_log)
-        self.clear_search_button = QPushButton("Clear Search")
-        self.clear_search_button.clicked.connect(self.clear_search)
-        search_layout.addWidget(QLabel("Log Search:"))
-        search_layout.addWidget(self.search_line)
-        search_layout.addWidget(self.search_button)
-        search_layout.addWidget(self.clear_search_button)
-        main_layout.addLayout(search_layout)
-        main_layout.addWidget(QLabel("Log:"))
+
+        # Log display
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
+        main_layout.addWidget(QLabel("Log:"))
         main_layout.addWidget(self.log_text)
-
-    def get_settings_from_fields(self):
-        settings = {}
-        for key, le in self.fields.items():
-            value = le.text().strip()
-            if key in ("MaxThreads", "CsvMaxLines", "CsvMaxSize"):
-                try:
-                    value = int(value)
-                except:
-                    value = 0
-            settings[key] = value
-        return settings
-
-    def load_settings(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Settings JSON", os.getcwd(), "JSON Files (*.json)")
-        if file_path:
-            try:
-                with open(file_path, "r", encoding="utf-8") as f:
-                    settings = json.load(f)
-                for key, value in settings.items():
-                    if key in self.fields:
-                        self.fields[key].setText(str(value))
-                self.append_log("Settings loaded successfully.")
-            except Exception as e:
-                self.append_log(f"Failed to load settings: {e}")
-
-    def save_settings(self):
-        settings = self.get_settings_from_fields()
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Settings JSON", os.getcwd(), "JSON Files (*.json)")
-        if file_path:
-            try:
-                with open(file_path, "w", encoding="utf-8") as f:
-                    json.dump(settings, f, indent=4)
-                self.append_log("Settings saved successfully.")
-            except Exception as e:
-                self.append_log(f"Failed to save settings: {e}")
 
     def toggle_scan(self):
         if not self.is_scanning:
             self.start_scan()
             self.start_stop_button.setText("Stop Scan")
-            self.pause_button.setVisible(True)
-            self.pause_button.setText("Pause Scan")
             self.is_scanning = True
         else:
             self.stop_scan()
             self.start_stop_button.setText("Start Scan")
-            self.pause_button.setVisible(False)
             self.is_scanning = False
-            self.is_paused = False
-
-    def toggle_pause(self):
-        if not self.is_scanning or not self.worker:
-            return
-        if not self.is_paused:
-            self.worker.pause()
-            self.pause_button.setText("Resume Scan")
-            self.is_paused = True
-        else:
-            self.worker.resume()
-            self.pause_button.setText("Pause Scan")
-            self.is_paused = False
 
     def start_scan(self):
-        settings = self.get_settings_from_fields()
-        self.settings = settings
         self.append_log("Starting scan...")
-        self.worker = ScannerWorker(settings)
+        self.worker = ScannerWorker(DEFAULT_SETTINGS)
         self.worker.log_signal.connect(self.append_log)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.finished_signal.connect(self.scan_finished)
@@ -1191,27 +972,10 @@ class MainWindow(QMainWindow):
     def scan_finished(self):
         self.append_log("Scan finished.")
         self.start_stop_button.setText("Start Scan")
-        self.pause_button.setVisible(False)
         self.is_scanning = False
-        self.is_paused = False
         if self.thread:
             self.thread.quit()
             self.thread.wait()
-
-    def search_log(self):
-        search_text = self.search_line.text().strip()
-        if not search_text:
-            return
-        if not self.log_text.find(search_text):
-            self.log_text.moveCursor(QTextCursor.Start)
-            if not self.log_text.find(search_text):
-                self.append_log(f'No matches found for "{search_text}".')
-
-    def clear_search(self):
-        cursor = self.log_text.textCursor()
-        cursor.clearSelection()
-        self.log_text.setTextCursor(cursor)
-        self.log_text.moveCursor(QTextCursor.End)
 
 def main():
     try:
@@ -1225,8 +989,4 @@ def main():
         logging.critical(f"Critical error in main: {e}", exc_info=True)
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    app.setStyleSheet(antivirus_style)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
+    main()
