@@ -527,6 +527,9 @@ class ScannerWorker(QObject):
         http_potentially_down_codes = [s.strip() for s in self.settings["HTTPPotentiallyDownCodes"].split(",")]
         http_potentially_up_codes = [s.strip() for s in self.settings["HTTPPotentiallyUpCodes"].split(",")]
 
+        # Initialize resource_urls to ensure it is always defined.
+        resource_urls = set()
+
         if code_str in http_up_codes:
             if response.url.startswith("http://") or response.url.startswith("https://"):
                 parsed_ip = urlparse(response.url).hostname
@@ -577,210 +580,217 @@ class ScannerWorker(QObject):
             return f"unhandled: HTTP {code_str}"
 
     def process_seed(self, seed, discovered_source_url=None, duplicate_flag=None):
-        if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
-            seed.ip = urlparse(seed.ip).hostname
-        if self.my_public_ip and seed.ip == self.my_public_ip:
-            self.log(f"Skipping my own public IP: {seed.ip}")
-            return
-        if not self.is_valid_ip(seed.ip):
-            self.log(f"Skipping seed with invalid IP: {seed.ip}")
-            return
-        if seed.ip in self.visited_ips and duplicate_flag is None:
-            self.log(f"Skipping {seed.ip} (already visited).")
-            return
-        self.visited_ips.add(seed.ip)
-        # Updated allowed categories: only active/inactive phishing IPv4 are allowed now
-        allowed_categories = {
-            "whitelist_ipv6", "whitelist_ipv4",
-            "phishing_ipv6", "phishing_ipv4_active", "phishing_ipv4_inactive",
-            "ddos_ipv6", "ddos_ipv4",
-            "bruteforce_ipv6", "bruteforce_ipv4",
-            "spam_ipv6", "spam_ipv4",
-            "malicious_ipv6", "malicious_ipv4"
-        }
-        cat = seed.source_type.lower().strip()
-        if cat not in allowed_categories:
-            self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
-            return
-        if not discovered_source_url:
-            discovered_source_url = seed.get_url()
-
-        category_mapping = {
-            "whitelist": "0",
-            "phishing": "7",
-            "ddos": "4",
-            "bruteforce": "18",
-            "spam": "10",
-            "malicious": "20"
-        }
-        base_category = seed.source_type.split("_")[0].lower()
-        cat_label = category_mapping.get(base_category)
-        if cat_label is None:
-            self.log("Invalid category base. Skipping...")
-            return
-
         try:
-            status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
-        except requests.exceptions.ConnectionError as ce:
-            status = f"WINERROR: {ce}"
-        if status is None:
-            self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
-            return
-        if duplicate_flag is None:
-            duplicate_flag = (seed.ip in self.visited_ips)
+            # Normalize and validate the IP
+            if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
+                seed.ip = urlparse(seed.ip).hostname
+            if self.my_public_ip and seed.ip == self.my_public_ip:
+                self.log(f"Skipping my own public IP: {seed.ip}")
+                return
+            if not self.is_valid_ip(seed.ip):
+                self.log(f"Skipping seed with invalid IP: {seed.ip}")
+                return
+            if seed.ip in self.visited_ips and duplicate_flag is None:
+                self.log(f"Skipping {seed.ip} (already visited).")
+                return
+            self.visited_ips.add(seed.ip)
 
-        if status.startswith("WINERROR"):
-            if duplicate_flag:
-                comment = f"WINERROR duplicate {seed.source_type} {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_duplicate_line(line)
-                else:
-                    self.write_bulk_duplicate_line(line)
-                self.log(f"WinError duplicate output written for {seed.ip}.")
-            else:
-                comment = f"WINERROR {seed.source_type} {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_winerror_whitelist_line(line)
-                    self.log(f"WinError whitelist output written for {seed.ip}.")
-                else:
-                    self.write_winerror_bulk_line(line)
-                    self.log(f"WinError bulk output written for {seed.ip}.")
-            return
-
-        if status.startswith("TIMEOUT"):
-            if duplicate_flag:
-                comment = f"TIMEOUT duplicate {seed.source_type} {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_duplicate_line(line)
-                else:
-                    self.write_bulk_duplicate_line(line)
-                self.log(f"Timeout duplicate output written for {seed.ip}.")
-            else:
-                comment = f"TIMEOUT {seed.source_type} {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_winerror_whitelist_line(line)
-                    self.log(f"Timeout whitelist output written for {seed.ip}.")
-                else:
-                    self.write_winerror_bulk_line(line)
-                    self.log(f"Timeout bulk output written for {seed.ip}.")
-            return
-
-        if status.startswith("potentially up"):
-            seed_verdict = {
-                "whitelist": "whitelist (auto verdict 7)",
-                "phishing": "phishing (auto verdict 8)",
-                "spam": "spam (auto verdict 9)",
-                "ddos": "ddos (auto verdict 10)",
-                "bruteforce": "bruteforce (auto verdict 11)",
-                "malicious": "malicious (auto verdict 12)"
-            }.get(base_category, seed.source_type)
-            if duplicate_flag:
-                comment = self.comment_template_nozeroday.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status
-                )
-            else:
-                comment = self.comment_template_zeroday.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status
-                )
-            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-            if duplicate_flag:
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_duplicate_line(line)
-                else:
-                    self.write_bulk_duplicate_line(line)
-                self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
-            else:
-                if cat.startswith("whitelist"):
-                    self.write_potentially_up_whitelist_line(line)
-                    self.log(f"Potentially Up (whitelist) output written for {seed.ip} with status {status}.")
-                else:
-                    self.write_potentially_up_bulk_line(line)
-                    self.log(f"Potentially Up (bulk) output written for {seed.ip} with status {status}.")
-            return
-
-        if status.startswith("potentially down"):
-            if duplicate_flag:
-                comment = f"Potentially down duplicate: {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_duplicate_line(line)
-                else:
-                    self.write_bulk_duplicate_line(line)
-                self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
-            else:
-                comment = f"Potentially down: {status}"
-                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_potentially_down_whitelist_line(line)
-                    self.log(f"Potentially Down (whitelist) output written for {seed.ip} with status {status}.")
-                else:
-                    self.write_potentially_down_bulk_line(line)
-                    self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
-            return
-
-        if status.startswith("up:"):
-            auto_verdict_mapping_confirmed = {
-                "whitelist": "whitelist (auto verdict 1)",
-                "phishing": "phishing (auto verdict 2)",
-                "spam": "spam (auto verdict 3)",
-                "ddos": "ddos (auto verdict 4)",
-                "bruteforce": "bruteforce (auto verdict 5)",
-                "malicious": "malicious (auto verdict 6)"
+            # Allowed categories: only separate phishing IPv4 types are used now.
+            allowed_categories = {
+                "whitelist_ipv6", "whitelist_ipv4",
+                "phishing_ipv6", "phishing_ipv4_active", "phishing_ipv4_inactive",
+                "ddos_ipv6", "ddos_ipv4",
+                "bruteforce_ipv6", "bruteforce_ipv4",
+                "spam_ipv6", "spam_ipv4",
+                "malicious_ipv6", "malicious_ipv4"
             }
-            seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
-            similarity_str = ""
-            if discovered_source_url:
-                new_url = seed.get_url()
-                if new_url != discovered_source_url:
-                    new_content = self.fetch_content(new_url)
-                    ref_content = self.fetch_content(discovered_source_url)
-                    if new_content and ref_content:
-                        similarity = compute_content_similarity(ref_content, new_content)
-                        similarity_str = f" HTML similarity: {similarity:.2f}%"
+            cat = seed.source_type.lower().strip()
+            if cat not in allowed_categories:
+                self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
+                return
+            if not discovered_source_url:
+                discovered_source_url = seed.get_url()
+
+            # Map base category to a numeric label
+            category_mapping = {
+                "whitelist": "0",
+                "phishing": "7",
+                "ddos": "4",
+                "bruteforce": "18",
+                "spam": "10",
+                "malicious": "20"
+            }
+            base_category = seed.source_type.split("_")[0].lower()
+            cat_label = category_mapping.get(base_category)
+            if cat_label is None:
+                self.log("Invalid category base. Skipping...")
+                return
+
+            try:
+                status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
+            except requests.exceptions.ConnectionError as ce:
+                status = f"WINERROR: {ce}"
+            if status is None:
+                self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
+                return
+            if duplicate_flag is None:
+                duplicate_flag = (seed.ip in self.visited_ips)
+
+            # Process one condition per IP and return immediately after handling.
+            if status.startswith("WINERROR"):
+                if duplicate_flag:
+                    comment = f"WINERROR duplicate {seed.source_type} {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_duplicate_line(line)
+                    else:
+                        self.write_bulk_duplicate_line(line)
+                    self.log(f"WinError duplicate output written for {seed.ip}.")
                 else:
-                    similarity_str = ""
-            if duplicate_flag:
-                comment = self.comment_template_nozeroday.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status
-                )
-            else:
-                comment = self.comment_template_zeroday_up.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status,
-                    similarity=similarity_str
-                )
-            line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-            if duplicate_flag:
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_duplicate_line(line)
+                    comment = f"WINERROR {seed.source_type} {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_winerror_whitelist_line(line)
+                        self.log(f"WinError whitelist output written for {seed.ip}.")
+                    else:
+                        self.write_winerror_bulk_line(line)
+                        self.log(f"WinError bulk output written for {seed.ip}.")
+                return
+
+            elif status.startswith("TIMEOUT"):
+                if duplicate_flag:
+                    comment = f"TIMEOUT duplicate {seed.source_type} {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_duplicate_line(line)
+                    else:
+                        self.write_bulk_duplicate_line(line)
+                    self.log(f"Timeout duplicate output written for {seed.ip}.")
                 else:
-                    self.write_bulk_duplicate_line(line)
-                self.log(f"Duplicate output written for {seed.ip} with status {status}.")
-            else:
-                if cat.startswith("whitelist"):
-                    self.write_whitelist_line(line)
-                    self.log(f"Whitelist output written for {seed.ip}.")
+                    comment = f"TIMEOUT {seed.source_type} {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_winerror_whitelist_line(line)
+                        self.log(f"Timeout whitelist output written for {seed.ip}.")
+                    else:
+                        self.write_winerror_bulk_line(line)
+                        self.log(f"Timeout bulk output written for {seed.ip}.")
+                return
+
+            elif status.startswith("potentially up"):
+                seed_verdict = {
+                    "whitelist": "whitelist (auto verdict 7)",
+                    "phishing": "phishing (auto verdict 8)",
+                    "spam": "spam (auto verdict 9)",
+                    "ddos": "ddos (auto verdict 10)",
+                    "bruteforce": "bruteforce (auto verdict 11)",
+                    "malicious": "malicious (auto verdict 12)"
+                }.get(base_category, seed.source_type)
+                if duplicate_flag:
+                    comment = self.comment_template_nozeroday.format(
+                        ip=seed.ip,
+                        discovered_url=discovered_source_url,
+                        verdict=seed_verdict,
+                        status=status
+                    )
                 else:
-                    self.write_bulk_line(line)
-                    self.log(f"Bulk output written for {seed.ip}.")
-        with self.lock:
-            self.processed_count += 1
-            self.update_progress()
+                    comment = self.comment_template_zeroday.format(
+                        ip=seed.ip,
+                        discovered_url=discovered_source_url,
+                        verdict=seed_verdict,
+                        status=status
+                    )
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                if duplicate_flag:
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_duplicate_line(line)
+                    else:
+                        self.write_bulk_duplicate_line(line)
+                    self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
+                else:
+                    if cat.startswith("whitelist"):
+                        self.write_potentially_up_whitelist_line(line)
+                        self.log(f"Potentially Up (whitelist) output written for {seed.ip} with status {status}.")
+                    else:
+                        self.write_potentially_up_bulk_line(line)
+                        self.log(f"Potentially Up (bulk) output written for {seed.ip} with status {status}.")
+                return
+
+            elif status.startswith("potentially down"):
+                if duplicate_flag:
+                    comment = f"Potentially down duplicate: {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_duplicate_line(line)
+                    else:
+                        self.write_bulk_duplicate_line(line)
+                    self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
+                else:
+                    comment = f"Potentially down: {status}"
+                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    if cat.startswith("whitelist"):
+                        self.write_potentially_down_whitelist_line(line)
+                        self.log(f"Potentially Down (whitelist) output written for {seed.ip} with status {status}.")
+                    else:
+                        self.write_potentially_down_bulk_line(line)
+                        self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
+                return
+
+            elif status.startswith("up:"):
+                auto_verdict_mapping_confirmed = {
+                    "whitelist": "whitelist (auto verdict 1)",
+                    "phishing": "phishing (auto verdict 2)",
+                    "spam": "spam (auto verdict 3)",
+                    "ddos": "ddos (auto verdict 4)",
+                    "bruteforce": "bruteforce (auto verdict 5)",
+                    "malicious": "malicious (auto verdict 6)"
+                }
+                seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
+                similarity_str = ""
+                if discovered_source_url:
+                    new_url = seed.get_url()
+                    if new_url != discovered_source_url:
+                        new_content = self.fetch_content(new_url)
+                        ref_content = self.fetch_content(discovered_source_url)
+                        if new_content and ref_content:
+                            similarity = compute_content_similarity(ref_content, new_content)
+                            similarity_str = f" HTML similarity: {similarity:.2f}%"
+                    else:
+                        similarity_str = ""
+                if duplicate_flag:
+                    comment = self.comment_template_nozeroday.format(
+                        ip=seed.ip,
+                        discovered_url=discovered_source_url,
+                        verdict=seed_verdict,
+                        status=status
+                    )
+                else:
+                    comment = self.comment_template_zeroday_up.format(
+                        ip=seed.ip,
+                        discovered_url=discovered_source_url,
+                        verdict=seed_verdict,
+                        status=status,
+                        similarity=similarity_str
+                    )
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                if duplicate_flag:
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_duplicate_line(line)
+                    else:
+                        self.write_bulk_duplicate_line(line)
+                    self.log(f"Duplicate output written for {seed.ip} with status {status}.")
+                else:
+                    if cat.startswith("whitelist"):
+                        self.write_whitelist_line(line)
+                        self.log(f"Whitelist output written for {seed.ip}.")
+                    else:
+                        self.write_bulk_line(line)
+                        self.log(f"Bulk output written for {seed.ip}.")
+                return
+        finally:
+            with self.lock:
+                self.processed_count += 1
+                self.update_progress()
 
     def get_my_public_ip(self):
         try:
