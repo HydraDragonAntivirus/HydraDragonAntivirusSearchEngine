@@ -637,7 +637,8 @@ class ScannerWorker(QObject):
             return
 
         try:
-            status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
+            status = self.is_active_and_static(seed.ip, seed.port, category=cat,
+                                               discovered_source_url=discovered_source_url)
         except requests.exceptions.ConnectionError as ce:
             status = f"WINERROR: {ce}"
         if status is None:
@@ -698,12 +699,20 @@ class ScannerWorker(QObject):
                 "bruteforce": "bruteforce (auto verdict 11)",
                 "malicious": "malicious (auto verdict 12)"
             }.get(base_category, seed.source_type)
-            comment = self.comment_template_zeroday.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status
-            )
+            if duplicate_flag:
+                comment = self.comment_template_nozeroday.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status
+                )
+            else:
+                comment = self.comment_template_zeroday.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status
+                )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if duplicate_flag:
                 if cat.startswith("whitelist"):
@@ -755,18 +764,30 @@ class ScannerWorker(QObject):
             similarity_str = ""
             if discovered_source_url:
                 new_url = seed.get_url()
-                new_content = self.fetch_content(new_url)
-                ref_content = self.fetch_content(discovered_source_url)
-                if new_content and ref_content:
-                    similarity = compute_content_similarity(ref_content, new_content)
-                    similarity_str = f" HTML similarity: {similarity:.2f}%"
-            comment = self.comment_template_zeroday_up.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status,
-                similarity=similarity_str
-            )
+                # Only compute similarity if the URLs are different
+                if new_url != discovered_source_url:
+                    new_content = self.fetch_content(new_url)
+                    ref_content = self.fetch_content(discovered_source_url)
+                    if new_content and ref_content:
+                        similarity = compute_content_similarity(ref_content, new_content)
+                        similarity_str = f" HTML similarity: {similarity:.2f}%"
+                else:
+                    similarity_str = ""
+            if duplicate_flag:
+                comment = self.comment_template_nozeroday.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status
+                )
+            else:
+                comment = self.comment_template_zeroday_up.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status,
+                    similarity=similarity_str
+                )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if duplicate_flag:
                 if cat.startswith("whitelist"):
@@ -1012,7 +1033,7 @@ class MainWindow(QMainWindow):
         add_plain_field("Category Malicious:", "CategoryMalicious", "20")
         add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
         add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
-        add_plain_field("Comment Template Zeroday:", "CommentTemplateZerodayUp", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
+        add_plain_field("Comment Template Zeroday Up:", "CommentTemplateZerodayUp", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
         add_plain_field("Enable ZeroDay Executable Detection (true/false):", "ZeroDayExecutableDetection", "true")
         add_field("ZeroDay Executable Output CSV File:", "ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
