@@ -52,10 +52,8 @@ logging.basicConfig(
 
 log_file = os.path.join(log_dir, "antiviruscritical.log")
 
-# Redirect stdout to console log
+# Redirect stdout and stderr to console log
 sys.stdout = open(log_file, "w", encoding="utf-8", errors="ignore")
-
-# Redirect stderr to console log
 sys.stderr = open(log_file, "w", encoding="utf-8", errors="ignore")
 
 # -----------------------------
@@ -113,7 +111,6 @@ def compute_content_similarity(text1, text2):
 # Helper: Return canonical forms for an IP address.
 # -----------------------------
 def canonical_urls(ip):
-    # Return the canonical http and https URLs (without trailing slash)
     return f"http://{ip}".rstrip('/'), f"https://{ip}".rstrip('/')
 
 # -----------------------------
@@ -166,48 +163,29 @@ class ScannerWorker(QObject):
             self.log(f"CsvMaxLines set to {self.user_csv_max_lines} but enforced as 10,000.")
         self.comment_template_zeroday = settings.get(
             "CommentTemplateZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, Zeroday: Yes it's not duplicate"
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate"
         )
         self.comment_template_nozeroday = settings.get(
             "CommentTemplateNoZeroday",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, Zeroday: No it's duplicate"
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate"
         )
         self.comment_template_zeroday_up = settings.get(
             "CommentTemplateZerodayUp",
-            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate"
+            "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate"
         )
         self.request_timeout = int(settings.get("RequestTimeout", 10))
         self.out_bulk_csv = settings.get("BulkOutputFile", default_bulk)
         self.out_whitelist_csv = settings.get("WhiteListOutputFile", default_whitelist)
-        # New output files for potentially up or down (non-duplicate) responses
         self.out_potentially_up_bulk_csv = settings.get("PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
         self.out_potentially_down_bulk_csv = settings.get("PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
         self.out_potentially_up_whitelist_csv = settings.get("PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         self.out_potentially_down_whitelist_csv = settings.get("PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
-        # New output files for potentially up or down duplicate responses
-        self.out_potentially_up_bulk_duplicate_csv = settings.get("PotentiallyBulkDuplicate1OutputFile", os.path.join(output_dir, "potentially_up_bulk_duplicate.csv"))
-        self.out_potentially_down_bulk_duplicate_csv = settings.get("PotentiallyDownBulkDuplicateOutputFile", os.path.join(output_dir, "potentially_down_bulk_duplicate.csv"))
-        self.out_potentially_up_whitelist_duplicate_csv = settings.get("PotentiallyUpWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_up_whitelist_duplicate.csv"))
-        self.out_potentially_down_whitelist_duplicate_csv = settings.get("PotentiallyDownWhitelistDuplicateOutputFile", os.path.join(output_dir, "potentially_down_whitelist_duplicate.csv"))
-
         self.out_winerror_bulk_csv = settings.get("WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         self.out_winerror_whitelist_csv = settings.get("WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        self.out_winerror_bulk_duplicate_csv = settings.get("WinErrorBulkDuplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
-        self.out_winerror_whitelist_duplicate_csv = settings.get("WinErrorWhitelistDuplicateOutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
 
-        # Duplicate file paths from settings.
-        self.duplicate_whitelist_file_ipv4 = settings.get("DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
-        self.duplicate_whitelist_file_ipv6 = settings.get("DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
-        self.duplicate_phishing_file_ipv4 = settings.get("DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
-        self.duplicate_phishing_file_ipv6 = settings.get("DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
-        self.duplicate_ddos_file_ipv4 = settings.get("DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
-        self.duplicate_ddos_file_ipv6 = settings.get("DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
-        self.duplicate_bruteforce_file_ipv4 = settings.get("DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
-        self.duplicate_bruteforce_file_ipv6 = settings.get("DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
-        self.duplicate_spam_file_ipv4 = settings.get("DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
-        self.duplicate_spam_file_ipv6 = settings.get("DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
-        self.duplicate_malicious_file_ipv4 = settings.get("DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
-        self.duplicate_malicious_file_ipv6 = settings.get("DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
+        # New duplicate output files (do not split by IPv4/IPv6)
+        self.out_bulk_duplicate_csv = settings.get("BulkDuplicateOutputFile", os.path.join(output_dir, "bulk_duplicates.csv"))
+        self.out_whitelist_duplicate_csv = settings.get("WhitelistDuplicateOutputFile", os.path.join(output_dir, "whitelist_duplicates.csv"))
 
         self.zeroday_exe_enabled = settings.get("ZeroDayExecutableDetection", "false").lower() == "true"
         self.out_zeroday_exe_csv = settings.get("ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
@@ -220,7 +198,6 @@ class ScannerWorker(QObject):
         self.bulk_file_index = 0
         self.whitelist_file_index = 0
         self.out_winerror_bulk_file_index = 0
-        self.out_winerror_bulk_duplicate_file_index = 0
         self.potentially_up_bulk_duplicate_file_index = 0
         self.potentially_down_bulk_duplicate_file_index = 0
         self.processed_count = 0
@@ -248,7 +225,9 @@ class ScannerWorker(QObject):
             self.out_potentially_up_whitelist_csv,
             self.out_potentially_down_whitelist_csv,
             self.out_winerror_bulk_csv,
-            self.out_winerror_whitelist_csv
+            self.out_winerror_whitelist_csv,
+            self.out_bulk_duplicate_csv,
+            self.out_whitelist_duplicate_csv
         }
         for filename in unique_files:
             directory = os.path.dirname(filename)
@@ -257,7 +236,7 @@ class ScannerWorker(QObject):
 
         header = "IP,Categories,ReportDate,Comment\n"
 
-        # Open non-duplicate output files (unchanged)
+        # Open non-duplicate output files
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
         self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
@@ -265,52 +244,35 @@ class ScannerWorker(QObject):
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
 
-        # Write header only once to each non-duplicate file
         for file in [self.bulk_file, self.whitelist_file,
                      self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
                      self.out_winerror_bulk_file, self.out_winerror_whitelist_file]:
             file.write(header)
             file.flush()
 
-        # Initialize duplicate file (all duplicate entries are written here)
-        self.out_duplicate_csv = os.path.join(output_dir, "duplicates.csv")
-        self.duplicate_file = open(self.out_duplicate_csv, "w", encoding="utf-8")
-        self.duplicate_file.write(header)
-        self.duplicate_file.flush()
-        self.duplicate_line_count = 1
-        self.duplicate_file_size = len(header.encode("utf-8"))
-        self.duplicate_file_index = 0
+        # Open duplicate files (one for bulk and one for whitelist)
+        self.bulk_duplicate_file = open(self.out_bulk_duplicate_csv, "w", encoding="utf-8")
+        self.bulk_duplicate_file.write(header)
+        self.bulk_duplicate_file.flush()
+        self.bulk_duplicate_line_count = 1
+        self.bulk_duplicate_file_size = len(header.encode("utf-8"))
+        self.bulk_duplicate_file_index = 0
 
-        # Initialize file sizes and line counts for non-duplicate files
-        self.bulk_file_size = len(header.encode("utf-8"))
-        self.whitelist_file_size = len(header.encode("utf-8"))
-        self.potentially_up_whitelist_file_size = len(header.encode("utf-8"))
-        self.potentially_down_whitelist_file_size = len(header.encode("utf-8"))
-        self.out_winerror_bulk_file_size = len(header.encode("utf-8"))
-        self.out_winerror_whitelist_file_size = len(header.encode("utf-8"))
-
-        self.bulk_line_count = 1
-        self.whitelist_line_count = 1
-        self.potentially_up_whitelist_line_count = 1
-        self.potentially_down_whitelist_line_count = 1
-        self.out_winerror_bulk_line_count = 1
-        self.out_winerror_whitelist_line_count = 1
+        self.whitelist_duplicate_file = open(self.out_whitelist_duplicate_csv, "w", encoding="utf-8")
+        self.whitelist_duplicate_file.write(header)
+        self.whitelist_duplicate_file.flush()
+        self.whitelist_duplicate_line_count = 1
+        self.whitelist_duplicate_file_size = len(header.encode("utf-8"))
+        self.whitelist_duplicate_file_index = 0
 
     def close_csv_files(self):
-        if self.bulk_file:
-            self.bulk_file.close()
-        if self.whitelist_file:
-            self.whitelist_file.close()
-        if self.potentially_up_whitelist_file:
-            self.potentially_up_whitelist_file.close()
-        if self.potentially_down_whitelist_file:
-            self.potentially_down_whitelist_file.close()
-        if self.out_winerror_bulk_file:
-            self.out_winerror_bulk_file.close()
-        if self.out_winerror_whitelist_file:
-            self.out_winerror_whitelist_file.close()
-        if hasattr(self, 'duplicate_file') and self.duplicate_file:
-            self.duplicate_file.close()
+        for f in [getattr(self, attr, None) for attr in [
+            "bulk_file", "whitelist_file", "potentially_up_whitelist_file",
+            "potentially_down_whitelist_file", "out_winerror_bulk_file", "out_winerror_whitelist_file",
+            "bulk_duplicate_file", "whitelist_duplicate_file"
+        ]]:
+            if f:
+                f.close()
         if self.zeroday_exe_enabled and hasattr(self, 'zeroday_exe_file') and self.zeroday_exe_file:
             self.zeroday_exe_file.close()
 
@@ -318,7 +280,6 @@ class ScannerWorker(QObject):
         try:
             response = requests.get(url, timeout=self.request_timeout, stream=True)
             if response.status_code == 200:
-                # Read only the first two bytes to check for the "MZ" signature
                 header_bytes = response.raw.read(2)
                 if header_bytes == b'MZ':
                     report_date = datetime.now(timezone.utc).isoformat()
@@ -332,24 +293,18 @@ class ScannerWorker(QObject):
     def write_zeroday_exe_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            # (For brevity, rotation logic is not included; you can add it similar to the other CSV writers)
             self.zeroday_exe_file.write(line)
             self.zeroday_exe_file.flush()
-            self.zeroday_exe_line_count += 1
-            self.zeroday_exe_file_size += line_bytes
 
     def write_winerror_whitelist_line(self, line):
         with self.lock:
             self.out_winerror_whitelist_file.write(line)
             self.out_winerror_whitelist_file.flush()
-            self.out_winerror_whitelist_line_count += 1
-            self.out_winerror_whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
 
     def write_winerror_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.out_winerror_bulk_line_count >= self.csv_max_lines or (self.out_winerror_bulk_file_size + line_bytes) >= self.csv_max_size:
+            if getattr(self, "out_winerror_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "out_winerror_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
                 self.out_winerror_bulk_file.close()
                 self.out_winerror_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_winerror_bulk_csv)
@@ -363,82 +318,53 @@ class ScannerWorker(QObject):
                 self.log(f"WinError Bulk file rotated; new file: {new_filename}")
             self.out_winerror_bulk_file.write(line)
             self.out_winerror_bulk_file.flush()
-            self.out_winerror_bulk_line_count += 1
-            self.out_winerror_bulk_file_size += line_bytes
-            self.total_seeds += 1
+            self.out_winerror_bulk_line_count = getattr(self, "out_winerror_bulk_line_count", 1) + 1
 
-    def write_winerror_whitelist_duplicate_line(self, line):
-        with self.lock:
-            self.out_winerror_whitelist_duplicate_file.write(line)
-            self.out_winerror_whitelist_duplicate_file.flush()
-            self.out_winerror_whitelist_duplicate_line_count += 1
-            self.out_winerror_whitelist_duplicate_file_size += len(line.encode("utf-8"))
-
-    def write_winerror_bulk_duplicate_line(self, line):
+    # New duplicate file writers (one for bulk and one for whitelist)
+    def write_bulk_duplicate_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.out_winerror_bulk_duplicate_line_count >= self.csv_max_lines or (self.out_winerror_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.out_winerror_bulk_duplicate_file.close()
-                self.out_winerror_bulk_duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_winerror_bulk_duplicate_csv)
-                new_filename = f"{base}_{self.out_winerror_bulk_duplicate_file_index}{ext}"
-                self.out_winerror_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
+            if self.bulk_duplicate_line_count >= self.csv_max_lines or (self.bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.bulk_duplicate_file.close()
+                self.bulk_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_bulk_duplicate_csv)
+                new_filename = f"{base}_{self.bulk_duplicate_file_index}{ext}"
+                self.bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.out_winerror_bulk_duplicate_file.write(header)
-                self.out_winerror_bulk_duplicate_file.flush()
-                self.out_winerror_bulk_duplicate_line_count = 1
-                self.out_winerror_bulk_duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"WinError Bulk Duplicate file rotated; new file: {new_filename}")
-            self.out_winerror_bulk_duplicate_file.write(line)
-            self.out_winerror_bulk_duplicate_file.flush()
-            self.out_winerror_bulk_duplicate_line_count += 1
-            self.out_winerror_bulk_duplicate_file_size += line_bytes
+                self.bulk_duplicate_file.write(header)
+                self.bulk_duplicate_file.flush()
+                self.bulk_duplicate_line_count = 1
+                self.bulk_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"Bulk duplicate file rotated; new file: {new_filename}")
+            self.bulk_duplicate_file.write(line)
+            self.bulk_duplicate_file.flush()
+            self.bulk_duplicate_line_count += 1
+            self.bulk_duplicate_file_size += line_bytes
 
-    # New helper methods for duplicate potentially outputs:
-    def write_potentially_up_bulk_duplicate_line(self, line):
+    def write_whitelist_duplicate_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.potentially_up_bulk_duplicate_line_count >= self.csv_max_lines or (self.potentially_up_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.potentially_up_bulk_duplicate_file.close()
-                self.potentially_up_bulk_duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_potentially_up_bulk_duplicate_csv)
-                new_filename = f"{base}_{self.potentially_up_bulk_duplicate_file_index}{ext}"
-                self.potentially_up_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
+            if self.whitelist_duplicate_line_count >= self.csv_max_lines or (self.whitelist_duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.whitelist_duplicate_file.close()
+                self.whitelist_duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_whitelist_duplicate_csv)
+                new_filename = f"{base}_{self.whitelist_duplicate_file_index}{ext}"
+                self.whitelist_duplicate_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                self.potentially_up_bulk_duplicate_file.write(header)
-                self.potentially_up_bulk_duplicate_file.flush()
-                self.potentially_up_bulk_duplicate_line_count = 1
-                self.potentially_up_bulk_duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"potentially_bulkup_duplicate file rotated; new file: {new_filename}")
-            self.potentially_up_bulk_duplicate_file.write(line)
-            self.potentially_up_bulk_duplicate_file.flush()
-            self.potentially_up_bulk_duplicate_line_count += 1
-            self.potentially_up_bulk_duplicate_file_size += line_bytes
-
-    def write_potentially_down_bulk_duplicate_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.potentially_down_bulk_duplicate_line_count >= self.csv_max_lines or (self.potentially_down_bulk_duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.potentially_down_bulk_duplicate_file.close()
-                self.potentially_down_bulk_duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_potentially_down_bulk_duplicate_csv)
-                new_filename = f"{base}_{self.potentially_down_bulk_duplicate_file_index}{ext}"
-                self.potentially_down_bulk_duplicate_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.potentially_down_bulk_duplicate_file.write(header)
-                self.potentially_down_bulk_duplicate_file.flush()
-                self.potentially_down_bulk_duplicate_line_count = 1
-                self.potentially_down_bulk_duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"potentially_bulkdown_duplicate file rotated; new file: {new_filename}")
-            self.potentially_down_bulk_duplicate_file.write(line)
-            self.potentially_down_bulk_duplicate_file.flush()
-            self.potentially_down_bulk_duplicate_line_count += 1
+                self.whitelist_duplicate_file.write(header)
+                self.whitelist_duplicate_file.flush()
+                self.whitelist_duplicate_line_count = 1
+                self.whitelist_duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"Whitelist duplicate file rotated; new file: {new_filename}")
+            self.whitelist_duplicate_file.write(line)
+            self.whitelist_duplicate_file.flush()
+            self.whitelist_duplicate_line_count += 1
+            self.whitelist_duplicate_file_size += line_bytes
 
     def write_potentially_up_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if (self.potentially_up_bulk_line_count >= self.csv_max_lines or
-                    (self.potentially_up_bulk_file_size + line_bytes) >= self.csv_max_size):
+            if getattr(self, "potentially_up_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "potentially_up_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
                 self.potentially_up_bulk_file.close()
                 self.potentially_up_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_potentially_up_bulk_csv)
@@ -449,16 +375,15 @@ class ScannerWorker(QObject):
                 self.potentially_up_bulk_file.flush()
                 self.potentially_up_bulk_line_count = 1
                 self.potentially_up_bulk_file_size = len(header.encode("utf-8"))
-                self.log(f"potentially_bulkup file rotated; new file: {new_filename}")
+                self.log(f"Potentially Up Bulk file rotated; new file: {new_filename}")
             self.potentially_up_bulk_file.write(line)
             self.potentially_up_bulk_file.flush()
-            self.potentially_up_bulk_line_count += 1
+            self.potentially_up_bulk_line_count = getattr(self, "potentially_up_bulk_line_count", 1) + 1
 
     def write_potentially_down_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if (self.potentially_down_bulk_line_count >= self.csv_max_lines or
-                    (self.potentially_down_bulk_file_size + line_bytes) >= self.csv_max_size):
+            if getattr(self, "potentially_down_bulk_line_count", 1) >= self.csv_max_lines or (getattr(self, "potentially_down_bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
                 self.potentially_down_bulk_file.close()
                 self.potentially_down_bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_potentially_down_bulk_csv)
@@ -469,47 +394,25 @@ class ScannerWorker(QObject):
                 self.potentially_down_bulk_file.flush()
                 self.potentially_down_bulk_line_count = 1
                 self.potentially_down_bulk_file_size = len(header.encode("utf-8"))
-                self.log(f"potentially_bulkdown file rotated; new file: {new_filename}")
+                self.log(f"Potentially Down Bulk file rotated; new file: {new_filename}")
             self.potentially_down_bulk_file.write(line)
             self.potentially_down_bulk_file.flush()
-            self.potentially_down_bulk_line_count += 1
+            self.potentially_down_bulk_line_count = getattr(self, "potentially_down_bulk_line_count", 1) + 1
 
     def write_potentially_up_whitelist_line(self, line):
         with self.lock:
             self.potentially_up_whitelist_file.write(line)
             self.potentially_up_whitelist_file.flush()
-            self.potentially_up_whitelist_line_count += 1
-            self.potentially_up_whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
 
     def write_potentially_down_whitelist_line(self, line):
         with self.lock:
             self.potentially_down_whitelist_file.write(line)
             self.potentially_down_whitelist_file.flush()
-            self.potentially_down_whitelist_line_count += 1
-            self.potentially_down_whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
-
-    def write_potentially_up_whitelist_duplicate_line(self, line):
-        with self.lock:
-            self.potentially_up_whitelist_duplicate_file.write(line)
-            self.potentially_up_whitelist_duplicate_file.flush()
-            self.potentially_up_whitelist_duplicate_line_count += 1
-            self.potentially_up_whitelist_duplicate_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
-
-    def write_potentially_down_whitelist_duplicate_line(self, line):
-        with self.lock:
-            self.potentially_down_whitelist_duplicate_file.write(line)
-            self.potentially_down_whitelist_duplicate_file.flush()
-            self.potentially_down_whitelist_duplicate_line_count += 1
-            self.potentially_down_whitelist_duplicate_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
 
     def write_bulk_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
-            if self.bulk_line_count >= self.csv_max_lines or (self.bulk_file_size + line_bytes) >= self.csv_max_size:
+            if self.bulk_line_count >= self.csv_max_lines or (getattr(self, "bulk_file_size", 0) + line_bytes) >= self.csv_max_size:
                 self.bulk_file.close()
                 self.bulk_file_index += 1
                 base, ext = os.path.splitext(self.out_bulk_csv)
@@ -524,37 +427,11 @@ class ScannerWorker(QObject):
             self.bulk_file.write(line)
             self.bulk_file.flush()
             self.bulk_line_count += 1
-            self.bulk_file_size += line_bytes
-            self.total_seeds += 1
 
     def write_whitelist_line(self, line):
         with self.lock:
             self.whitelist_file.write(line)
             self.whitelist_file.flush()
-            self.whitelist_line_count += 1
-            self.whitelist_file_size += len(line.encode("utf-8"))
-            self.total_seeds += 1
-
-    def write_duplicate_combined_line(self, line):
-        with self.lock:
-            line_bytes = len(line.encode("utf-8"))
-            if self.duplicate_line_count >= self.csv_max_lines or (
-                    self.duplicate_file_size + line_bytes) >= self.csv_max_size:
-                self.duplicate_file.close()
-                self.duplicate_file_index += 1
-                base, ext = os.path.splitext(self.out_duplicate_csv)
-                new_filename = f"{base}_{self.duplicate_file_index}{ext}"
-                self.duplicate_file = open(new_filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                self.duplicate_file.write(header)
-                self.duplicate_file.flush()
-                self.duplicate_line_count = 1
-                self.duplicate_file_size = len(header.encode("utf-8"))
-                self.log(f"Duplicate file rotated; new file: {new_filename}")
-            self.duplicate_file.write(line)
-            self.duplicate_file.flush()
-            self.duplicate_line_count += 1
-            self.duplicate_file_size += line_bytes
 
     def run_scan(self):
         self.log("Loading definitions...")
@@ -569,21 +446,18 @@ class ScannerWorker(QObject):
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
 
-        # Enqueue all initial seeds
         for seed in seeds:
             self.seed_queue.put(seed)
 
-        # Define a consumer that continuously takes seeds from the queue and submits them
         def seed_consumer():
             while True:
                 try:
-                    seed = self.seed_queue.get(timeout=3)  # timeout allows exit when done
+                    seed = self.seed_queue.get(timeout=3)
                 except queue.Empty:
                     break
                 self.threadpool.start(SeedRunnable(seed, self))
                 self.seed_queue.task_done()
 
-        # Start a fixed number of consumer threads (adjust num_consumers as needed)
         num_consumers = 10
         consumer_threads = []
         for i in range(num_consumers):
@@ -591,11 +465,8 @@ class ScannerWorker(QObject):
             t.start()
             consumer_threads.append(t)
 
-        # Wait for all seeds in the queue to be processed
         self.seed_queue.join()
-        # Wait for all thread pool tasks to complete
         self.threadpool.waitForDone()
-        # Optionally, join the consumer threads
         for t in consumer_threads:
             t.join()
 
@@ -604,9 +475,6 @@ class ScannerWorker(QObject):
         self.finished_signal.emit()
 
     def fetch_content(self, url):
-        """
-        Fetches the text content from a given URL.
-        """
         try:
             response = requests.get(url, timeout=self.request_timeout, allow_redirects=True)
             return response.text
@@ -618,7 +486,6 @@ class ScannerWorker(QObject):
         if timeout is None:
             timeout = self.request_timeout
 
-        # Construct URL based on IPv4 or IPv6 format
         if self.is_valid_ip(ip) == "ipv6":
             url = f"http://[{ip}]" + (f":{port}" if port else "")
         else:
@@ -643,7 +510,6 @@ class ScannerWorker(QObject):
         code = response.status_code
         code_str = f"{code:03d}"
 
-        # Initialize resource_urls so that it's always defined
         resource_urls = set()
 
         http_up_codes = [s.strip() for s in self.settings.get(
@@ -658,7 +524,6 @@ class ScannerWorker(QObject):
         ).split(",")]
 
         if code_str in http_up_codes:
-            # Process any redirects first
             if response.url.startswith("http://") or response.url.startswith("https://"):
                 parsed_ip = urlparse(response.url).hostname
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
@@ -666,14 +531,10 @@ class ScannerWorker(QObject):
                     new_seed = Seed(parsed_ip, category, port=port)
                     self.log(f"Queueing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                     self.seed_queue.put(new_seed)
-
-            # Extract IPs from the main HTML
             found_ips = self.extract_ip_and_port(response.text)
             for extracted_ip, extracted_port, ip_version in found_ips:
                 if ip_version == "ipv6":
-                    candidate = f"http://[{extracted_ip}]" if not (
-                                extracted_ip.startswith('[') and extracted_ip.endswith(
-                            ']')) else f"http://{extracted_ip[1:-1]}"
+                    candidate = f"http://[{extracted_ip}]" if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')) else f"http://{extracted_ip[1:-1]}"
                 else:
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
@@ -682,10 +543,8 @@ class ScannerWorker(QObject):
                 new_seed = Seed(discovered_ip, category, port=extracted_port)
                 self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
-
-            # Parse resource URLs from the HTML
             soup = BeautifulSoup(response.text, "html.parser")
-            resource_urls = set()  # reinitialize resource_urls here based on parsed content
+            resource_urls = set()
             for script in soup.find_all("script", src=True):
                 src = script.get("src")
                 if src:
@@ -698,8 +557,6 @@ class ScannerWorker(QObject):
                 src = img.get("src")
                 if src:
                     resource_urls.add(urljoin(url, src))
-
-            # Process additional resources
             for resource_url in resource_urls:
                 try:
                     res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
@@ -708,25 +565,19 @@ class ScannerWorker(QObject):
                         resource_ips = self.extract_ip_and_port(res.text)
                         for extracted_ip, extracted_port, ip_version in resource_ips:
                             if ip_version == "ipv6":
-                                candidate = f"http://[{extracted_ip}]" if not (
-                                            extracted_ip.startswith('[') and extracted_ip.endswith(
-                                        ']')) else f"http://{extracted_ip[1:-1]}"
+                                candidate = f"http://[{extracted_ip}]" if not (extracted_ip.startswith('[') and extracted_ip.endswith(']')) else f"http://{extracted_ip[1:-1]}"
                             else:
-                                candidate = extracted_ip if extracted_ip.lower().startswith(
-                                    "http") else "http://" + extracted_ip
+                                candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                             parse_extracted = urlparse(candidate).hostname
                             discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
-                            display_ip = f"[{discovered_ip}]" if self.is_valid_ip(
-                                discovered_ip) == "ipv6" else discovered_ip
+                            display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
                             new_seed = Seed(discovered_ip, category, port=extracted_port)
-                            self.log(
-                                f"Processing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
+                            self.log(f"Processing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
                             self.process_seed(new_seed, discovered_source_url=discovered_source_url)
                     else:
                         self.log(f"Resource {resource_url} returned HTTP {res.status_code}")
                 except:
                     pass
-
             return f"up: HTTP {code_str}"
 
         if self.zeroday_exe_enabled:
@@ -744,27 +595,18 @@ class ScannerWorker(QObject):
             return f"unhandled: HTTP {code_str}"
 
     def process_seed(self, seed, discovered_source_url=None, duplicate_flag=None):
-        # Normalize seed IP if it starts with http:// or https://
         if seed.ip.startswith("https://") or seed.ip.startswith("http://"):
             seed.ip = urlparse(seed.ip).hostname
-
-        # Skip if the seed IP matches our public IP
         if self.my_public_ip and seed.ip == self.my_public_ip:
             self.log(f"Skipping my own public IP: {seed.ip}")
             return
-
-        # Validate IP address
         if not self.is_valid_ip(seed.ip):
             self.log(f"Skipping seed with invalid IP: {seed.ip}")
             return
-
-        # Skip if already processed (global duplicate)
         if seed.ip in self.visited_ips and duplicate_flag is None:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
         self.visited_ips.add(seed.ip)
-
-        # Ensure the category is allowed
         cat = seed.source_type.lower().strip()
         allowed_categories = {
             "whitelist_ipv6", "whitelist_ipv4",
@@ -777,11 +619,9 @@ class ScannerWorker(QObject):
         if cat not in allowed_categories:
             self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
             return
-
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
-        # Compute the base category and label.
         base_category = seed.source_type.split("_")[0].lower()
         category_mapping = {
             "whitelist": "0",
@@ -796,16 +636,13 @@ class ScannerWorker(QObject):
             self.log("Invalid category base. Skipping...")
             return
 
-        # Determine status and catch WINERROR exceptions
         try:
-            status = self.is_active_and_static(seed.ip, seed.port, category=cat,
-                                               discovered_source_url=discovered_source_url)
+            status = self.is_active_and_static(seed.ip, seed.port, category=cat, discovered_source_url=discovered_source_url)
         except requests.exceptions.ConnectionError as ce:
             status = f"WINERROR: {ce}"
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
-
         if duplicate_flag is None:
             duplicate_flag = (seed.ip in self.visited_ips)
 
@@ -814,7 +651,10 @@ class ScannerWorker(QObject):
             if duplicate_flag:
                 comment = f"WINERROR duplicate {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_duplicate_combined_line(line)
+                if cat.startswith("whitelist"):
+                    self.write_whitelist_duplicate_line(line)
+                else:
+                    self.write_bulk_duplicate_line(line)
                 self.log(f"WinError duplicate output written for {seed.ip}.")
             else:
                 comment = f"WINERROR {seed.source_type} {status}"
@@ -832,7 +672,10 @@ class ScannerWorker(QObject):
             if duplicate_flag:
                 comment = f"TIMEOUT duplicate {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_duplicate_combined_line(line)
+                if cat.startswith("whitelist"):
+                    self.write_whitelist_duplicate_line(line)
+                else:
+                    self.write_bulk_duplicate_line(line)
                 self.log(f"Timeout duplicate output written for {seed.ip}.")
             else:
                 comment = f"TIMEOUT {seed.source_type} {status}"
@@ -863,7 +706,10 @@ class ScannerWorker(QObject):
             )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if duplicate_flag:
-                self.write_duplicate_combined_line(line)
+                if cat.startswith("whitelist"):
+                    self.write_whitelist_duplicate_line(line)
+                else:
+                    self.write_bulk_duplicate_line(line)
                 self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
@@ -879,7 +725,10 @@ class ScannerWorker(QObject):
             if duplicate_flag:
                 comment = f"Potentially down duplicate: {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                self.write_duplicate_combined_line(line)
+                if cat.startswith("whitelist"):
+                    self.write_whitelist_duplicate_line(line)
+                else:
+                    self.write_bulk_duplicate_line(line)
                 self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
             else:
                 comment = f"Potentially down: {status}"
@@ -903,32 +752,27 @@ class ScannerWorker(QObject):
                 "malicious": "malicious (auto verdict 6)"
             }
             seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
-            if discovered_source_url and "Firewall" in status:
-                comment = self.comment_template_zeroday.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status
-                )
-            else:
-                similarity_str = ""
-                if discovered_source_url:
-                    new_url = seed.get_url()
-                    new_content = self.fetch_content(new_url)
-                    ref_content = self.fetch_content(discovered_source_url)
-                    if new_content and ref_content:
-                        similarity = compute_content_similarity(ref_content, new_content)
-                        similarity_str = f" HTML similarity: {similarity:.2f}%"
-                comment = self.comment_template_zeroday_up.format(
-                    ip=seed.ip,
-                    discovered_url=discovered_source_url,
-                    verdict=seed_verdict,
-                    status=status,
-                    similarity=similarity_str
-                )
+            similarity_str = ""
+            if discovered_source_url:
+                new_url = seed.get_url()
+                new_content = self.fetch_content(new_url)
+                ref_content = self.fetch_content(discovered_source_url)
+                if new_content and ref_content:
+                    similarity = compute_content_similarity(ref_content, new_content)
+                    similarity_str = f" HTML similarity: {similarity:.2f}%"
+            comment = self.comment_template_zeroday_up.format(
+                ip=seed.ip,
+                discovered_url=discovered_source_url,
+                verdict=seed_verdict,
+                status=status,
+                similarity=similarity_str
+            )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
             if duplicate_flag:
-                self.write_duplicate_combined_line(line)
+                if cat.startswith("whitelist"):
+                    self.write_whitelist_duplicate_line(line)
+                else:
+                    self.write_bulk_duplicate_line(line)
                 self.log(f"Duplicate output written for {seed.ip} with status {status}.")
             else:
                 if cat.startswith("whitelist"):
@@ -937,7 +781,6 @@ class ScannerWorker(QObject):
                 else:
                     self.write_bulk_line(line)
                     self.log(f"Bulk output written for {seed.ip}.")
-
         with self.lock:
             self.processed_count += 1
             self.update_progress()
@@ -1015,7 +858,7 @@ class ScannerWorker(QObject):
 
     def load_seeds(self):
         seeds = []
-        loaded_ips = set()  # Replaces initial_ips dictionary
+        loaded_ips = set()
         file_category_mapping = {}
 
         def add_file(file, source_type):
@@ -1065,8 +908,7 @@ class ScannerWorker(QObject):
                 for ip in ips:
                     if ip not in self.visited_ips:
                         seeds.append(Seed(ip, source_type))
-                        self.visited_ips.add(ip)  # Track all loaded IPs in one set
-
+                        self.visited_ips.add(ip)
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
 
@@ -1100,21 +942,13 @@ class MainWindow(QMainWindow):
         settings_layout = QGridLayout(settings_group)
         row = 0
 
-        # Define keys for which a browse button should be added.
         file_keys = {
             "BulkOutputFile", "WhiteListOutputFile",
             "PotentiallyUpBulkOutputFile", "PotentiallyDownBulkOutputFile",
-            "PotentiallyUpBulkDuplicateOutputFile", "PotentiallyDownBulkDuplicateOutputFile",
             "PotentiallyUpWhiteListOutputFile", "PotentiallyDownWhiteListOutputFile",
-            "PotentiallyUpWhiteListDuplicateOutputFile", "PotentiallyDownWhiteListDuplicateOutputFile",
-            "DuplicateWhitelistFileIPv4", "DuplicateWhitelistFileIPv6",
-            "DuplicatePhishingFileIPv4", "DuplicatePhishingFileIPv6",
-            "DuplicateDDoSFileIPv4", "DuplicateDDoSFileIPv6",
-            "DuplicateBruteForceFileIPv4", "DuplicateBruteForceFileIPv6",
-            "DuplicateSpamFileIPv4", "DuplicateSpamFileIPv6",
-            "DuplicateMaliciousFileIPv4", "DuplicateMaliciousFileIPv6",
-            "WinErrorWhitelistOutputFile",  "WinErrorBulkOutputFile",
-            "WinErrorWhitelistDuplicateOutputFile", "WinErrorBulkDuplicateOutputFile",
+            "BulkDuplicateOutputFile", "WhitelistDuplicateOutputFile",
+            "WinErrorBulkOutputFile", "WinErrorWhitelistOutputFile",
+            "ZeroDayExecutableOutputFile",
             "MalwareFilesIPv6", "MalwareFilesIPv4",
             "BruteForceFilesIPv4", "BruteForceFilesIPv6",
             "SpamFilesIPv4", "SpamFilesIPv6",
@@ -1122,10 +956,8 @@ class MainWindow(QMainWindow):
             "DDoSFilesIPv4", "DDoSFilesIPv6",
             "WhiteListFilesIPv4", "WhiteListFilesIPv6"
         }
-
         directory_keys = {"LastPath"}
 
-        # Modified add_field: adds a browse button for file/directory selection if needed.
         def add_field(label_text, key, default=""):
             nonlocal row
             current_row = row
@@ -1162,26 +994,17 @@ class MainWindow(QMainWindow):
             self.fields[key] = le
             row += 1
 
-        # Basic settings (these remain unchanged)
         add_plain_field("Max Threads:", "MaxThreads", "1000")
-        # CSV file fields now use the modified add_field with browse button
         add_field("Bulk Report File:", "BulkOutputFile", default_bulk)
         add_field("Whitelist Report File:", "WhiteListOutputFile", default_whitelist)
-        # New fields for Potentially CSV outputs
         add_field("Potentially Bulk 1 Output File:", "PotentiallyUpBulkOutputFile", os.path.join(output_dir, "potentially_up_bulk.csv"))
         add_field("Potentially Bulk 2 Output File:", "PotentiallyDownBulkOutputFile", os.path.join(output_dir, "potentially_down_bulk.csv"))
         add_field("Potentially Whitelist 1 Output File:", "PotentiallyUpWhiteListOutputFile", os.path.join(output_dir, "potentially_up_whitelist.csv"))
         add_field("Potentially Whitelist 2 Output File:", "PotentiallyDownWhiteListOutputFile", os.path.join(output_dir, "potentially_down_whitelist.csv"))
-        add_field("Potentially Bulk Duplicate 1 Output File:", "PotentiallyUpBulkDuplicateOutputFile", os.path.join(output_dir, "potentially_up_bulk_duplicate.csv"))
-        add_field("Potentially Bulk Duplicate 2 Output File:", "PotentiallyDownBulkDuplicateOutputFile", os.path.join(output_dir, "potentially_down_bulk_duplicate.csv"))
-        add_field("Potentially Whitelist Duplicate 1 Output File:", "PotentiallyUpWhiteListDuplicateOutputFile", os.path.join(output_dir, "potentially_up_whitelist_duplicate.csv"))
-        add_field("Potentially Whitelist Duplicate 2 Output File:", "PotentiallyDownWhiteListDuplicateOutputFile", os.path.join(output_dir, "potentially_down_whitelist_duplicate.csv"))
-        # New fields for WinError CSV outputs:
+        add_field("Bulk Duplicate Output File:", "BulkDuplicateOutputFile", os.path.join(output_dir, "bulk_duplicates.csv"))
+        add_field("Whitelist Duplicate Output File:", "WhitelistDuplicateOutputFile", os.path.join(output_dir, "whitelist_duplicates.csv"))
         add_field("WinError Bulk Output File:", "WinErrorBulkOutputFile", os.path.join(output_dir, "winerror_bulk.csv"))
         add_field("WinError Whitelist Output File:", "WinErrorWhitelistOutputFile", os.path.join(output_dir, "winerror_whitelist.csv"))
-        add_field("WinError Bulk Duplicate Output File:", "WinErrorBulkDuplicateOutputFile", os.path.join(output_dir, "winerror_bulk_duplicate.csv"))
-        add_field("WinError Whitelist Duplicate Output File:", "WinErrorWhitelistDuplicateOutputFile", os.path.join(output_dir, "winerror_whitelist_duplicate.csv"))
-
         add_plain_field("Category Phishing:", "CategoryPhishing", "7")
         add_plain_field("Category DDoS:", "CategoryDDoS", "4")
         add_plain_field("Category BruteForce:", "CategoryBruteForce", "18")
@@ -1204,25 +1027,7 @@ class MainWindow(QMainWindow):
         add_field("DDoSFilesIPv4 (comma-separated):", "DDoSFilesIPv4", "website\\IPv4DDoS.txt")
         add_field("WhiteListFilesIPv6 (comma-separated):", "WhiteListFilesIPv6", "website\\IPv6WhiteList.txt")
         add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
-        # Last Directory Path uses a directory browse button
         add_field("Last Directory Path:", "LastPath", "website")
-        # Duplicate file fields (CSV) use browse buttons
-        add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
-        add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
-        add_field("Duplicate Phishing File IPv4:", "DuplicatePhishingFileIPv4", "output\\phishing_ipv4_duplicates.csv")
-        add_field("Duplicate Phishing File IPv6:", "DuplicatePhishingFileIPv6", "output\\phishing_ipv6_duplicates.csv")
-        add_field("Duplicate DDoS File IPv4:", "DuplicateDDoSFileIPv4", "output\\ddos_ipv4_duplicates.csv")
-        add_field("Duplicate DDoS File IPv6:", "DuplicateDDoSFileIPv6", "output\\ddos_ipv6_duplicates.csv")
-        add_field("Duplicate BruteForce File IPv4:", "DuplicateBruteForceFileIPv4", "output\\bruteforce_ipv4_duplicates.csv")
-        add_field("Duplicate BruteForce File IPv6:", "DuplicateBruteForceFileIPv6", "output\\bruteforce_ipv6_duplicates.csv")
-        add_field("Duplicate Spam File IPv4:", "DuplicateSpamFileIPv4", "output\\spam_ipv4_duplicates.csv")
-        add_field("Duplicate Spam File IPv6:", "DuplicateSpamFileIPv6", "output\\spam_ipv6_duplicates.csv")
-        add_field("Duplicate Malicious File IPv4:", "DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
-        add_field("Duplicate Malicious File IPv6:", "DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
-        # New UI fields for HTTP status code configuration
-        add_plain_field("HTTP Up Codes (comma-separated):", "HTTPUpCodes", "100,101,102,200,201,202,203,204,205,206,207,208,226,429")
-        add_plain_field("HTTP Potentially Down Codes (comma-separated):", "HTTPPotentiallyDownCodes", "400,402,404,409,410,412,414,415,416,451")
-        add_plain_field("HTTP Potentially Up Codes (comma-separated):", "HTTPPotentiallyUpCodes", "000,300,301,302,303,304,305,307,308,403,405,406,407,408,411,413,417,418,421,422,423,424,426,428,431,500,501,502,503,504,505,506,507,508,510,511")
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
