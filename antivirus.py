@@ -1451,7 +1451,6 @@ def main():
     except Exception as e:
         logging.critical(f"Critical error in main: {e}", exc_info=True)
 
-# (The rest of the application initialization and execution code remains unchanged.)
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyleSheet(antivirus_style)
