@@ -122,7 +122,8 @@ DEFAULT_SETTINGS = {
     "WhiteListFilesIPv6": "website/IPv6WhiteList.txt",
     "WhiteListFilesIPv4": "website/IPv4WhiteList.txt",
     "PhishingFilesIPv6": "",
-    "PhishingFilesIPv4": "website/IPv4PhishingActive.txt, website/IPv4PhishingInActive.txt",
+    "PhishingFilesIPv4Active": "website/IPv4PhishingActive.txt, website/IPv4PhishingInActive.txt",
+    "PhishingFilesIPv4InActive": "website/IPv4PhishingActive.txt, website/IPv4PhishingInActive.txt",
     "DDoSFilesIPv6": "website/IPv6DDoS.txt",
     "DDoSFilesIPv4": "website/IPv4DDoS.txt",
     "BruteForceFilesIPv6": "",
@@ -588,15 +589,16 @@ class ScannerWorker(QObject):
             self.log(f"Skipping {seed.ip} (already visited).")
             return
         self.visited_ips.add(seed.ip)
-        cat = seed.source_type.lower().strip()
+        # Updated allowed categories: only active/inactive phishing IPv4 are allowed now
         allowed_categories = {
             "whitelist_ipv6", "whitelist_ipv4",
-            "phishing_ipv6", "phishing_ipv4",
+            "phishing_ipv6", "phishing_ipv4_active", "phishing_ipv4_inactive",
             "ddos_ipv6", "ddos_ipv4",
             "bruteforce_ipv6", "bruteforce_ipv4",
             "spam_ipv6", "spam_ipv4",
             "malicious_ipv6", "malicious_ipv4"
         }
+        cat = seed.source_type.lower().strip()
         if cat not in allowed_categories:
             self.log(f"Category for {seed.ip} is '{cat}', which is not allowed. Skipping processing.")
             return
@@ -835,14 +837,17 @@ class ScannerWorker(QObject):
 
     def load_lines(self, path):
         entries = []
-        if os.path.exists(path):
-            with open(path, "r", encoding="utf-8") as f:
-                for line in f:
-                    parts = line.strip().split(",", 1)
-                    ip = parts[0].strip().lower()
-                    if ip and self.is_valid_ip(ip):
-                        entries.append(ip)
-        self.log(f"Loaded {len(entries)} valid IP entries from {path}")
+        # Support multiple files separated by commas
+        paths = [p.strip() for p in path.split(",") if p.strip()]
+        for single_path in paths:
+            if os.path.exists(single_path):
+                with open(single_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        parts = line.strip().split(",", 1)
+                        ip = parts[0].strip().lower()
+                        if ip and self.is_valid_ip(ip):
+                            entries.append(ip)
+                self.log(f"Loaded {len(entries)} valid IP entries from {single_path}")
         return entries
 
     def load_seeds(self):
@@ -858,7 +863,9 @@ class ScannerWorker(QObject):
         add_file(self.settings["WhiteListFilesIPv6"], "whitelist_ipv6")
         add_file(self.settings["WhiteListFilesIPv4"], "whitelist_ipv4")
         add_file(self.settings["PhishingFilesIPv6"], "phishing_ipv6")
-        add_file(self.settings["PhishingFilesIPv4"], "phishing_ipv4")
+        # Only use the separate phishing IPv4 settings now
+        add_file(self.settings.get("PhishingFilesIPv4Active", ""), "phishing_ipv4_active")
+        add_file(self.settings.get("PhishingFilesIPv4InActive", ""), "phishing_ipv4_inactive")
         add_file(self.settings["DDoSFilesIPv6"], "ddos_ipv6")
         add_file(self.settings["DDoSFilesIPv4"], "ddos_ipv4")
         add_file(self.settings["BruteForceFilesIPv6"], "bruteforce_ipv6")
