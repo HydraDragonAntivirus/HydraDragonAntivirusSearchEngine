@@ -53,14 +53,16 @@ DEFAULT_SETTINGS = {
     "RequestTimeout": 10,
     "BulkOutputFile": default_bulk,
     "WhiteListOutputFile": default_whitelist,
+    # Other CSV files:
     "PotentiallyUpBulkOutputFile": os.path.join(output_dir, "potentially_up_bulk.csv"),
     "PotentiallyDownBulkOutputFile": os.path.join(output_dir, "potentially_down_bulk.csv"),
     "PotentiallyUpWhiteListOutputFile": os.path.join(output_dir, "potentially_up_whitelist.csv"),
     "PotentiallyDownWhiteListOutputFile": os.path.join(output_dir, "potentially_down_whitelist.csv"),
     "WinErrorBulkOutputFile": os.path.join(output_dir, "winerror_bulk.csv"),
     "WinErrorWhitelistOutputFile": os.path.join(output_dir, "winerror_whitelist.csv"),
-    "BulkDuplicateOutputFile": os.path.join(output_dir, "bulk_duplicates.csv"),
-    "WhitelistDuplicateOutputFile": os.path.join(output_dir, "whitelist_duplicates.csv"),
+    # Duplicate files now use a _duplicate suffix
+    "BulkDuplicateOutputFile": os.path.join(output_dir, "BulkReport_duplicate.csv"),
+    "WhitelistDuplicateOutputFile": os.path.join(output_dir, "WhitelistReport_duplicate.csv"),
     "ZeroDayExecutableDetection": "true",
     "ZeroDayExecutableOutputFile": os.path.join(output_dir, "ZeroDayExecutables.csv"),
     "HTTPUpCodes": "100,101,102,200,201,202,203,204,205,206,207,208,226,429",
@@ -296,6 +298,7 @@ class ScannerWorker:
         self.potentially_down_whitelist_csv = CSVFile(settings["PotentiallyDownWhiteListOutputFile"], max_lines, max_size, header)
         self.winerror_bulk_csv = CSVFile(settings["WinErrorBulkOutputFile"], max_lines, max_size, header)
         self.winerror_whitelist_csv = CSVFile(settings["WinErrorWhitelistOutputFile"], max_lines, max_size, header)
+        # Duplicate CSV files for both lists
         self.bulk_duplicate_csv = CSVFile(settings["BulkDuplicateOutputFile"], max_lines, max_size, header)
         self.whitelist_duplicate_csv = CSVFile(settings["WhitelistDuplicateOutputFile"], max_lines, max_size, header)
         if settings["ZeroDayExecutableDetection"].lower() == "true":
@@ -348,13 +351,24 @@ class ScannerWorker:
             logging.error("Error in ZeroDay executable check for %s: %s", url, e)
 
     def process_seed(self, ip, category, version):
-        # Update global results: if seen, update category and skip reprocessing.
+        duplicate = False
         with self.lock:
             if ip in processed_results:
+                duplicate = True
                 processed_results[ip]["categories"].add(category)
-                return
             else:
                 processed_results[ip] = {"categories": set([category]), "last_comment": ""}
+        if duplicate:
+            # Log duplicate entry into the corresponding duplicate CSV file.
+            report_date = datetime.now(timezone.utc).isoformat()
+            cat_label = CATEGORY_MAP.get(category, "")
+            line = f'{ip},{cat_label},{report_date},"Duplicate entry detected"\n'
+            if category == "whitelist":
+                self.whitelist_duplicate_csv.write_line(line)
+            else:
+                self.bulk_duplicate_csv.write_line(line)
+            return
+
         port = None  # Extend if port info is available
         base_url = f"http://{ip}" + (f":{port}" if port else "")
         visited = set()
@@ -447,6 +461,8 @@ class ScannerWorker:
                                         if new_ip not in processed_results:
                                             new_seed = {"ip": new_ip, "category": category, "version": new_version}
                                             self.seed_queue.put(new_seed)
+                                            self.pbar.total += 1
+                                            self.pbar.refresh()
                 new_ips_content = extract_ip_and_port(response.text)
                 for new_ip, new_port, new_version in new_ips_content:
                     if new_ip != ip:
@@ -454,6 +470,8 @@ class ScannerWorker:
                             if new_ip not in processed_results:
                                 new_seed = {"ip": new_ip, "category": category, "version": new_version}
                                 self.seed_queue.put(new_seed)
+                                self.pbar.total += 1
+                                self.pbar.refresh()
             return new_sub_urls, response.text
 
         while to_process:
