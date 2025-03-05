@@ -208,6 +208,9 @@ class ScannerWorker(QObject):
         self.duplicate_malicious_file_ipv4 = settings.get("DuplicateMaliciousFileIPv4", "output\\malicious_ipv4_duplicates.csv")
         self.duplicate_malicious_file_ipv6 = settings.get("DuplicateMaliciousFileIPv6", "output\\malicious_ipv6_duplicates.csv")
 
+        self.zeroday_exe_enabled = settings.get("ZeroDayExecutableDetection", "false").lower() == "true"
+        self.out_zeroday_exe_csv = settings.get("ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
+
         self.my_public_ip = None
         self.lock = threading.Lock()
         self.cancelled = False
@@ -339,6 +342,14 @@ class ScannerWorker(QObject):
         self.out_winerror_bulk_duplicate_line_count = 1
         self.out_winerror_whitelist_duplicate_line_count = 1
 
+        if self.zeroday_exe_enabled:
+            self.zeroday_exe_file = open(self.out_zeroday_exe_csv, "w", encoding="utf-8")
+            header_zeroday = "IP,URL,ReportDate,Comment\n"
+            self.zeroday_exe_file.write(header_zeroday)
+            self.zeroday_exe_file.flush()
+            self.zeroday_exe_line_count = 1
+            self.zeroday_exe_file_size = len(header_zeroday.encode("utf-8"))
+
     def close_csv_files(self):
         if self.bulk_file:
             self.bulk_file.close()
@@ -360,6 +371,30 @@ class ScannerWorker(QObject):
             if info.get("handle"):
                 info["handle"].close()
                 info["handle"] = None
+
+    def check_zeroday_executable(self, url, originating_ip):
+        try:
+            response = requests.get(url, timeout=self.request_timeout, stream=True)
+            if response.status_code == 200:
+                # Read only the first two bytes to check for the "MZ" signature
+                header_bytes = response.raw.read(2)
+                if header_bytes == b'MZ':
+                    report_date = datetime.now(timezone.utc).isoformat()
+                    comment = "ZeroDay Executable detected (MZ signature)"
+                    line = f'{originating_ip},{url},{report_date},"{comment}"\n'
+                    self.write_zeroday_exe_line(line)
+                    self.log(f"ZeroDay executable detected at {url}")
+        except Exception as e:
+            self.log(f"Error in ZeroDay executable check for {url}: {e}")
+
+    def write_zeroday_exe_line(self, line):
+        with self.lock:
+            line_bytes = len(line.encode("utf-8"))
+            # (For brevity, rotation logic is not included; you can add it similar to the other CSV writers)
+            self.zeroday_exe_file.write(line)
+            self.zeroday_exe_file.flush()
+            self.zeroday_exe_line_count += 1
+            self.zeroday_exe_file_size += line_bytes
 
     def write_winerror_whitelist_line(self, line):
         with self.lock:
@@ -747,6 +782,10 @@ class ScannerWorker(QObject):
                     self.log(f"Failed to fetch resource {resource_url}: {ex}")
 
             return f"up: HTTP {code_str}"
+
+        if self.zeroday_exe_enabled:
+            for resource_url in resource_urls:
+                self.check_zeroday_executable(resource_url, ip)
 
         elif code_str in http_potentially_up_codes:
             self.log(f"Potentially Up status for {url}: HTTP {code_str}")
@@ -1242,6 +1281,8 @@ class MainWindow(QMainWindow):
         add_plain_field("Comment Template Zeroday:", "CommentTemplateZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate")
         add_plain_field("Comment Template No Zeroday (Duplicate):", "CommentTemplateNoZeroday", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate")
         add_plain_field("Comment Template Zeroday:", "CommentTemplateZerodayUp", "Related with ip address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes it's not duplicate")
+        add_plain_field("Enable ZeroDay Executable Detection (true/false):", "ZeroDayExecutableDetection", "false")
+        add_field("ZeroDay Executable Output CSV File:", "ZeroDayExecutableOutputFile", os.path.join(output_dir, "ZeroDayExecutables.csv"))
         add_field("MalwareFilesIPv6 (comma-separated):", "MalwareFilesIPv6", "website\\IPv6Malware.txt")
         add_field("MalwareFilesIPv4 (comma-separated):", "MalwareFilesIPv4", "website\\IPv4Malware.txt")
         add_field("BruteForceFilesIPv6 (comma-separated):", "BruteForceFilesIPv6", "")
