@@ -43,7 +43,7 @@ DEFAULT_SETTINGS = {
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
     "CommentTemplateNoZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate",
-    # Renamed template: Only for HTTP 200 responses with similarity check.
+    # Renamed template for HTTP 200 responses with similarity check.
     "CommentTemplateZerodayStatus200": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity:.2f}%, Zeroday: Yes it's not duplicate",
     "RequestTimeout": 10,
     "BulkOutputFile": default_bulk,
@@ -270,7 +270,7 @@ class ScannerWorker:
         self.timeout = int(settings["RequestTimeout"])
         self.seed_queue = queue.Queue()
         self.lock = threading.Lock()
-        self.pbar = None  # Progress bar to update processed IP count
+        self.pbar = None  # Progress bar for processed IP count
         max_lines = int(settings["CsvMaxLines"])
         max_size = int(settings["CsvMaxSize"])
         header = "IP,Categories,ReportDate,Comment\n"
@@ -382,16 +382,15 @@ class ScannerWorker:
 
         # Check for up status
         if code_str in up_codes:
-            # For HTTP 200, perform an HTML similarity check
             if code_str == "200":
-                similarity = 100.0
+                # Set similarity = 0.0 by default
+                similarity = 0.0
                 if "source_url" in seed and seed["source_url"]:
                     try:
                         ref_resp = requests.get(seed["source_url"], timeout=self.timeout, allow_redirects=True)
                         similarity = compute_similarity(ref_resp.text, response.text)
                     except Exception:
                         similarity = 0.0
-                # Use the renamed template for status 200
                 comment = self.settings["CommentTemplateZerodayStatus200"].format(
                     ip=ip, discovered_url=base_url, verdict=category, status=code_str, similarity=similarity
                 )
