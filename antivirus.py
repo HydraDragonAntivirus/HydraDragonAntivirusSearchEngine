@@ -964,24 +964,30 @@ class ScannerWorker(QObject):
             }
             seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
 
-            # Compute similarity and create a string to append to the comment.
-            similarity_str = ""
-            if discovered_source_url and "Firewall" not in status:
-                new_url = seed.get_url()
-                new_content = self.fetch_content(new_url)
-                ref_content = self.fetch_content(discovered_source_url)
-                if new_content and ref_content:
-                    similarity = compute_content_similarity(ref_content, new_content)
-                    similarity_str = f" HTML similarity: {similarity:.2f}%"
-
-            # Append the similarity string to the default comment.
-            comment = self.comment_template_zeroday_up.format(
-                ip=seed.ip,
-                discovered_url=discovered_source_url,
-                verdict=seed_verdict,
-                status=status,
-                similarity = similarity_str
-            )
+            if discovered_source_url and "Firewall" in status:
+                # When a firewall is detected, use the zeroday template without HTML similarity.
+                comment = self.comment_template_zeroday.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status
+                )
+            else:
+                similarity_str = ""
+                if discovered_source_url:
+                    new_url = seed.get_url()
+                    new_content = self.fetch_content(new_url)
+                    ref_content = self.fetch_content(discovered_source_url)
+                    if new_content and ref_content:
+                        similarity = compute_content_similarity(ref_content, new_content)
+                        similarity_str = f" HTML similarity: {similarity:.2f}%"
+                comment = self.comment_template_zeroday_up.format(
+                    ip=seed.ip,
+                    discovered_url=discovered_source_url,
+                    verdict=seed_verdict,
+                    status=status,
+                    similarity=similarity_str
+                )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
 
             # Write output based on category and duplicate status.
