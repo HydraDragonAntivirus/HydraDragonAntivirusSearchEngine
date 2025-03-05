@@ -1117,7 +1117,7 @@ class ScannerWorker(QObject):
                 for ip in ips:
                     if ip not in self.visited_ips:
                         seeds.append(Seed(ip, source_type))
-                        visited_ips.add(ip)  # Track all loaded IPs in one set
+                        self.visited_ips.add(ip)  # Track all loaded IPs in one set
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
