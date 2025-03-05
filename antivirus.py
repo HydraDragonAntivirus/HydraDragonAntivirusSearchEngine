@@ -1115,7 +1115,7 @@ class ScannerWorker(QObject):
         for file, ips in results.items():
             for source_type in file_category_mapping[file]:
                 for ip in ips:
-                    if ip not in visited_ips:
+                    if ip not in self.visited_ips:
                         seeds.append(Seed(ip, source_type))
                         visited_ips.add(ip)  # Track all loaded IPs in one set
 
