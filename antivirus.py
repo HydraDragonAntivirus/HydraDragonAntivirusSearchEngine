@@ -270,6 +270,7 @@ class ScannerWorker:
         self.timeout = int(settings["RequestTimeout"])
         self.seed_queue = queue.Queue()
         self.lock = threading.Lock()
+        self.pbar = None  # Progress bar to update processed IP count
         max_lines = int(settings["CsvMaxLines"])
         max_size = int(settings["CsvMaxSize"])
         header = "IP,Categories,ReportDate,Comment\n"
@@ -484,14 +485,19 @@ class ScannerWorker:
                 break
             self.process_seed(seed)
             self.seed_queue.task_done()
+            # Update progress by 1 for each IP processed
+            with self.lock:
+                if self.pbar:
+                    self.pbar.update(1)
 
     def run(self, seeds):
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
         for seed in seeds:
             self.seed_queue.put(seed)
-        total = self.seed_queue.qsize()
-        pbar = tqdm(total=total, desc="Processing seeds")
+        # Initialize the progress bar with the current number of seeds in the queue.
+        initial_total = self.seed_queue.qsize()
+        self.pbar = tqdm(total=initial_total, desc="Processing seeds")
         threads = []
         for _ in range(int(self.settings["MaxThreads"])):
             t = threading.Thread(target=self.worker)
@@ -500,7 +506,7 @@ class ScannerWorker:
         self.seed_queue.join()
         for t in threads:
             t.join()
-        pbar.close()
+        self.pbar.close()
         self.close_files()
         logging.info("Scan completed.")
 
