@@ -15,17 +15,15 @@ import logging
 from bs4 import BeautifulSoup
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
-from PySide6.QtGui import QIcon, QTextCursor
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
     QWidget,
     QVBoxLayout,
     QHBoxLayout,
-    QLabel,
     QPushButton,
     QProgressBar,
-    QTextEdit,
 )
 
 # Directories and default file paths
@@ -80,24 +78,12 @@ QPushButton:pressed {
                                 stop:0.2 #004380, stop:0.8 #003d75);
     border-color: #004380;
 }
-QLabel {
-    color: #e0e0e0;
-}
-QTextEdit {
-    background-color: #3c3c3c;
-    border: 1px solid #5a5a5a;
-    padding: 4px;
-}
 QProgressBar {
     text-align: center;
 }
 """
 
 def compute_content_similarity(text1, text2):
-    """
-    Computes a similarity score between two text strings.
-    Returns a percentage (0% to 100%) where 100% means identical.
-    """
     ratio = difflib.SequenceMatcher(None, text1, text2).ratio()
     return ratio * 100
 
@@ -148,6 +134,27 @@ DEFAULT_SETTINGS = {
 }
 
 # -----------------------------
+# Load Settings From File (Read Once)
+# -----------------------------
+def load_settings_from_file():
+    settings_folder = "settings"
+    settings_file = "settings.json"
+    settings_path = os.path.join(settings_folder, settings_file)
+    if os.path.exists(settings_path):
+        try:
+            with open(settings_path, "r", encoding="utf-8") as f:
+                settings = json.load(f)
+                logging.info("Loaded settings from %s", settings_path)
+                return settings
+        except Exception as e:
+            logging.error("Error reading settings from file: %s", e)
+    else:
+        logging.info("Settings file %s not found, using default settings", settings_path)
+    return DEFAULT_SETTINGS
+
+SETTINGS = load_settings_from_file()
+
+# -----------------------------
 # Helper Functions
 # -----------------------------
 def canonical_urls(ip):
@@ -191,7 +198,7 @@ class ScannerWorker(QObject):
 
     def __init__(self, settings=None, parent=None):
         super().__init__(parent)
-        self.settings = settings if settings is not None else DEFAULT_SETTINGS
+        self.settings = settings if settings is not None else SETTINGS
         self.max_workers = int(self.settings["MaxThreads"])
         self.user_csv_max_lines = int(self.settings["CsvMaxLines"])
         self.csv_max_lines = self.user_csv_max_lines if self.user_csv_max_lines <= 10000 else 10000
@@ -291,7 +298,6 @@ class ScannerWorker(QObject):
         try:
             response = requests.get(url, timeout=self.request_timeout, stream=True)
             if response.status_code == 200:
-                # Read first 4 bytes to check for both PE and ELF signatures.
                 header_bytes = response.raw.read(4)
                 if header_bytes.startswith(b'MZ'):
                     report_date = datetime.now(timezone.utc).isoformat()
@@ -516,7 +522,6 @@ class ScannerWorker(QObject):
 
         code = response.status_code
         code_str = f"{code:03d}"
-
         http_up_codes = [s.strip() for s in self.settings["HTTPUpCodes"].split(",")]
         http_potentially_down_codes = [s.strip() for s in self.settings["HTTPPotentiallyDownCodes"].split(",")]
         http_potentially_up_codes = [s.strip() for s in self.settings["HTTPPotentiallyUpCodes"].split(",")]
@@ -598,7 +603,6 @@ class ScannerWorker(QObject):
         if not discovered_source_url:
             discovered_source_url = seed.get_url()
 
-        # Fixed category mapping (hard-coded defaults)
         category_mapping = {
             "whitelist": "0",
             "phishing": "7",
@@ -623,7 +627,6 @@ class ScannerWorker(QObject):
         if duplicate_flag is None:
             duplicate_flag = (seed.ip in self.visited_ips)
 
-        # ----- WINERROR Handling -----
         if status.startswith("WINERROR"):
             if duplicate_flag:
                 comment = f"WINERROR duplicate {seed.source_type} {status}"
@@ -644,7 +647,6 @@ class ScannerWorker(QObject):
                     self.log(f"WinError bulk output written for {seed.ip}.")
             return
 
-        # ----- TIMEOUT Handling -----
         if status.startswith("TIMEOUT"):
             if duplicate_flag:
                 comment = f"TIMEOUT duplicate {seed.source_type} {status}"
@@ -665,7 +667,6 @@ class ScannerWorker(QObject):
                     self.log(f"Timeout bulk output written for {seed.ip}.")
             return
 
-        # ----- Potentially Up Handling -----
         if status.startswith("potentially up"):
             seed_verdict = {
                 "whitelist": "whitelist (auto verdict 7)",
@@ -705,7 +706,6 @@ class ScannerWorker(QObject):
                     self.log(f"Potentially Up (bulk) output written for {seed.ip} with status {status}.")
             return
 
-        # ----- Potentially Down Handling -----
         if status.startswith("potentially down"):
             if duplicate_flag:
                 comment = f"Potentially down duplicate: {status}"
@@ -726,7 +726,6 @@ class ScannerWorker(QObject):
                     self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
             return
 
-        # ----- Confirmed "up" Handling -----
         if status.startswith("up:"):
             auto_verdict_mapping_confirmed = {
                 "whitelist": "whitelist (auto verdict 1)",
@@ -891,7 +890,7 @@ class ScannerWorker(QObject):
         return seeds
 
 # -----------------------------
-# MainWindow: Simplified GUI (No Pause)
+# MainWindow: Simplified GUI (No Logs)
 # -----------------------------
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -908,22 +907,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
 
-        # Only Start/Stop button is used now.
         control_layout = QHBoxLayout()
         self.start_stop_button = QPushButton("Start Scan")
         self.start_stop_button.clicked.connect(self.toggle_scan)
         control_layout.addWidget(self.start_stop_button)
         main_layout.addLayout(control_layout)
 
-        # Progress bar
         self.progress_bar = QProgressBar()
         main_layout.addWidget(self.progress_bar)
-
-        # Log display
-        self.log_text = QTextEdit()
-        self.log_text.setReadOnly(True)
-        main_layout.addWidget(QLabel("Log:"))
-        main_layout.addWidget(self.log_text)
 
     def toggle_scan(self):
         if not self.is_scanning:
@@ -936,12 +927,10 @@ class MainWindow(QMainWindow):
             self.is_scanning = False
 
     def start_scan(self):
-        self.append_log("Starting scan...")
-        self.worker = ScannerWorker(DEFAULT_SETTINGS)
-        self.worker.log_signal.connect(self.append_log)
+        self.worker = ScannerWorker(SETTINGS)
         self.worker.progress_signal.connect(self.update_progress)
         self.worker.finished_signal.connect(self.scan_finished)
-        self.worker.failure.connect(self.append_log)
+        self.worker.failure.connect(lambda msg: None)
         self.thread = QThread()
         self.worker.moveToThread(self.thread)
         self.scan_start_time = time.time()
@@ -951,10 +940,6 @@ class MainWindow(QMainWindow):
     def stop_scan(self):
         if self.worker:
             self.worker.cancelled = True
-            self.append_log("Scan cancellation requested.")
-
-    def append_log(self, message):
-        self.log_text.append(message)
 
     def update_progress(self, processed, total):
         self.progress_bar.setMaximum(total if total > 0 else 1)
@@ -970,7 +955,6 @@ class MainWindow(QMainWindow):
         self.progress_bar.setFormat(f"{processed}/{total} ({percent:.0f}%) - ETA: {eta}")
 
     def scan_finished(self):
-        self.append_log("Scan finished.")
         self.start_stop_button.setText("Start Scan")
         self.is_scanning = False
         if self.thread:
@@ -982,7 +966,7 @@ def main():
         app = QApplication(sys.argv)
         app.setStyleSheet(antivirus_style)
         window = MainWindow()
-        window.resize(800, 600)
+        window.resize(400, 150)
         window.show()
         sys.exit(app.exec())
     except Exception as e:
