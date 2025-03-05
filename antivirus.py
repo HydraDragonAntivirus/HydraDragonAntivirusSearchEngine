@@ -774,7 +774,7 @@ class ScannerWorker(QObject):
             return
 
         # Skip if already processed (global duplicate)
-        if seed.ip in self.visited_ips:
+        if seed.ip in self.visited_ips and duplicate_flag is None:
             self.log(f"Skipping {seed.ip} (already visited).")
             return
         self.visited_ips.add(seed.ip)
@@ -826,8 +826,7 @@ class ScannerWorker(QObject):
 
         # Duplicate flag: check if the IP was already loaded (using a single set for all initial IPs)
         if duplicate_flag is None:
-            # Assume self.loaded_ips is a set of all IPs loaded from seed files
-            duplicate_flag = (seed.ip in self.visited_ips) or (seed.ip in self.loaded_ips)
+            duplicate_flag = (seed.ip in self.visited_ips)
 
         # -- WINERROR Handling: Always use cat_label --
         if status.startswith("WINERROR"):
@@ -1116,9 +1115,9 @@ class ScannerWorker(QObject):
         for file, ips in results.items():
             for source_type in file_category_mapping[file]:
                 for ip in ips:
-                    if ip not in loaded_ips:
+                    if ip not in visited_ips:
                         seeds.append(Seed(ip, source_type))
-                        loaded_ips.add(ip)  # Track all loaded IPs in one set
+                        visited_ips.add(ip)  # Track all loaded IPs in one set
 
         self.log(f"Total valid seeds loaded: {len(seeds)}")
         return seeds
