@@ -4,7 +4,7 @@
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes, it's not duplicate",
     "CommentTemplateNoZeroday": "Related with IP address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No, it's duplicate",
-    "CommentTemplateZerodayUp": "Related with IP address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes, it's not duplicate",
+    "CommentTemplateZerodayStatus200": "Related with IP address detected by heuristics of https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity}, Zeroday: Yes, it's not duplicate",
     "RequestTimeout": 10,
     "BulkOutputFile": "output/BulkReport.csv",
     "WhiteListOutputFile": "output/WhitelistReport.csv",

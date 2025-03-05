@@ -43,7 +43,8 @@ DEFAULT_SETTINGS = {
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
     "CommentTemplateNoZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: No it's duplicate",
-    "CommentTemplateZerodayUp": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity:.2f}%, Zeroday: Yes it's not duplicate",
+    # Renamed template: Only for HTTP 200 responses with similarity check.
+    "CommentTemplateZerodayStatus200": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), HTML similarity: {similarity:.2f}%, Zeroday: Yes it's not duplicate",
     "RequestTimeout": 10,
     "BulkOutputFile": default_bulk,
     "WhiteListOutputFile": default_whitelist,
@@ -329,15 +330,47 @@ class ScannerWorker:
         with self.lock:
             processed_ips.add(ip)
         base_url = f"http://{ip}" + (f":{port}" if port else "")
+        
         try:
             response = requests.get(base_url, timeout=self.timeout, allow_redirects=True)
+        except requests.exceptions.ConnectionError as ce:
+            # If connection is refused, check for WinError 10061
+            if "10061" in str(ce):
+                logging.info("Server is up with firewall detected at %s", base_url)
+                cat_label = CATEGORY_MAP.get(category, "")
+                comment = "Server is up but connection refused (firewall detected)"
+                if category == "whitelist":
+                    self.whitelist_csv.write_line(
+                        f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    )
+                else:
+                    self.bulk_csv.write_line(
+                        f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                    )
+                return
+            else:
+                logging.error("Error accessing %s: %s", base_url, ce)
+                cat_label = CATEGORY_MAP.get(category, "")
+                if category == "whitelist":
+                    self.winerror_whitelist_csv.write_line(
+                        f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {ce}"\n'
+                    )
+                else:
+                    self.winerror_bulk_csv.write_line(
+                        f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {ce}"\n'
+                    )
+                return
         except Exception as e:
             logging.error("Error accessing %s: %s", base_url, e)
             cat_label = CATEGORY_MAP.get(category, "")
             if category == "whitelist":
-                self.winerror_whitelist_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {e}"\n')
+                self.winerror_whitelist_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {e}"\n'
+                )
             else:
-                self.winerror_bulk_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {e}"\n')
+                self.winerror_bulk_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"Connection error: {e}"\n'
+                )
             return
 
         code_str = f"{response.status_code:03d}"
@@ -346,9 +379,9 @@ class ScannerWorker:
         potentially_down_codes = set(code.strip() for code in self.settings["HTTPPotentiallyDownCodes"].split(","))
         cat_label = CATEGORY_MAP.get(category, "")
 
-        # Replace "200-only" check with an "up status" check.
+        # Check for up status
         if code_str in up_codes:
-            # For a 200 response (non duplicate), perform an HTML similarity check.
+            # For HTTP 200, perform an HTML similarity check
             if code_str == "200":
                 similarity = 100.0
                 if "source_url" in seed and seed["source_url"]:
@@ -357,31 +390,58 @@ class ScannerWorker:
                         similarity = compute_similarity(ref_resp.text, response.text)
                     except Exception:
                         similarity = 0.0
-                comment = self.settings["CommentTemplateZerodayUp"].format(ip=ip, discovered_url=base_url, verdict=category, status=code_str, similarity=similarity)
+                # Use the renamed template for status 200
+                comment = self.settings["CommentTemplateZerodayStatus200"].format(
+                    ip=ip, discovered_url=base_url, verdict=category, status=code_str, similarity=similarity
+                )
             else:
-                comment = self.settings["CommentTemplateZeroday"].format(ip=ip, discovered_url=base_url, verdict=category, status=code_str)
+                comment = self.settings["CommentTemplateZeroday"].format(
+                    ip=ip, discovered_url=base_url, verdict=category, status=code_str
+                )
             if category == "whitelist":
-                self.whitelist_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.whitelist_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
             else:
-                self.bulk_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.bulk_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
         elif code_str in potentially_up_codes:
-            comment = self.settings["CommentTemplateNoZeroday"].format(ip=ip, discovered_url=base_url, verdict=category, status=code_str)
+            comment = self.settings["CommentTemplateNoZeroday"].format(
+                ip=ip, discovered_url=base_url, verdict=category, status=code_str
+            )
             if category == "whitelist":
-                self.potentially_up_whitelist_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.potentially_up_whitelist_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
             else:
-                self.potentially_up_bulk_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.potentially_up_bulk_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
         elif code_str in potentially_down_codes:
-            comment = self.settings["CommentTemplateNoZeroday"].format(ip=ip, discovered_url=base_url, verdict=category, status=code_str)
+            comment = self.settings["CommentTemplateNoZeroday"].format(
+                ip=ip, discovered_url=base_url, verdict=category, status=code_str
+            )
             if category == "whitelist":
-                self.potentially_down_whitelist_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.potentially_down_whitelist_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
             else:
-                self.potentially_down_bulk_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.potentially_down_bulk_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
         else:
-            comment = self.settings["CommentTemplateNoZeroday"].format(ip=ip, discovered_url=base_url, verdict=category, status=code_str)
+            comment = self.settings["CommentTemplateNoZeroday"].format(
+                ip=ip, discovered_url=base_url, verdict=category, status=code_str
+            )
             if category == "whitelist":
-                self.whitelist_duplicate_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.whitelist_duplicate_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
             else:
-                self.bulk_duplicate_csv.write_line(f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n')
+                self.bulk_duplicate_csv.write_line(
+                    f'{ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                )
 
         # Enqueue additional discovered IPs from the page content
         content = response.text
