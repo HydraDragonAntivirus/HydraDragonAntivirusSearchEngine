@@ -541,8 +541,8 @@ class ScannerWorker(QObject):
                 discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
                 display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
                 new_seed = Seed(discovered_ip, category, port=extracted_port)
-                self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
-                self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                self.log(f"Queueing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
+                self.seed_queue.put(new_seed)
             soup = BeautifulSoup(response.text, "html.parser")
             resource_urls = set()
             for script in soup.find_all("script", src=True):
@@ -572,8 +572,8 @@ class ScannerWorker(QObject):
                             discovered_ip = parse_extracted if parse_extracted is not None else extracted_ip
                             display_ip = f"[{discovered_ip}]" if self.is_valid_ip(discovered_ip) == "ipv6" else discovered_ip
                             new_seed = Seed(discovered_ip, category, port=extracted_port)
-                            self.log(f"Processing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
-                            self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                            self.log(f"Queueing discovered IP from resource {resource_url}: {display_ip} (Category: {category}) - HTTP {code_str}")
+                            self.seed_queue.put(new_seed)
                     else:
                         self.log(f"Resource {resource_url} returned HTTP {res.status_code}")
                 except:
