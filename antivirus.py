@@ -731,6 +731,10 @@ class ScannerWorker(QObject):
 
         code = response.status_code
         code_str = f"{code:03d}"
+
+        # Initialize resource_urls so that it's always defined
+        resource_urls = set()
+
         http_up_codes = [s.strip() for s in self.settings.get(
             "HTTPUpCodes", "100,101,102,200,201,202,203,204,205,206,207,208,226,429"
         ).split(",")]
@@ -757,8 +761,8 @@ class ScannerWorker(QObject):
             for extracted_ip, extracted_port, ip_version in found_ips:
                 if ip_version == "ipv6":
                     candidate = f"http://[{extracted_ip}]" if not (
-                            extracted_ip.startswith('[') and extracted_ip.endswith(']')
-                    ) else f"http://{extracted_ip[1:-1]}"
+                                extracted_ip.startswith('[') and extracted_ip.endswith(
+                            ']')) else f"http://{extracted_ip[1:-1]}"
                 else:
                     candidate = extracted_ip if extracted_ip.lower().startswith("http") else "http://" + extracted_ip
                 parse_extracted = urlparse(candidate).hostname
@@ -768,9 +772,9 @@ class ScannerWorker(QObject):
                 self.log(f"Processing discovered IP: {display_ip} (Category: {category}) - HTTP {code_str}")
                 self.process_seed(new_seed, discovered_source_url=discovered_source_url)
 
-            # Also parse resource URLs from the HTML
+            # Parse resource URLs from the HTML
             soup = BeautifulSoup(response.text, "html.parser")
-            resource_urls = set()
+            resource_urls = set()  # reinitialize resource_urls here based on parsed content
             for script in soup.find_all("script", src=True):
                 src = script.get("src")
                 if src:
@@ -784,7 +788,7 @@ class ScannerWorker(QObject):
                 if src:
                     resource_urls.add(urljoin(url, src))
 
-            # Process additional resources, now checking for any "up" status, not just 200.
+            # Process additional resources
             for resource_url in resource_urls:
                 try:
                     res = requests.get(resource_url, timeout=timeout, allow_redirects=True)
@@ -794,8 +798,8 @@ class ScannerWorker(QObject):
                         for extracted_ip, extracted_port, ip_version in resource_ips:
                             if ip_version == "ipv6":
                                 candidate = f"http://[{extracted_ip}]" if not (
-                                        extracted_ip.startswith('[') and extracted_ip.endswith(']')
-                                ) else f"http://{extracted_ip[1:-1]}"
+                                            extracted_ip.startswith('[') and extracted_ip.endswith(
+                                        ']')) else f"http://{extracted_ip[1:-1]}"
                             else:
                                 candidate = extracted_ip if extracted_ip.lower().startswith(
                                     "http") else "http://" + extracted_ip
@@ -809,8 +813,8 @@ class ScannerWorker(QObject):
                             self.process_seed(new_seed, discovered_source_url=discovered_source_url)
                     else:
                         self.log(f"Resource {resource_url} returned HTTP {res.status_code}")
-                except Exception as ex:
-                    self.log(f"Failed to fetch resource {resource_url}: {ex}")
+                except:
+                    pass
 
             return f"up: HTTP {code_str}"
 
