@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timezone
 import concurrent.futures
 import difflib
+import queue
 
 from PySide6.QtCore import QObject, Signal, QThread, QThreadPool, QRunnable
 from PySide6.QtGui import QIcon, QTextCursor
@@ -229,6 +230,8 @@ class ScannerWorker(QObject):
         self.pause_event.set()
         self.threadpool = QThreadPool()
         self.threadpool.setMaxThreadCount(self.max_workers)
+
+        self.seed_queue = queue.Queue()
 
         # Duplicate file info for rotation (per category key)
         self.dup_file_info = {
@@ -654,9 +657,37 @@ class ScannerWorker(QObject):
             self.total_seeds = len(seeds)
         self.log(f"Starting with {len(seeds)} initial seeds.")
         self.open_csv_files()
+
+        # Enqueue all initial seeds
         for seed in seeds:
-            self.threadpool.start(SeedRunnable(seed, self))
+            self.seed_queue.put(seed)
+
+        # Define a consumer that continuously takes seeds from the queue and submits them
+        def seed_consumer():
+            while True:
+                try:
+                    seed = self.seed_queue.get(timeout=3)  # timeout allows exit when done
+                except queue.Empty:
+                    break
+                self.threadpool.start(SeedRunnable(seed, self))
+                self.seed_queue.task_done()
+
+        # Start a fixed number of consumer threads (adjust num_consumers as needed)
+        num_consumers = 10
+        consumer_threads = []
+        for i in range(num_consumers):
+            t = threading.Thread(target=seed_consumer)
+            t.start()
+            consumer_threads.append(t)
+
+        # Wait for all seeds in the queue to be processed
+        self.seed_queue.join()
+        # Wait for all thread pool tasks to complete
         self.threadpool.waitForDone()
+        # Optionally, join the consumer threads
+        for t in consumer_threads:
+            t.join()
+
         self.close_csv_files()
         self.log("Scan completed.")
         self.finished_signal.emit()
@@ -718,8 +749,8 @@ class ScannerWorker(QObject):
                 if parsed_ip and parsed_ip != ip and self.is_valid_ip(parsed_ip):
                     display_ip = f"[{parsed_ip}]" if self.is_valid_ip(parsed_ip) == "ipv6" else parsed_ip
                     new_seed = Seed(parsed_ip, category, port=port)
-                    self.log(f"Processing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
-                    self.process_seed(new_seed, discovered_source_url=discovered_source_url)
+                    self.log(f"Queueing redirected IP: {display_ip} (Category: {category}) - HTTP {code_str}")
+                    self.seed_queue.put(new_seed)
 
             # Extract IPs from the main HTML
             found_ips = self.extract_ip_and_port(response.text)
