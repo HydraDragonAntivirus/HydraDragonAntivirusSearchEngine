@@ -874,7 +874,7 @@ class ScannerWorker(QObject):
 
         # -- Potentially Up Handling --
         if status.startswith("potentially up"):
-            # For potentially up responses, use the auto verdict mapping in the range 7–12.
+            # For potentially up responses, use the auto verdict mapping in the range 7 12.
             auto_verdict_mapping = {
                 "whitelist": "whitelist (auto verdict 7)",
                 "phishing": "phishing (auto verdict 8)",
