@@ -842,9 +842,7 @@ class ScannerWorker(QObject):
 
         # Duplicate flag: check if the IP was seen in any category list.
         if duplicate_flag is None:
-            duplicate_flag = any(seed.ip in ip_set for ip_set in self.initial_ips.values())
-        if not duplicate_flag:
-            self.initial_ips.setdefault(cat, set()).add(seed.ip)
+            duplicate_flag = (seed.ip in self.visited_ips) or any(seed.ip in ip_set for ip_set in self.initial_ips.values())
 
         # -- WINERROR Handling: Always use cat_label --
         if status.startswith("WINERROR"):
