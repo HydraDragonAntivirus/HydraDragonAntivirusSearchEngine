@@ -233,22 +233,6 @@ class ScannerWorker(QObject):
 
         self.seed_queue = queue.Queue()
 
-        # Duplicate file info for rotation (per category key)
-        self.dup_file_info = {
-            "whitelist_ipv4": {"base": self.duplicate_whitelist_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "whitelist_ipv6": {"base": self.duplicate_whitelist_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "phishing_ipv4": {"base": self.duplicate_phishing_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "phishing_ipv6": {"base": self.duplicate_phishing_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "ddos_ipv4": {"base": self.duplicate_ddos_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "ddos_ipv6": {"base": self.duplicate_ddos_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "bruteforce_ipv4": {"base": self.duplicate_bruteforce_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "bruteforce_ipv6": {"base": self.duplicate_bruteforce_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "spam_ipv4": {"base": self.duplicate_spam_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "spam_ipv6": {"base": self.duplicate_spam_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "malicious_ipv4": {"base": self.duplicate_malicious_file_ipv4, "index": 0, "line_count": 0, "file_size": 0, "handle": None},
-            "malicious_ipv6": {"base": self.duplicate_malicious_file_ipv6, "index": 0, "line_count": 0, "file_size": 0, "handle": None}
-        }
-
     def log(self, message):
         self.log_signal.emit(message)
         logging.info(message)
@@ -257,22 +241,15 @@ class ScannerWorker(QObject):
         self.progress_signal.emit(self.processed_count, self.total_seeds)
 
     def open_csv_files(self):
-        # Collect unique file paths (include whitelist duplicate files)
+        # Ensure directories exist for each unique file
         unique_files = {
             self.out_bulk_csv,
             self.out_whitelist_csv,
             self.out_potentially_up_whitelist_csv,
             self.out_potentially_down_whitelist_csv,
-            self.out_potentially_up_bulk_duplicate_csv,
-            self.out_potentially_down_bulk_duplicate_csv,
-            self.out_potentially_up_whitelist_duplicate_csv,
-            self.out_potentially_down_whitelist_duplicate_csv,
             self.out_winerror_bulk_csv,
-            self.out_winerror_whitelist_csv,
-            self.out_winerror_bulk_duplicate_csv,
-            self.out_winerror_whitelist_duplicate_csv
+            self.out_winerror_whitelist_csv
         }
-        # Ensure directories exist for each unique file
         for filename in unique_files:
             directory = os.path.dirname(filename)
             if directory and not os.path.exists(directory):
@@ -280,78 +257,44 @@ class ScannerWorker(QObject):
 
         header = "IP,Categories,ReportDate,Comment\n"
 
-        # Open each file only once
+        # Open non-duplicate output files (unchanged)
         self.bulk_file = open(self.out_bulk_csv, "w", encoding="utf-8")
         self.whitelist_file = open(self.out_whitelist_csv, "w", encoding="utf-8")
         self.potentially_up_whitelist_file = open(self.out_potentially_up_whitelist_csv, "w", encoding="utf-8")
         self.potentially_down_whitelist_file = open(self.out_potentially_down_whitelist_csv, "w", encoding="utf-8")
-        self.potentially_up_bulk_duplicate_file = open(self.out_potentially_up_bulk_duplicate_csv, "w",
-                                                       encoding="utf-8")
-        self.potentially_down_bulk_duplicate_file = open(self.out_potentially_down_bulk_duplicate_csv, "w",
-                                                         encoding="utf-8")
-        # Added missing whitelist duplicate file handles:
-        self.potentially_up_whitelist_duplicate_file = open(self.out_potentially_up_whitelist_duplicate_csv, "w",
-                                                            encoding="utf-8")
-        self.potentially_down_whitelist_duplicate_file = open(self.out_potentially_down_whitelist_duplicate_csv, "w",
-                                                              encoding="utf-8")
         self.out_winerror_bulk_file = open(self.out_winerror_bulk_csv, "w", encoding="utf-8")
         self.out_winerror_whitelist_file = open(self.out_winerror_whitelist_csv, "w", encoding="utf-8")
-        self.out_winerror_bulk_duplicate_file = open(self.out_winerror_bulk_duplicate_csv, "w", encoding="utf-8")
-        self.out_winerror_whitelist_duplicate_file = open(self.out_winerror_whitelist_duplicate_csv, "w",
-                                                          encoding="utf-8")
 
-        # Write header only once to each file
-        for file in [
-            self.bulk_file, self.whitelist_file,
-            self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
-            self.potentially_up_bulk_duplicate_file, self.potentially_down_bulk_duplicate_file,
-            self.potentially_up_whitelist_duplicate_file, self.potentially_down_whitelist_duplicate_file,
-            self.out_winerror_bulk_file, self.out_winerror_whitelist_file,
-            self.out_winerror_bulk_duplicate_file, self.out_winerror_whitelist_duplicate_file
-        ]:
+        # Write header only once to each non-duplicate file
+        for file in [self.bulk_file, self.whitelist_file,
+                     self.potentially_up_whitelist_file, self.potentially_down_whitelist_file,
+                     self.out_winerror_bulk_file, self.out_winerror_whitelist_file]:
             file.write(header)
             file.flush()
 
-        # Calculate header size in bytes for initialization
-        hsize = len(header.encode("utf-8"))
+        # Initialize duplicate file (all duplicate entries are written here)
+        self.out_duplicate_csv = os.path.join(output_dir, "duplicates.csv")
+        self.duplicate_file = open(self.out_duplicate_csv, "w", encoding="utf-8")
+        self.duplicate_file.write(header)
+        self.duplicate_file.flush()
+        self.duplicate_line_count = 1
+        self.duplicate_file_size = len(header.encode("utf-8"))
+        self.duplicate_file_index = 0
 
-        self.bulk_file_size = hsize
-        self.whitelist_file_size = hsize
-        self.potentially_up_whitelist_file_size = hsize
-        self.potentially_down_whitelist_file_size = hsize
-        self.potentially_up_whitelist_duplicate_file_size = hsize
-        self.potentially_down_whitelist_duplicate_file_size = hsize
-        self.potentially_up_bulk_file_size = hsize
-        self.potentially_down_bulk_file_size = hsize
-        self.potentially_up_bulk_duplicate_file_size = hsize
-        self.potentially_down_bulk_duplicate_file_size = hsize
-        self.out_winerror_bulk_file_size = hsize
-        self.out_winerror_whitelist_file_size = hsize
-        self.out_winerror_bulk_duplicate_file_size = hsize
-        self.out_winerror_whitelist_duplicate_file_size = hsize
+        # Initialize file sizes and line counts for non-duplicate files
+        self.bulk_file_size = len(header.encode("utf-8"))
+        self.whitelist_file_size = len(header.encode("utf-8"))
+        self.potentially_up_whitelist_file_size = len(header.encode("utf-8"))
+        self.potentially_down_whitelist_file_size = len(header.encode("utf-8"))
+        self.out_winerror_bulk_file_size = len(header.encode("utf-8"))
+        self.out_winerror_whitelist_file_size = len(header.encode("utf-8"))
 
         self.bulk_line_count = 1
         self.whitelist_line_count = 1
         self.potentially_up_whitelist_line_count = 1
-        self.potentially_up_bulk_line_count = 1
         self.potentially_down_whitelist_line_count = 1
-        self.potentially_down_bulk_line_count = 1
-        self.potentially_up_bulk_duplicate_line_count = 1
-        self.potentially_down_bulk_duplicate_line_count = 1
-        self.potentially_up_whitelist_duplicate_line_count = 1
-        self.potentially_down_whitelist_duplicate_line_count = 1
         self.out_winerror_bulk_line_count = 1
         self.out_winerror_whitelist_line_count = 1
-        self.out_winerror_bulk_duplicate_line_count = 1
-        self.out_winerror_whitelist_duplicate_line_count = 1
-
-        if self.zeroday_exe_enabled:
-            self.zeroday_exe_file = open(self.out_zeroday_exe_csv, "w", encoding="utf-8")
-            header_zeroday = "IP,URL,ReportDate,Comment\n"
-            self.zeroday_exe_file.write(header_zeroday)
-            self.zeroday_exe_file.flush()
-            self.zeroday_exe_line_count = 1
-            self.zeroday_exe_file_size = len(header_zeroday.encode("utf-8"))
 
     def close_csv_files(self):
         if self.bulk_file:
@@ -362,18 +305,14 @@ class ScannerWorker(QObject):
             self.potentially_up_whitelist_file.close()
         if self.potentially_down_whitelist_file:
             self.potentially_down_whitelist_file.close()
-        if self.out_winerror_whitelist_file:
-            self.out_winerror_whitelist_file.close()
         if self.out_winerror_bulk_file:
             self.out_winerror_bulk_file.close()
-        if self.out_winerror_whitelist_duplicate_file:
-            self.out_winerror_whitelist_duplicate_file.close()
-        if self.out_winerror_bulk_duplicate_file:
-            self.out_winerror_bulk_duplicate_file.close()
-        for info in self.dup_file_info.values():
-            if info.get("handle"):
-                info["handle"].close()
-                info["handle"] = None
+        if self.out_winerror_whitelist_file:
+            self.out_winerror_whitelist_file.close()
+        if hasattr(self, 'duplicate_file') and self.duplicate_file:
+            self.duplicate_file.close()
+        if self.zeroday_exe_enabled and hasattr(self, 'zeroday_exe_file') and self.zeroday_exe_file:
+            self.zeroday_exe_file.close()
 
     def check_zeroday_executable(self, url, originating_ip):
         try:
@@ -596,54 +535,26 @@ class ScannerWorker(QObject):
             self.whitelist_file_size += len(line.encode("utf-8"))
             self.total_seeds += 1
 
-    def write_duplicate_line(self, category, line):
+    def write_duplicate_combined_line(self, line):
         with self.lock:
-            info = self.dup_file_info.get(category)
-            if info is None:
-                self.log(f"[ERROR] No duplicate file info for category {category}")
-                return
-            if info["handle"] is None:
-                base, ext = os.path.splitext(info["base"])
-                filename = f"{base}_{info['index']}{ext}"
-                handle = open(filename, "w", encoding="utf-8")
-                header = "IP,Categories,ReportDate,Comment\n"
-                handle.write(header)
-                handle.flush()
-                info["line_count"] = 1
-                info["file_size"] = len(header.encode("utf-8"))
-                info["handle"] = handle
             line_bytes = len(line.encode("utf-8"))
-            if info["line_count"] >= self.csv_max_lines or (info["file_size"] + line_bytes) >= self.csv_max_size:
-                info["handle"].close()
-                info["index"] += 1
-                base, ext = os.path.splitext(info["base"])
-                new_filename = f"{base}_{info['index']}{ext}"
-                handle = open(new_filename, "w", encoding="utf-8")
+            if self.duplicate_line_count >= self.csv_max_lines or (
+                    self.duplicate_file_size + line_bytes) >= self.csv_max_size:
+                self.duplicate_file.close()
+                self.duplicate_file_index += 1
+                base, ext = os.path.splitext(self.out_duplicate_csv)
+                new_filename = f"{base}_{self.duplicate_file_index}{ext}"
+                self.duplicate_file = open(new_filename, "w", encoding="utf-8")
                 header = "IP,Categories,ReportDate,Comment\n"
-                handle.write(header)
-                handle.flush()
-                info["line_count"] = 1
-                info["file_size"] = len(header.encode("utf-8"))
-                info["handle"] = handle
-                self.log(f"Duplicate file for {category} rotated; new file: {new_filename}")
-            info["handle"].write(line)
-            info["handle"].flush()
-            info["line_count"] += 1
-            info["file_size"] += line_bytes
-
-    def handle_duplicate(self, category, seed, status, discovered_source_url):
-        report_date = datetime.now(timezone.utc).isoformat()
-        comment = self.comment_template_nozeroday.format(
-            ip=seed.ip,
-            discovered_url=discovered_source_url,
-            verdict=seed.source_type,
-            status=status
-        )
-        base_cat = seed.source_type.split("_")[0]
-        dup_cat = f"duplicate {base_cat}"
-        line = f'{seed.ip},"{dup_cat}",{report_date},"{comment}"\n'
-        self.write_duplicate_line(category, line)
-        self.log(f"Duplicate recorded for {seed.ip} in duplicate file {category} with status {status}.")
+                self.duplicate_file.write(header)
+                self.duplicate_file.flush()
+                self.duplicate_line_count = 1
+                self.duplicate_file_size = len(header.encode("utf-8"))
+                self.log(f"Duplicate file rotated; new file: {new_filename}")
+            self.duplicate_file.write(line)
+            self.duplicate_file.flush()
+            self.duplicate_line_count += 1
+            self.duplicate_file_size += line_bytes
 
     def run_scan(self):
         self.log("Loading definitions...")
@@ -885,34 +796,26 @@ class ScannerWorker(QObject):
             self.log("Invalid category base. Skipping...")
             return
 
-        winerror_msg = "WinError Happened"
-
-        # Determine status
+        # Determine status and catch WINERROR exceptions
         try:
             status = self.is_active_and_static(seed.ip, seed.port, category=cat,
                                                discovered_source_url=discovered_source_url)
         except requests.exceptions.ConnectionError as ce:
             status = f"WINERROR: {ce}"
-            winerror_msg = str(ce)
         if status is None:
             self.log(f"Skipping {seed.ip} due to unavailable HTTP status.")
             return
 
-        # Duplicate flag: check if the IP was already loaded (using a single set for all initial IPs)
         if duplicate_flag is None:
             duplicate_flag = (seed.ip in self.visited_ips)
 
-        # -- WINERROR Handling: Always use cat_label --
+        # ----- WINERROR Handling -----
         if status.startswith("WINERROR"):
             if duplicate_flag:
                 comment = f"WINERROR duplicate {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_winerror_whitelist_duplicate_line(line)
-                    self.log(f"WinError whitelist duplicate output written for {seed.ip}.")
-                else:
-                    self.write_winerror_bulk_duplicate_line(line)
-                    self.log(f"WinError bulk duplicate output written for {seed.ip}.")
+                self.write_duplicate_combined_line(line)
+                self.log(f"WinError duplicate output written for {seed.ip}.")
             else:
                 comment = f"WINERROR {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
@@ -924,17 +827,13 @@ class ScannerWorker(QObject):
                     self.log(f"WinError bulk output written for {seed.ip}.")
             return
 
-        # -- TIMEOUT Handling: Always use cat_label --
+        # ----- TIMEOUT Handling -----
         if status.startswith("TIMEOUT"):
             if duplicate_flag:
                 comment = f"TIMEOUT duplicate {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                if cat.startswith("whitelist"):
-                    self.write_winerror_whitelist_duplicate_line(line)
-                    self.log(f"Timeout whitelist duplicate output written for {seed.ip}.")
-                else:
-                    self.write_winerror_bulk_duplicate_line(line)
-                    self.log(f"Timeout bulk duplicate output written for {seed.ip}.")
+                self.write_duplicate_combined_line(line)
+                self.log(f"Timeout duplicate output written for {seed.ip}.")
             else:
                 comment = f"TIMEOUT {seed.source_type} {status}"
                 line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
@@ -946,18 +845,16 @@ class ScannerWorker(QObject):
                     self.log(f"Timeout bulk output written for {seed.ip}.")
             return
 
-        # -- Potentially Up Handling --
+        # ----- Potentially Up Handling -----
         if status.startswith("potentially up"):
-            # For potentially up responses, use the auto verdict mapping in the range 7 12.
-            auto_verdict_mapping = {
+            seed_verdict = {
                 "whitelist": "whitelist (auto verdict 7)",
                 "phishing": "phishing (auto verdict 8)",
                 "spam": "spam (auto verdict 9)",
                 "ddos": "ddos (auto verdict 10)",
                 "bruteforce": "bruteforce (auto verdict 11)",
                 "malicious": "malicious (auto verdict 12)"
-            }
-            seed_verdict = auto_verdict_mapping.get(base_category, seed.source_type)
+            }.get(base_category, seed.source_type)
             comment = self.comment_template_zeroday.format(
                 ip=seed.ip,
                 discovered_url=discovered_source_url,
@@ -965,50 +862,37 @@ class ScannerWorker(QObject):
                 status=status
             )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-            if cat.startswith("whitelist"):
-                if duplicate_flag:
-                    self.write_potentially_up_whitelist_duplicate_line(line)
-                    self.log(f"Potentially Up duplicate (whitelist) output written for {seed.ip} with status {status}.")
-                else:
+            if duplicate_flag:
+                self.write_duplicate_combined_line(line)
+                self.log(f"Potentially Up duplicate output written for {seed.ip} with status {status}.")
+            else:
+                if cat.startswith("whitelist"):
                     self.write_potentially_up_whitelist_line(line)
                     self.log(f"Potentially Up (whitelist) output written for {seed.ip} with status {status}.")
-            else:
-                if duplicate_flag:
-                    self.write_potentially_up_bulk_duplicate_line(line)
-                    self.log(f"Potentially Up duplicate (bulk) output written for {seed.ip} with status {status}.")
                 else:
                     self.write_potentially_up_bulk_line(line)
                     self.log(f"Potentially Up (bulk) output written for {seed.ip} with status {status}.")
             return
 
-        # -- Potentially Down Handling --
+        # ----- Potentially Down Handling -----
         if status.startswith("potentially down"):
-            if cat.startswith("whitelist"):
-                if duplicate_flag:
-                    comment = f"Potentially down duplicate: {status}"
-                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_whitelist_duplicate_line(line)
-                    self.log(
-                        f"Potentially Down duplicate (whitelist) output written for {seed.ip} with status {status}.")
-                else:
-                    comment = f"Potentially down: {status}"
-                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+            if duplicate_flag:
+                comment = f"Potentially down duplicate: {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                self.write_duplicate_combined_line(line)
+                self.log(f"Potentially Down duplicate output written for {seed.ip} with status {status}.")
+            else:
+                comment = f"Potentially down: {status}"
+                line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
+                if cat.startswith("whitelist"):
                     self.write_potentially_down_whitelist_line(line)
                     self.log(f"Potentially Down (whitelist) output written for {seed.ip} with status {status}.")
-            else:
-                if duplicate_flag:
-                    comment = f"Potentially down duplicate: {status}"
-                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-                    self.write_potentially_down_bulk_duplicate_line(line)
-                    self.log(f"Potentially Down duplicate (bulk) output written for {seed.ip} with status {status}.")
                 else:
-                    comment = f"Potentially down: {status}"
-                    line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
                     self.write_potentially_down_bulk_line(line)
                     self.log(f"Potentially Down (bulk) output written for {seed.ip} with status {status}.")
             return
 
-        # Confirmed "up" response
+        # ----- Confirmed "up" Handling -----
         if status.startswith("up:"):
             auto_verdict_mapping_confirmed = {
                 "whitelist": "whitelist (auto verdict 1)",
@@ -1019,9 +903,7 @@ class ScannerWorker(QObject):
                 "malicious": "malicious (auto verdict 6)"
             }
             seed_verdict = auto_verdict_mapping_confirmed.get(base_category, seed.source_type)
-
             if discovered_source_url and "Firewall" in status:
-                # When a firewall is detected, use the zeroday template without HTML similarity.
                 comment = self.comment_template_zeroday.format(
                     ip=seed.ip,
                     discovered_url=discovered_source_url,
@@ -1045,24 +927,16 @@ class ScannerWorker(QObject):
                     similarity=similarity_str
                 )
             line = f'{seed.ip},{cat_label},{datetime.now(timezone.utc).isoformat()},"{comment}"\n'
-
-            # Write output based on category and duplicate status.
-            if cat.startswith("whitelist"):
-                if not duplicate_flag:
+            if duplicate_flag:
+                self.write_duplicate_combined_line(line)
+                self.log(f"Duplicate output written for {seed.ip} with status {status}.")
+            else:
+                if cat.startswith("whitelist"):
                     self.write_whitelist_line(line)
                     self.log(f"Whitelist output written for {seed.ip}.")
-                elif duplicate_flag and self.settings.get("AllowDuplicate", True):
-                    self.handle_duplicate(cat, seed, status, discovered_source_url)
                 else:
-                    self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
-            else:
-                if not duplicate_flag:
                     self.write_bulk_line(line)
                     self.log(f"Bulk output written for {seed.ip}.")
-                elif duplicate_flag and self.settings.get("AllowDuplicate", True):
-                    self.handle_duplicate(cat, seed, status, discovered_source_url)
-                else:
-                    self.log(f"Duplicate for {seed.ip} detected. Skipping adding.")
 
         with self.lock:
             self.processed_count += 1
@@ -1332,7 +1206,6 @@ class MainWindow(QMainWindow):
         add_field("WhiteListFilesIPv4 (comma-separated):", "WhiteListFilesIPv4", "website\\IPv4WhiteList.txt")
         # Last Directory Path uses a directory browse button
         add_field("Last Directory Path:", "LastPath", "website")
-        add_plain_field("Allow Duplicate (true/false):", "AllowDuplicate", "true")
         # Duplicate file fields (CSV) use browse buttons
         add_field("Duplicate Whitelist File IPv4:", "DuplicateWhitelistFileIPv4", "output\\whitelist_ipv4_duplicates.csv")
         add_field("Duplicate Whitelist File IPv6:", "DuplicateWhitelistFileIPv6", "output\\whitelist_ipv6_duplicates.csv")
@@ -1400,8 +1273,6 @@ class MainWindow(QMainWindow):
                     value = int(value)
                 except:
                     value = 0
-            if key == "AllowDuplicate":
-                value = value.lower() == "true"
             settings[key] = value
         return settings
 
