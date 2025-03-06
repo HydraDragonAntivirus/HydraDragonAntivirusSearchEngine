@@ -418,6 +418,7 @@ class ScannerWorker:
             response = requests.get(url, timeout=self.timeout, stream=True)
             if response.status_code != 200:
                 return
+
             header_bytes = response.raw.read(4)
             detected = False
             comment = ""
@@ -425,32 +426,62 @@ class ScannerWorker:
             if header_bytes.startswith(b'MZ'):
                 comment = "ZeroDay Executable detected (MZ signature)"
                 detected = True
-                logging.info("ZeroDay executable detected (MZ) at %s", url)
             elif header_bytes.startswith(b'\x7FELF'):
                 comment = "ZeroDay Executable detected (ELF signature)"
                 detected = True
-                logging.info("ZeroDay executable detected (ELF) at %s", url)
 
-            if detected and self.zeroday_csv:
-                report_date = datetime.now(timezone.utc).isoformat()
-                line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
+            if detected:
                 with self.lock:
-                    if originating_ip in processed_results and (
-                            processed_results[originating_ip].get("is_initial", False) or
-                            processed_results[originating_ip].get("count", 0) > 1):
+                    # Ensure entry exists in processed_results
+                    if originating_ip not in processed_results:
+                        processed_results[originating_ip] = {
+                            "categories": set(),
+                            "last_comment": "",
+                            "is_initial": False,
+                            "count": 0,
+                            "processed": False,
+                            "status_type": "up"
+                        }
+
+                    # Update categories and comment
+                    processed_results[originating_ip]["categories"].add("malicious")
+                    processed_results[originating_ip]["last_comment"] = comment
+                    processed_results[originating_ip]["status_type"] = "up"
+
+                    # Prepare CSV line
+                    report_date = datetime.now(timezone.utc).isoformat()
+                    line = (f'{originating_ip},'
+                            f'{CATEGORY_MAP.get("malicious", "")},'
+                            f'{report_date},'
+                            f'"{comment}"\n')
+
+                    # Determine duplicate status
+                    is_duplicate = (processed_results[originating_ip].get("is_initial", False)
+                                    or processed_results[originating_ip].get("count", 0) > 1)
+
+                    # Write to appropriate CSV
+                    if is_duplicate:
                         if self.zeroday_duplicate_csv:
                             self.zeroday_duplicate_csv.write_line(line)
                     else:
                         self.zeroday_csv.write_line(line)
+
         except Exception as e:
             error_comment = f"ZeroDay check error: {e}"
             logging.error("Error in ZeroDay executable check for %s: %s", url, e)
-            # Update processed_results for this IP to reflect the error
             with self.lock:
-                processed_results.setdefault(originating_ip, {}).update({
-                    "last_comment": error_comment,
-                    "status_type": "winerror"
-                })
+                if originating_ip not in processed_results:
+                    processed_results[originating_ip] = {
+                        "categories": set(),
+                        "last_comment": error_comment,
+                        "is_initial": False,
+                        "count": 0,
+                        "processed": False,
+                        "status_type": "winerror"
+                    }
+                else:
+                    processed_results[originating_ip]["last_comment"] = error_comment
+                    processed_results[originating_ip]["status_type"] = "winerror"
 
     def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
@@ -572,18 +603,18 @@ class ScannerWorker:
                                                 self.pbar.refresh()
                 
                 # Extract IPs from content
-                new_ips_content = extract_ip_and_port(response.text)
-                for new_ip, new_port, new_version in new_ips_content:
+                new_ips = extract_ip_and_port(full_url)
+                for new_ip, new_port, new_version in new_ips:
                     if new_ip != ip:
                         with self.lock:
                             if self.max_ips > 0 and len(processed_results) >= self.max_ips:
                                 continue
                             if new_ip not in processed_results:
-                                new_seed = {"ip": new_ip, "category": category, "version": new_version}
+                                # Add malicious category automatically for executables
+                                new_seed = {"ip": new_ip,
+                                            "category": "malicious",  # Changed from original category
+                                            "version": new_version}
                                 self.seed_queue.put(new_seed)
-                                if self.pbar:
-                                    self.pbar.total += 1
-                                    self.pbar.refresh()
             
             return new_sub_urls, response.text
 
