@@ -45,6 +45,7 @@ default_bulk = os.path.join(output_dir, "BulkReport.csv")
 default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 DEFAULT_SETTINGS = {
     "MaxThreads": 1000,
+    "MaxIPs": 0,  # 0 means unlimited; set to a positive integer to limit processed unique IPs.
     "CsvMaxLines": 10000,
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
@@ -53,14 +54,12 @@ DEFAULT_SETTINGS = {
     "RequestTimeout": 10,
     "BulkOutputFile": default_bulk,
     "WhiteListOutputFile": default_whitelist,
-    # Other CSV files:
     "PotentiallyUpBulkOutputFile": os.path.join(output_dir, "potentially_up_bulk.csv"),
     "PotentiallyDownBulkOutputFile": os.path.join(output_dir, "potentially_down_bulk.csv"),
     "PotentiallyUpWhiteListOutputFile": os.path.join(output_dir, "potentially_up_whitelist.csv"),
     "PotentiallyDownWhiteListOutputFile": os.path.join(output_dir, "potentially_down_whitelist.csv"),
     "WinErrorBulkOutputFile": os.path.join(output_dir, "winerror_bulk.csv"),
     "WinErrorWhitelistOutputFile": os.path.join(output_dir, "winerror_whitelist.csv"),
-    # Duplicate files now use a _duplicate suffix
     "BulkDuplicateOutputFile": os.path.join(output_dir, "BulkReport_duplicate.csv"),
     "WhitelistDuplicateOutputFile": os.path.join(output_dir, "WhitelistReport_duplicate.csv"),
     "ZeroDayExecutableDetection": "true",
@@ -271,7 +270,7 @@ def is_active_and_static(ip, port, timeout):
 # -----------------------------------------------------------------------------
 # Global state: processed results and public IP.
 # -----------------------------------------------------------------------------
-# processed_results maps ip -> {"categories": set([...]), "last_comment": <str>}
+# processed_results maps ip -> {"categories": set([...]), "last_comment": <str>, "direct_written": <bool>}
 processed_results = {}
 MY_PUBLIC_IP = None
 
@@ -282,16 +281,17 @@ class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
         self.timeout = int(settings["RequestTimeout"])
+        self.max_ips = int(settings.get("MaxIPs", 0))  # 0 means unlimited
         self.seed_queue = queue.Queue()
         self.lock = threading.Lock()
         self.pbar = None  # Progress bar for processed IP count
         max_lines = int(settings["CsvMaxLines"])
         max_size = int(settings["CsvMaxSize"])
         header = "IP,Categories,ReportDate,Comment\n"
-        # Final bulk and whitelist CSVs are written only once at the end.
+        # Final bulk and whitelist CSVs (for aggregated entries)
         self.bulk_csv = CSVFile(settings["BulkOutputFile"], max_lines, max_size, header)
         self.whitelist_csv = CSVFile(settings["WhiteListOutputFile"], max_lines, max_size, header)
-        # Other CSV files (errors, duplicates, etc.) are written inline.
+        # Other CSV files (errors, duplicates, etc.)
         self.potentially_up_bulk_csv = CSVFile(settings["PotentiallyUpBulkOutputFile"], max_lines, max_size, header)
         self.potentially_down_bulk_csv = CSVFile(settings["PotentiallyDownBulkOutputFile"], max_lines, max_size, header)
         self.potentially_up_whitelist_csv = CSVFile(settings["PotentiallyUpWhiteListOutputFile"], max_lines, max_size, header)
@@ -316,13 +316,14 @@ class ScannerWorker:
             self.zeroday_csv.close()
 
     def final_write(self):
-        """After all scanning is complete, write final aggregated bulk and whitelist records."""
+        """Write aggregated bulk records and whitelist entries that were not directly written."""
         report_date = datetime.now(timezone.utc).isoformat()
         for ip, data in processed_results.items():
-            # Join all categories as a quoted, comma-separated list.
+            # Skip whitelist IPs that have been written directly
+            if "whitelist" in data["categories"] and data.get("direct_written", False):
+                continue
             all_categories = '"' + ",".join(sorted(data["categories"])) + '"'
             comment = data.get("last_comment", "Aggregated result")
-            # If the IP was ever seen as whitelist, write to whitelist file; else, bulk.
             if "whitelist" in data["categories"]:
                 self.whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
             else:
@@ -357,9 +358,9 @@ class ScannerWorker:
                 duplicate = True
                 processed_results[ip]["categories"].add(category)
             else:
-                processed_results[ip] = {"categories": set([category]), "last_comment": ""}
+                processed_results[ip] = {"categories": set([category]), "last_comment": "", "direct_written": False}
         if duplicate:
-            # Log duplicate entry into the corresponding duplicate CSV file.
+            # Log duplicate entry
             report_date = datetime.now(timezone.utc).isoformat()
             cat_label = CATEGORY_MAP.get(category, "")
             line = f'{ip},{cat_label},{report_date},"Duplicate entry detected"\n'
@@ -368,6 +369,11 @@ class ScannerWorker:
             else:
                 self.bulk_duplicate_csv.write_line(line)
             return
+
+        # If we've reached the maximum allowed unique IPs, skip processing further seeds.
+        with self.lock:
+            if self.max_ips > 0 and len(processed_results) > self.max_ips:
+                return
 
         port = None  # Extend if port info is available
         base_url = f"http://{ip}" + (f":{port}" if port else "")
@@ -458,6 +464,9 @@ class ScannerWorker:
                             for new_ip, new_port, new_version in new_ips:
                                 if new_ip != ip:
                                     with self.lock:
+                                        # Check maximum limit before adding new seed.
+                                        if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                            continue
                                         if new_ip not in processed_results:
                                             new_seed = {"ip": new_ip, "category": category, "version": new_version}
                                             self.seed_queue.put(new_seed)
@@ -467,6 +476,8 @@ class ScannerWorker:
                 for new_ip, new_port, new_version in new_ips_content:
                     if new_ip != ip:
                         with self.lock:
+                            if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                continue
                             if new_ip not in processed_results:
                                 new_seed = {"ip": new_ip, "category": category, "version": new_version}
                                 self.seed_queue.put(new_seed)
@@ -482,12 +493,25 @@ class ScannerWorker:
                 if url not in visited:
                     to_process.add(url)
 
+        # If the processed seed is whitelist, write it directly now.
+        report_date = datetime.now(timezone.utc).isoformat()
+        with self.lock:
+            if category == "whitelist":
+                self.whitelist_csv.write_line(
+                    f'{ip},"{",".join(sorted(processed_results[ip]["categories"]))}",{report_date},"{processed_results[ip]["last_comment"]}"\n'
+                )
+                processed_results[ip]["direct_written"] = True
+
     def worker(self):
         while True:
             try:
                 seed = self.seed_queue.get(timeout=5)
             except queue.Empty:
                 break
+            with self.lock:
+                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                    self.seed_queue.task_done()
+                    break
             self.process_seed(seed["ip"], seed["category"], seed["version"])
             self.seed_queue.task_done()
             with self.lock:
