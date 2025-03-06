@@ -416,36 +416,38 @@ class ScannerWorker:
     def check_zeroday_executable(self, url, originating_ip):
         try:
             response = requests.get(url, timeout=self.timeout, stream=True)
-            if response.status_code == 200:
-                header_bytes = response.raw.read(4)
+            # Only proceed if response is OK
+            if response.status_code != 200:
+                return
+            header_bytes = response.raw.read(4)
+            detected = False
+            comment = ""
+
+            if header_bytes.startswith(b'MZ'):
+                comment = "ZeroDay Executable detected (MZ signature)"
+                detected = True
+                logging.info("ZeroDay executable detected (MZ) at %s", url)
+            elif header_bytes.startswith(b'\x7FELF'):
+                comment = "ZeroDay Executable detected (ELF signature)"
+                detected = True
+                logging.info("ZeroDay executable detected (ELF) at %s", url)
+
+            if detected and self.zeroday_csv:
                 report_date = datetime.now(timezone.utc).isoformat()
-                comment = ""
-                detected = False
-                
-                if header_bytes.startswith(b'MZ'):
-                    comment = "ZeroDay Executable detected (MZ signature)"
-                    detected = True
-                    logging.info("ZeroDay executable detected (MZ) at %s", url)
-                elif header_bytes == b'\x7FELF':
-                    comment = "ZeroDay Executable detected (ELF signature)"
-                    detected = True
-                    logging.info("ZeroDay executable detected (ELF) at %s", url)
-                    
-                if detected and self.zeroday_csv:
-                    # Determine if this is a duplicate
-                    is_duplicate = False
-                    with self.lock:
-                        if originating_ip in processed_results:
-                            is_duplicate = processed_results[originating_ip].get("is_initial", False) or processed_results[originating_ip].get("count", 0) > 1
-                    
-                    line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
-                    with self.lock:
-                        if is_duplicate and self.zeroday_duplicate_csv:
+                line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
+                with self.lock:
+                    # Write to the duplicate file if applicable
+                    if originating_ip in processed_results and (
+                            processed_results[originating_ip].get("is_initial", False) or
+                            processed_results[originating_ip].get("count", 0) > 1):
+                        if self.zeroday_duplicate_csv:
                             self.zeroday_duplicate_csv.write_line(line)
-                        else:
-                            self.zeroday_csv.write_line(line)
+                    else:
+                        self.zeroday_csv.write_line(line)
         except Exception as e:
             logging.error("Error in ZeroDay executable check for %s: %s", url, e)
+            # On error, simply return without writing anything to ZeroDay executable CSVs.
+            return
 
     def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
