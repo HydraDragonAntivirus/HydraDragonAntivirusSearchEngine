@@ -267,7 +267,7 @@ def is_active_and_static(ip, port, timeout):
 
 # -----------------------------------------------------------------------------
 # Global state: processed_results and public IP.
-# For each IP: {"categories": set, "last_comment": str, "direct_written": bool, "processed": bool, "is_initial": bool}
+# For each IP, we also keep a counter "count" to indicate the number of times it was detected.
 # -----------------------------------------------------------------------------
 processed_results = {}
 MY_PUBLIC_IP = None
@@ -312,34 +312,37 @@ class ScannerWorker:
 
     def final_write(self):
         """
-        Final aggregation: If the IP comes from the initial seeds, it is directly considered a duplicate.
-        Otherwise, if the comment is empty, it is considered a duplicate.
+        Final aggregation:
+          - If the IP is an initial seed (is_initial True), it is always treated as a duplicate,
+            regardless of duplicate count.
+          - For non-initial IPs, if count > 1 then it is treated as duplicate.
+          - If the comment is empty, a default message is added.
         """
         report_date = datetime.now(timezone.utc).isoformat()
         for ip, data in processed_results.items():
             all_categories = '"' + ",".join(sorted(data["categories"])) + '"'
-            # If the seed is initial (from the initial list), mark it as duplicate directly
+            comment = data.get("last_comment", "").strip()
+            if not comment:
+                comment = "Default comment generated"
             if data.get("is_initial", False):
-                duplicate_comment = data.get("last_comment", "").strip() or "Initial seed duplicate entry"
+                # Always treat initial seed as duplicate
                 if "whitelist" in data["categories"]:
                     self.whitelist_duplicate_csv.write_line(
-                        f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                        f'{ip},{all_categories},{report_date},"{comment}"\n'
                     )
                 else:
                     self.bulk_duplicate_csv.write_line(
-                        f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                        f'{ip},{all_categories},{report_date},"{comment}"\n'
                     )
             else:
-                comment = data.get("last_comment", "").strip()
-                if not comment:
-                    duplicate_comment = "Duplicate entry with empty comment"
+                if data.get("count", 0) > 1:
                     if "whitelist" in data["categories"]:
                         self.whitelist_duplicate_csv.write_line(
-                            f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                            f'{ip},{all_categories},{report_date},"{comment}"\n'
                         )
                     else:
                         self.bulk_duplicate_csv.write_line(
-                            f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                            f'{ip},{all_categories},{report_date},"{comment}"\n'
                         )
                 else:
                     if "whitelist" in data["categories"]:
@@ -375,16 +378,24 @@ class ScannerWorker:
 
     def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
+            if ip not in processed_results:
+                processed_results[ip] = {
+                    "categories": set(),
+                    "last_comment": "",
+                    "direct_written": False,
+                    "is_initial": False,
+                    "count": 0,
+                    "processed": False
+                }
             if initial_ip:
-                # If it is an initial seed, mark it as duplicate immediately
-                processed_results.setdefault(ip, {"categories": set(), "last_comment": "", "direct_written": False, "processed": False, "is_initial": True})
-                processed_results[ip]["categories"].add(category)
-            else:
-                if ip not in processed_results:
-                    processed_results[ip] = {"categories": set(), "last_comment": "", "direct_written": False, "processed": False, "is_initial": False}
-                processed_results[ip]["categories"].add(category)
-                if processed_results[ip]["processed"]:
-                    return
+                processed_results[ip]["is_initial"] = True
+            processed_results[ip]["categories"].add(category)
+            processed_results[ip]["count"] += 1
+            already_processed = processed_results[ip]["processed"]
+        if already_processed:
+            return
+
+        with self.lock:
             processed_results[ip]["processed"] = True
 
         port = None
@@ -425,7 +436,6 @@ class ScannerWorker:
             up_codes = set(code.strip() for code in self.settings["HTTPUpCodes"].split(","))
             potentially_up_codes = set(code.strip() for code in self.settings["HTTPPotentiallyUpCodes"].split(","))
             potentially_down_codes = set(code.strip() for code in self.settings["HTTPPotentiallyDownCodes"].split(","))
-            final_comment = ""
             if code_str in up_codes:
                 if code_str == "200":
                     similarity = 0.0
@@ -508,16 +518,11 @@ class ScannerWorker:
         with self.lock:
             if category == "whitelist":
                 comment = processed_results[ip]["last_comment"].strip()
-                # If it is an initial seed or if the comment is empty, write to the duplicate file
-                if processed_results[ip].get("is_initial", False) or not comment:
-                    duplicate_comment = comment or "Initial seed duplicate entry"
-                    self.whitelist_duplicate_csv.write_line(
-                        f'{ip},"{",".join(sorted(processed_results[ip]["categories"]))}",{report_date},"{duplicate_comment}"\n'
-                    )
-                else:
-                    self.whitelist_csv.write_line(
-                        f'{ip},"{",".join(sorted(processed_results[ip]["categories"]))}",{report_date},"{comment}"\n'
-                    )
+                if not comment:
+                    comment = "Default comment generated"
+                self.whitelist_csv.write_line(
+                    f'{ip},"{",".join(sorted(processed_results[ip]["categories"]))}",{report_date},"{comment}"\n'
+                )
                 processed_results[ip]["direct_written"] = True
 
     def worker(self):
@@ -542,8 +547,18 @@ class ScannerWorker:
         # Pre-populate processed_results with initial seeds and mark them as initial.
         for seed in seeds:
             with self.lock:
-                processed_results.setdefault(seed["ip"], {"categories": set(), "last_comment": "", "direct_written": False, "processed": False, "is_initial": True})
+                if seed["ip"] not in processed_results:
+                    processed_results[seed["ip"]] = {
+                        "categories": set(),
+                        "last_comment": "",
+                        "direct_written": False,
+                        "is_initial": False,
+                        "count": 0,
+                        "processed": False
+                    }
                 processed_results[seed["ip"]]["categories"].add(seed["category"])
+                processed_results[seed["ip"]]["count"] += 1
+                processed_results[seed["ip"]]["is_initial"] = True
             seed["initial"] = True
             self.seed_queue.put(seed)
         initial_total = self.seed_queue.qsize()
