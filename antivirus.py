@@ -416,7 +416,6 @@ class ScannerWorker:
     def check_zeroday_executable(self, url, originating_ip):
         try:
             response = requests.get(url, timeout=self.timeout, stream=True)
-            # Only proceed if response is OK
             if response.status_code != 200:
                 return
             header_bytes = response.raw.read(4)
@@ -436,7 +435,6 @@ class ScannerWorker:
                 report_date = datetime.now(timezone.utc).isoformat()
                 line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
                 with self.lock:
-                    # Write to the duplicate file if applicable
                     if originating_ip in processed_results and (
                             processed_results[originating_ip].get("is_initial", False) or
                             processed_results[originating_ip].get("count", 0) > 1):
@@ -445,9 +443,14 @@ class ScannerWorker:
                     else:
                         self.zeroday_csv.write_line(line)
         except Exception as e:
+            error_comment = f"ZeroDay check error: {e}"
             logging.error("Error in ZeroDay executable check for %s: %s", url, e)
-            # On error, simply return without writing anything to ZeroDay executable CSVs.
-            return
+            # Update processed_results for this IP to reflect the error
+            with self.lock:
+                processed_results.setdefault(originating_ip, {}).update({
+                    "last_comment": error_comment,
+                    "status_type": "winerror"
+                })
 
     def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
