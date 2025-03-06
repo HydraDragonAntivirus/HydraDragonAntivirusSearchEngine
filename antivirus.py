@@ -270,12 +270,12 @@ def is_active_and_static(ip, port, timeout):
 # -----------------------------------------------------------------------------
 # Global state: processed results and public IP.
 # -----------------------------------------------------------------------------
-# processed_results maps ip -> {"categories": set([...]), "last_comment": <str>, "direct_written": <bool>}
+# processed_results maps ip -> {"categories": set([...]), "last_comment": <str>, "direct_written": <bool>, "processed": <bool>}
 processed_results = {}
 MY_PUBLIC_IP = None
 
 # -----------------------------------------------------------------------------
-# Advanced ScannerWorker with All Features
+# Advanced ScannerWorker with All Features (modified)
 # -----------------------------------------------------------------------------
 class ScannerWorker:
     def __init__(self, settings):
@@ -298,7 +298,7 @@ class ScannerWorker:
         self.potentially_down_whitelist_csv = CSVFile(settings["PotentiallyDownWhiteListOutputFile"], max_lines, max_size, header)
         self.winerror_bulk_csv = CSVFile(settings["WinErrorBulkOutputFile"], max_lines, max_size, header)
         self.winerror_whitelist_csv = CSVFile(settings["WinErrorWhitelistOutputFile"], max_lines, max_size, header)
-        # Duplicate CSV files for both lists
+        # Duplicate CSV files for both lists (now no longer used, but kept if needed)
         self.bulk_duplicate_csv = CSVFile(settings["BulkDuplicateOutputFile"], max_lines, max_size, header)
         self.whitelist_duplicate_csv = CSVFile(settings["WhitelistDuplicateOutputFile"], max_lines, max_size, header)
         if settings["ZeroDayExecutableDetection"].lower() == "true":
@@ -351,29 +351,26 @@ class ScannerWorker:
         except Exception as e:
             logging.error("Error in ZeroDay executable check for %s: %s", url, e)
 
-    def process_seed(self, ip, category, version):
-        duplicate = False
+    # Modified process_seed method: uses an "initial_ip" flag.
+    def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
-            if ip in processed_results:
-                duplicate = True
+            if initial_ip:
+                # For initial seeds, we assume they were preloaded.
                 processed_results[ip]["categories"].add(category)
             else:
-                processed_results[ip] = {"categories": set([category]), "last_comment": "", "direct_written": False}
-        if duplicate:
-            # Log duplicate entry
-            report_date = datetime.now(timezone.utc).isoformat()
-            cat_label = CATEGORY_MAP.get(category, "")
-            line = f'{ip},{cat_label},{report_date},"Duplicate entry detected"\n'
-            if category == "whitelist":
-                self.whitelist_duplicate_csv.write_line(line)
-            else:
-                self.bulk_duplicate_csv.write_line(line)
-            return
-
-        # If we've reached the maximum allowed unique IPs, skip processing further seeds.
-        with self.lock:
-            if self.max_ips > 0 and len(processed_results) > self.max_ips:
-                return
+                if ip not in processed_results:
+                    processed_results[ip] = {
+                        "categories": set(),
+                        "last_comment": "",
+                        "direct_written": False,
+                        "processed": False
+                    }
+                processed_results[ip]["categories"].add(category)
+                # For non-initial seeds, skip processing if already processed.
+                if processed_results[ip]["processed"]:
+                    return
+            # Mark the IP as processed.
+            processed_results[ip]["processed"] = True
 
         port = None  # Extend if port info is available
         base_url = f"http://{ip}" + (f":{port}" if port else "")
@@ -464,7 +461,6 @@ class ScannerWorker:
                             for new_ip, new_port, new_version in new_ips:
                                 if new_ip != ip:
                                     with self.lock:
-                                        # Check maximum limit before adding new seed.
                                         if self.max_ips > 0 and len(processed_results) >= self.max_ips:
                                             continue
                                         if new_ip not in processed_results:
@@ -502,6 +498,7 @@ class ScannerWorker:
                 )
                 processed_results[ip]["direct_written"] = True
 
+    # Modified worker method to always call process_seed with initial_ip=True for initial seeds.
     def worker(self):
         while True:
             try:
@@ -512,7 +509,7 @@ class ScannerWorker:
                 if self.max_ips > 0 and len(processed_results) >= self.max_ips:
                     self.seed_queue.task_done()
                     break
-            self.process_seed(seed["ip"], seed["category"], seed["version"])
+            self.process_seed(seed["ip"], seed["category"], seed["version"], initial_ip=seed.get("initial", False))
             self.seed_queue.task_done()
             with self.lock:
                 if self.pbar:
@@ -521,7 +518,13 @@ class ScannerWorker:
     def run(self, seeds):
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
+        # Pre-populate processed_results with all initial seeds.
         for seed in seeds:
+            with self.lock:
+                processed_results.setdefault(seed["ip"], {"categories": set(), "last_comment": "", "direct_written": False, "processed": False})
+                processed_results[seed["ip"]]["categories"].add(seed["category"])
+            # Mark these as initial by setting a flag in the seed dictionary.
+            seed["initial"] = True
             self.seed_queue.put(seed)
         initial_total = self.seed_queue.qsize()
         self.pbar = tqdm(total=initial_total, desc="Processing seeds")
