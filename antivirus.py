@@ -564,67 +564,69 @@ class ScannerWorker:
                 processed_results[ip]["last_comment"] = final_comment
                 processed_results[ip]["status_type"] = status_type
 
-            # Process HTML content
+        # Process HTML content
+        try:
+            with warnings.catch_warnings():
+                warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+                soup = BeautifulSoup(response.text, "lxml")
+        except Exception as e:
+            logging.error("lxml parser failed for %s: %s", url, e)
             try:
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
-                    soup = BeautifulSoup(response.text, "lxml")
+                soup = BeautifulSoup(response.text, "html.parser")
             except Exception as e:
-                logging.error("lxml parser failed for %s: %s", url, e)
-                try:
-                    soup = BeautifulSoup(response.text, "html.parser")
-                except Exception as e:
-                    logging.error("html.parser failed for %s: %s", url, e)
-                    return new_sub_urls, None
+                logging.error("html.parser failed for %s: %s", url, e)
+                return new_sub_urls, None
 
-            if response.status_code == 200:
-                # Extract URLs from HTML elements
-                # In the HTML parsing section of process_page():
-                for tag in soup.find_all(["script", "link", "img"]):
-                    attr = "src" if tag.name in ["script", "img"] else "href"
-                    url_val = tag.get(attr)
-                    if url_val:
-                        full_url = urljoin(url, url_val)
-                        parsed = urlparse(full_url)
+        if response.status_code == 200:
+            # 1. Process HTML elements for URLs
+            for tag in soup.find_all(["script", "link", "img"]):
+                attr = "src" if tag.name in ["script", "img"] else "href"
+                url_val = tag.get(attr)
+                if url_val:
+                    full_url = urljoin(url, url_val)
+                    parsed = urlparse(full_url)
 
-                        # Initialize full_url to empty string if undefined
-                        if not full_url:
-                            full_url = ""
+                    # Process same-host URLs
+                    if parsed.hostname == ip:
+                        if full_url not in visited:
+                            new_sub_urls.add(full_url)
+                    else:
+                        # Extract IPs from external URLs
+                        new_ips = extract_ip_and_port(full_url)
+                        for new_ip, new_port, new_version in new_ips:
+                            if new_ip != ip:
+                                with self.lock:
+                                    if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                        continue
+                                    if new_ip not in processed_results:
+                                        new_seed = {
+                                            "ip": new_ip,
+                                            "category": category,
+                                            "version": new_version
+                                        }
+                                        self.seed_queue.put(new_seed)
+                                        if self.pbar:
+                                            self.pbar.total += 1
+                                            self.pbar.refresh()
 
-                        if parsed.hostname == ip:
-                            if full_url not in visited:
-                                new_sub_urls.add(full_url)
-                        else:
-                            # Ensure full_url exists before processing
-                            if full_url:  # Add this check
-                                new_ips = extract_ip_and_port(full_url)
-                                for new_ip, new_port, new_version in new_ips:
-                                    if new_ip != ip:
-                                        with self.lock:
-                                            if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                                continue
-                                            if new_ip not in processed_results:
-                                                new_seed = {"ip": new_ip, "category": category, "version": new_version}
-                                                self.seed_queue.put(new_seed)
-                                                if self.pbar:
-                                                    self.pbar.total += 1
-                                                    self.pbar.refresh()
-
-                # Extract IPs from content
-                new_ips = extract_ip_and_port(full_url)
-                for new_ip, new_port, new_version in new_ips:
+            # 2. Process content text separately
+            content_text = response.text
+            if content_text:
+                content_ips = extract_ip_and_port(content_text)
+                for new_ip, new_port, new_version in content_ips:
                     if new_ip != ip:
                         with self.lock:
                             if self.max_ips > 0 and len(processed_results) >= self.max_ips:
                                 continue
                             if new_ip not in processed_results:
-                                # Add malicious category automatically for executables
-                                new_seed = {"ip": new_ip,
-                                            "category": "malicious",  # Changed from original category
-                                            "version": new_version}
+                                new_seed = {
+                                    "ip": new_ip,
+                                    "category": "malicious",
+                                    "version": new_version
+                                }
                                 self.seed_queue.put(new_seed)
-            
-            return new_sub_urls, response.text
+
+        return new_sub_urls, response.text
 
         # Process the URL and its subpages
         while to_process:
