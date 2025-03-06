@@ -298,7 +298,7 @@ class ScannerWorker:
         self.potentially_down_whitelist_csv = CSVFile(settings["PotentiallyDownWhiteListOutputFile"], max_lines, max_size, header)
         self.winerror_bulk_csv = CSVFile(settings["WinErrorBulkOutputFile"], max_lines, max_size, header)
         self.winerror_whitelist_csv = CSVFile(settings["WinErrorWhitelistOutputFile"], max_lines, max_size, header)
-        # Duplicate CSV files for both lists (now no longer used, but kept if needed)
+        # Duplicate CSV files for both lists
         self.bulk_duplicate_csv = CSVFile(settings["BulkDuplicateOutputFile"], max_lines, max_size, header)
         self.whitelist_duplicate_csv = CSVFile(settings["WhitelistDuplicateOutputFile"], max_lines, max_size, header)
         if settings["ZeroDayExecutableDetection"].lower() == "true":
@@ -316,18 +316,40 @@ class ScannerWorker:
             self.zeroday_csv.close()
 
     def final_write(self):
-        """Write aggregated bulk records and whitelist entries that were not directly written."""
+        """
+        Write aggregated bulk records and whitelist entries that were not directly written.
+        If the comment is empty (after stripping), the record is treated as a duplicate and written
+        only to the duplicate CSV file.
+        """
         report_date = datetime.now(timezone.utc).isoformat()
         for ip, data in processed_results.items():
-            # Skip whitelist IPs that have been written directly
+            # Skip whitelist IPs that have been directly written.
             if "whitelist" in data["categories"] and data.get("direct_written", False):
                 continue
+
+            comment = data.get("last_comment", "").strip()
             all_categories = '"' + ",".join(sorted(data["categories"])) + '"'
-            comment = data.get("last_comment", "Aggregated result")
-            if "whitelist" in data["categories"]:
-                self.whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+            
+            # If comment is empty, write to duplicate CSV.
+            if not comment:
+                duplicate_comment = "Duplicate entry with empty comment"
+                if "whitelist" in data["categories"]:
+                    self.whitelist_duplicate_csv.write_line(
+                        f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                    )
+                else:
+                    self.bulk_duplicate_csv.write_line(
+                        f'{ip},{all_categories},{report_date},"{duplicate_comment}"\n'
+                    )
             else:
-                self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                if "whitelist" in data["categories"]:
+                    self.whitelist_csv.write_line(
+                        f'{ip},{all_categories},{report_date},"{comment}"\n'
+                    )
+                else:
+                    self.bulk_csv.write_line(
+                        f'{ip},{all_categories},{report_date},"{comment}"\n'
+                    )
 
     def check_zeroday_executable(self, url, originating_ip):
         try:
@@ -355,7 +377,7 @@ class ScannerWorker:
     def process_seed(self, ip, category, version, initial_ip=False):
         with self.lock:
             if initial_ip:
-                # For initial seeds, we assume they were preloaded.
+                # For initial seeds, we assume they are preloaded.
                 processed_results[ip]["categories"].add(category)
             else:
                 if ip not in processed_results:
@@ -498,7 +520,7 @@ class ScannerWorker:
                 )
                 processed_results[ip]["direct_written"] = True
 
-    # Modified worker method to always call process_seed with initial_ip=True for initial seeds.
+    # Modified worker method: for each seed, pass its "initial" flag.
     def worker(self):
         while True:
             try:
@@ -523,7 +545,7 @@ class ScannerWorker:
             with self.lock:
                 processed_results.setdefault(seed["ip"], {"categories": set(), "last_comment": "", "direct_written": False, "processed": False})
                 processed_results[seed["ip"]]["categories"].add(seed["category"])
-            # Mark these as initial by setting a flag in the seed dictionary.
+            # Mark these as initial by setting a flag.
             seed["initial"] = True
             self.seed_queue.put(seed)
         initial_total = self.seed_queue.qsize()
