@@ -659,6 +659,7 @@ class ScannerWorker:
         # Write final results to appropriate files
         self.final_write()
         self.close_files()
+        logging.info("Scan completed.")
 
 def main():
     seeds = load_seeds(SETTINGS)
