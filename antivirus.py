@@ -60,7 +60,6 @@ DEFAULT_SETTINGS = {
     "PotentiallyDownWhiteListOutputFile": os.path.join(output_dir, "potentially_down_whitelist.csv"),
     "WinErrorBulkOutputFile": os.path.join(output_dir, "winerror_bulk.csv"),
     "WinErrorWhitelistOutputFile": os.path.join(output_dir, "winerror_whitelist.csv"),
-    # All duplicate files should follow the same naming pattern with _duplicate suffix
     "BulkDuplicateOutputFile": os.path.join(output_dir, "BulkReport_duplicate.csv"),
     "WhiteListDuplicateOutputFile": os.path.join(output_dir, "WhitelistReport_duplicate.csv"),
     "PotentiallyUpBulkDuplicateOutputFile": os.path.join(output_dir, "potentially_up_bulk_duplicate.csv"),
@@ -126,7 +125,7 @@ class CSVFile:
         self.size = len(header.encode("utf-8"))
         self.index = 0
         self.open_file()
-        self.lock = threading.Lock()  # Add a lock for thread safety
+        self.lock = threading.Lock()
         
     def open_file(self):
         if self.index == 0:
@@ -139,7 +138,7 @@ class CSVFile:
         self.file.flush()
         
     def write_line(self, line):
-        with self.lock:  # Ensure thread safety
+        with self.lock:
             line_bytes = len(line.encode("utf-8"))
             if self.line_count >= self.max_lines or (self.size + line_bytes) >= self.max_size:
                 self.file.close()
@@ -211,9 +210,15 @@ def load_lines(path):
         if os.path.exists(single_path):
             with open(single_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    ip = line.strip().split(",")[0].strip().lower()
-                    if ip and is_valid_ip(ip):
+                    line = line.strip()
+                    parts = line.split(',')
+                    first_part = parts[0].strip()
+                    found_ips = extract_ip_and_port(first_part)
+                    if found_ips:
+                        ip = found_ips[0][0]
                         entries.append(ip)
+                    else:
+                        logging.warning("Invalid IP in line: %s", line)
             logging.info("Loaded %d IPs from %s", len(entries), single_path)
     return entries
 
@@ -239,7 +244,8 @@ def load_seeds(settings):
         for ip in ips:
             if ip not in seen:
                 version = is_valid_ip(ip)
-                seeds.append({"ip": ip, "category": category, "version": version})
+                # For initial seeds, discovered_url is set to its own base URL.
+                seeds.append({"ip": ip, "category": category, "version": version, "discovered_url": f"http://{ip}"})
                 seen.add(ip)
     logging.info("Total seeds loaded: %d", len(seeds))
     return seeds
@@ -279,16 +285,10 @@ def is_active_and_static(ip, port, timeout):
         logging.error("Active check failed for %s: %s", url, e)
         return False
 
-# -----------------------------------------------------------------------------
-# Global state: processed_results and public IP.
-# For each IP, we also keep a counter "count" and store status_type.
-# -----------------------------------------------------------------------------
+# Global state
 processed_results = {}
 MY_PUBLIC_IP = None
 
-# -----------------------------------------------------------------------------
-# ScannerWorker (modified for separate duplicate file handling)
-# -----------------------------------------------------------------------------
 class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
@@ -302,7 +302,6 @@ class ScannerWorker:
         header = "IP,Categories,ReportDate,Comment\n"
         
         # Create CSV file objects for different report types
-        # Regular files
         self.bulk_csv = CSVFile(settings["BulkOutputFile"], max_lines, max_size, header)
         self.whitelist_csv = CSVFile(settings["WhiteListOutputFile"], max_lines, max_size, header)
         self.potentially_up_bulk_csv = CSVFile(settings["PotentiallyUpBulkOutputFile"], max_lines, max_size, header)
@@ -312,7 +311,6 @@ class ScannerWorker:
         self.winerror_bulk_csv = CSVFile(settings["WinErrorBulkOutputFile"], max_lines, max_size, header)
         self.winerror_whitelist_csv = CSVFile(settings["WinErrorWhitelistOutputFile"], max_lines, max_size, header)
         
-        # Duplicate files - one for each category with _duplicate suffix
         self.bulk_duplicate_csv = CSVFile(settings["BulkDuplicateOutputFile"], max_lines, max_size, header)
         self.whitelist_duplicate_csv = CSVFile(settings["WhiteListDuplicateOutputFile"], max_lines, max_size, header)
         self.potentially_up_bulk_duplicate_csv = CSVFile(settings["PotentiallyUpBulkDuplicateOutputFile"], max_lines, max_size, header)
@@ -330,7 +328,6 @@ class ScannerWorker:
             self.zeroday_duplicate_csv = None
 
     def close_files(self):
-        # Close all CSV file objects
         regular_files = [
             self.bulk_csv, self.whitelist_csv, 
             self.potentially_up_bulk_csv, self.potentially_down_bulk_csv,
@@ -354,26 +351,15 @@ class ScannerWorker:
             self.zeroday_duplicate_csv.close()
 
     def final_write(self):
-        """
-        Final aggregation with separate duplicate files:
-        - Each duplicate goes to the corresponding _duplicate file based on category and status
-        - Non-duplicates go to their respective category files
-        """
         report_date = datetime.now(timezone.utc).isoformat()
         
         for ip, data in processed_results.items():
-            # Format categories for CSV
             all_categories = '"' + ",".join(sorted(data["categories"])) + '"'
             comment = data.get("last_comment", "").strip()
-            
-            # Determine if this is a duplicate
             is_duplicate = data.get("is_initial", False) or data.get("count", 0) > 1
-            
-            # Get status type
             status_type = data.get("status_type", "up")
             is_whitelist = "whitelist" in data["categories"]
             
-            # Write to the appropriate file based on duplicate status, category, and status_type
             if is_duplicate:
                 if is_whitelist:
                     if status_type == "potentially_up":
@@ -382,18 +368,18 @@ class ScannerWorker:
                         self.potentially_down_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "winerror":
                         self.winerror_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:  # "up" (normal) status
+                    else:
                         self.whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                else:  # Not whitelist
+                else:
                     if status_type == "potentially_up":
                         self.potentially_up_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "potentially_down":
                         self.potentially_down_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "winerror":
                         self.winerror_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:  # "up" (normal) status
+                    else:
                         self.bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-            else:  # Not a duplicate
+            else:
                 if is_whitelist:
                     if status_type == "potentially_up":
                         self.potentially_up_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
@@ -401,16 +387,16 @@ class ScannerWorker:
                         self.potentially_down_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "winerror":
                         self.winerror_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:  # "up" (normal) status
+                    else:
                         self.whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                else:  # Not whitelist
+                else:
                     if status_type == "potentially_up":
                         self.potentially_up_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "potentially_down":
                         self.potentially_down_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                     elif status_type == "winerror":
                         self.winerror_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:  # "up" (normal) status
+                    else:
                         self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
 
     def check_zeroday_executable(self, url, originating_ip):
@@ -432,7 +418,6 @@ class ScannerWorker:
 
             if detected:
                 with self.lock:
-                    # Ensure entry exists in processed_results
                     if originating_ip not in processed_results:
                         processed_results[originating_ip] = {
                             "categories": set(),
@@ -442,24 +427,19 @@ class ScannerWorker:
                             "processed": False,
                             "status_type": "up"
                         }
-
-                    # Update categories and comment
                     processed_results[originating_ip]["categories"].add("malicious")
                     processed_results[originating_ip]["last_comment"] = comment
                     processed_results[originating_ip]["status_type"] = "up"
 
-                    # Prepare CSV line
                     report_date = datetime.now(timezone.utc).isoformat()
                     line = (f'{originating_ip},'
                             f'{CATEGORY_MAP.get("malicious", "")},'
                             f'{report_date},'
                             f'"{comment}"\n')
 
-                    # Determine duplicate status
                     is_duplicate = (processed_results[originating_ip].get("is_initial", False)
                                     or processed_results[originating_ip].get("count", 0) > 1)
 
-                    # Write to appropriate CSV
                     if is_duplicate:
                         if self.zeroday_duplicate_csv:
                             self.zeroday_duplicate_csv.write_line(line)
@@ -483,7 +463,7 @@ class ScannerWorker:
                     processed_results[originating_ip]["last_comment"] = error_comment
                     processed_results[originating_ip]["status_type"] = "winerror"
 
-    def process_seed(self, ip, category, version, initial_ip=False):
+    def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
         with self.lock:
             if ip not in processed_results:
                 processed_results[ip] = {
@@ -511,7 +491,7 @@ class ScannerWorker:
         visited = set()
         to_process = set([base_url])
 
-        def process_page(url, visited):
+        def process_page(url):
             new_sub_urls = set()
             try:
                 response = requests.get(url, timeout=self.timeout, allow_redirects=True)
@@ -531,32 +511,31 @@ class ScannerWorker:
             potentially_up_codes = set(code.strip() for code in self.settings["HTTPPotentiallyUpCodes"].split(","))
             potentially_down_codes = set(code.strip() for code in self.settings["HTTPPotentiallyDownCodes"].split(","))
             
-            # Determine comment and status_type based on response code:
             if code_str in up_codes:
                 if code_str == "200":
                     similarity = 0.0
                     final_comment = self.settings["CommentTemplateZerodayStatus200"].format(
-                        ip=ip, discovered_url=url, verdict=category, status=code_str, similarity=similarity
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
                     )
                     status_type = "up"
                 else:
                     final_comment = self.settings["CommentTemplateZeroday"].format(
-                        ip=ip, discovered_url=url, verdict=category, status=code_str
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                     )
                     status_type = "up"
             elif code_str in potentially_up_codes:
                 final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=url, verdict=category, status=code_str
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "potentially_up"
             elif code_str in potentially_down_codes:
                 final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=url, verdict=category, status=code_str
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "potentially_down"
             else:
                 final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=url, verdict=category, status=code_str
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "up"
                 
@@ -564,80 +543,73 @@ class ScannerWorker:
                 processed_results[ip]["last_comment"] = final_comment
                 processed_results[ip]["status_type"] = status_type
 
-        # Process HTML content
-        try:
-            with warnings.catch_warnings():
-                warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
-                soup = BeautifulSoup(response.text, "lxml")
-        except Exception as e:
-            logging.error("lxml parser failed for %s: %s", url, e)
             try:
-                soup = BeautifulSoup(response.text, "html.parser")
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+                    soup = BeautifulSoup(response.text, "lxml")
             except Exception as e:
-                logging.error("html.parser failed for %s: %s", url, e)
-                return new_sub_urls, None
+                logging.error("lxml parser failed for %s: %s", url, e)
+                try:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                except Exception as e:
+                    logging.error("html.parser failed for %s: %s", url, e)
+                    return new_sub_urls, None
 
-        if response.status_code == 200:
-            # 1. Process HTML elements for URLs
-            for tag in soup.find_all(["script", "link", "img"]):
-                attr = "src" if tag.name in ["script", "img"] else "href"
-                url_val = tag.get(attr)
-                if url_val:
-                    full_url = urljoin(url, url_val)
-                    parsed = urlparse(full_url)
+            if response.status_code == 200:
+                for tag in soup.find_all(["script", "link", "img"]):
+                    attr = "src" if tag.name in ["script", "img"] else "href"
+                    url_val = tag.get(attr)
+                    if url_val:
+                        full_url = urljoin(url, url_val)
+                        parsed = urlparse(full_url)
+                        if parsed.hostname == ip:
+                            if full_url not in visited:
+                                new_sub_urls.add(full_url)
+                        else:
+                            new_ips = extract_ip_and_port(full_url)
+                            for new_ip, new_port, new_version in new_ips:
+                                if new_ip != ip:
+                                    with self.lock:
+                                        if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                            continue
+                                        if new_ip not in processed_results:
+                                            new_seed = {
+                                                "ip": new_ip,
+                                                "category": category,
+                                                "version": new_version,
+                                                "discovered_url": url
+                                            }
+                                            self.seed_queue.put(new_seed)
+                                            if self.pbar:
+                                                self.pbar.total += 1
+                                                self.pbar.refresh()
 
-                    # Process same-host URLs
-                    if parsed.hostname == ip:
-                        if full_url not in visited:
-                            new_sub_urls.add(full_url)
-                    else:
-                        # Extract IPs from external URLs
-                        new_ips = extract_ip_and_port(full_url)
-                        for new_ip, new_port, new_version in new_ips:
-                            if new_ip != ip:
-                                with self.lock:
-                                    if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                        continue
-                                    if new_ip not in processed_results:
-                                        new_seed = {
-                                            "ip": new_ip,
-                                            "category": category,
-                                            "version": new_version
-                                        }
-                                        self.seed_queue.put(new_seed)
-                                        if self.pbar:
-                                            self.pbar.total += 1
-                                            self.pbar.refresh()
+                content_text = response.text
+                if content_text:
+                    content_ips = extract_ip_and_port(content_text)
+                    for new_ip, new_port, new_version in content_ips:
+                        if new_ip != ip:
+                            with self.lock:
+                                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                    continue
+                                if new_ip not in processed_results:
+                                    new_seed = {
+                                        "ip": new_ip,
+                                        "category": "malicious",
+                                        "version": new_version,
+                                        "discovered_url": url
+                                    }
+                                    self.seed_queue.put(new_seed)
+            return new_sub_urls, response.text
 
-            # 2. Process content text separately
-            content_text = response.text
-            if content_text:
-                content_ips = extract_ip_and_port(content_text)
-                for new_ip, new_port, new_version in content_ips:
-                    if new_ip != ip:
-                        with self.lock:
-                            if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                continue
-                            if new_ip not in processed_results:
-                                new_seed = {
-                                    "ip": new_ip,
-                                    "category": "malicious",
-                                    "version": new_version
-                                }
-                                self.seed_queue.put(new_seed)
-
-        return new_sub_urls, response.text
-
-        # Process the URL and its subpages
         while to_process:
             current_url = to_process.pop()
             visited.add(current_url)
-            new_urls, content = process_page(current_url, visited)
-            for url in new_urls:
-                if url not in visited:
-                    to_process.add(url)
+            new_urls, content = process_page(current_url)
+            for next_url in new_urls:
+                if next_url not in visited:
+                    to_process.add(next_url)
 
-        # Check for zero-day executable if enabled
         if self.zeroday_csv and base_url:
             self.check_zeroday_executable(base_url, ip)
 
@@ -653,7 +625,7 @@ class ScannerWorker:
                     self.seed_queue.task_done()
                     break
             
-            self.process_seed(seed["ip"], seed["category"], seed["version"], initial_ip=seed.get("initial", False))
+            self.process_seed(seed["ip"], seed["category"], seed["version"], seed["discovered_url"], initial_ip=seed.get("initial", False))
             self.seed_queue.task_done()
             
             with self.lock:
@@ -664,14 +636,13 @@ class ScannerWorker:
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
         
-        # Pre-populate processed_results with initial seeds and mark them as initial
         for seed in seeds:
             with self.lock:
                 if seed["ip"] not in processed_results:
                     processed_results[seed["ip"]] = {
                         "categories": set(),
                         "last_comment": "",
-                        "is_initial": True,  # Mark as initial
+                        "is_initial": True,
                         "count": 0,
                         "processed": False,
                         "status_type": "up"
@@ -685,7 +656,6 @@ class ScannerWorker:
         initial_total = self.seed_queue.qsize()
         self.pbar = tqdm(total=initial_total, desc="Processing seeds")
         
-        # Start worker threads
         threads = []
         max_threads = min(int(self.settings["MaxThreads"]), initial_total)
         for _ in range(max_threads):
@@ -693,16 +663,13 @@ class ScannerWorker:
             t.start()
             threads.append(t)
         
-        # Wait for all tasks to complete
         self.seed_queue.join()
         
-        # Ensure all threads finish
         for t in threads:
             t.join()
         
         self.pbar.close()
         
-        # Write final results to appropriate files
         self.final_write()
         self.close_files()
         logging.info("Scan completed.")
