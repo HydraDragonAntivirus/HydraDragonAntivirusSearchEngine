@@ -128,7 +128,11 @@ class CSVFile:
         self.lock = threading.Lock()
         
     def open_file(self):
-        path = f"{os.path.splitext(self.base_path)[0]}_{self.index}{os.path.splitext(self.base_path)[1]}" if self.index else self.base_path
+        if self.index == 0:
+            path = self.base_path
+        else:
+            base, ext = os.path.splitext(self.base_path)
+            path = f"{base}_{self.index}{ext}"
         self.file = open(path, "w", encoding="utf-8")
         self.file.write(self.header)
         self.file.flush()
@@ -169,8 +173,8 @@ def is_valid_ip(ip_string):
 def extract_ip_and_port(text):
     found_ips = []
     ipv4_pattern = re.compile(r'\b(?P<ip>(?:\d{1,3}\.){3}\d{1,3})(?::(?P<port>\d{1,5}))?\b')
-    ipv6_bracket_pattern = re.compile(r'\[(?P<ip>([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(([0-9a-fA-F]{1,4}:){0,6})([0-9a-fA-F]{1,4})?::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})\](?::(?P<port>\d{1,5}))?')
-    ipv6_pattern = re.compile(r'\b(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|(([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})?::([0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4})\b')
+    ipv6_bracket_pattern = re.compile(r'\[(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\](?::(?P<port>\d{1,5}))?')
+    ipv6_pattern = re.compile(r'\b(?P<ip>(?:[A-Fa-f0-9]{1,4}:){2,7}[A-Fa-f0-9]{1,4})\b')
     for match in ipv6_bracket_pattern.finditer(text):
         ip = match.group('ip')
         port_str = match.group('port')
@@ -192,7 +196,7 @@ def extract_ip_and_port(text):
         if is_valid_ip(ip):
             found_ips.append((ip, port, "ipv4"))
     for match in ipv6_pattern.finditer(text):
-        ip = match.group(0)
+        ip = match.group('ip')
         if any(existing[0] == ip for existing in found_ips):
             continue
         if is_valid_ip(ip):
@@ -206,9 +210,15 @@ def load_lines(path):
         if os.path.exists(single_path):
             with open(single_path, "r", encoding="utf-8") as f:
                 for line in f:
-                    ip = line.strip().split(",")[0].strip().lower()
-                    if ip and is_valid_ip(ip):
+                    line = line.strip()
+                    parts = line.split(',')
+                    first_part = parts[0].strip()
+                    found_ips = extract_ip_and_port(first_part)
+                    if found_ips:
+                        ip = found_ips[0][0]  # Take the first IP found, ignoring port
                         entries.append(ip)
+                    else:
+                        logging.warning("Invalid IP in line: %s", line)
             logging.info("Loaded %d IPs from %s", len(entries), single_path)
     return entries
 
@@ -234,7 +244,12 @@ def load_seeds(settings):
         for ip in ips:
             if ip not in seen:
                 version = is_valid_ip(ip)
-                seeds.append({"ip": ip, "category": category, "version": version})
+                seeds.append({
+                    "ip": ip,
+                    "category": category,
+                    "version": version,
+                    "discovered_url": f"http://{ip}"  # Initial seeds' discovered URL
+                })
                 seen.add(ip)
     logging.info("Total seeds loaded: %d", len(seeds))
     return seeds
@@ -262,23 +277,20 @@ def is_active_and_static(ip, port, timeout):
     url = f"http://{ip}" + (f":{port}" if port else "")
     try:
         response = requests.get(url, timeout=timeout, allow_redirects=True)
+        if response.status_code not in [200]:
+            return False
         parsed = urlparse(response.url)
         final_ip = parsed.hostname
         final_port = parsed.port if parsed.port else 80
         expected_port = port if port else 80
         return final_ip == ip and final_port == expected_port
     except Exception as e:
+        logging.error("Active check failed for %s: %s", url, e)
         return False
 
-# -----------------------------------------------------------------------------
-# Global state
-# -----------------------------------------------------------------------------
 processed_results = {}
 MY_PUBLIC_IP = None
 
-# -----------------------------------------------------------------------------
-# ScannerWorker
-# -----------------------------------------------------------------------------
 class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
@@ -317,16 +329,19 @@ class ScannerWorker:
             self.zeroday_duplicate_csv = None
 
     def close_files(self):
-        for csv_obj in [
+        regular_files = [
             self.bulk_csv, self.whitelist_csv, 
             self.potentially_up_bulk_csv, self.potentially_down_bulk_csv,
             self.potentially_up_whitelist_csv, self.potentially_down_whitelist_csv,
-            self.winerror_bulk_csv, self.winerror_whitelist_csv,
+            self.winerror_bulk_csv, self.winerror_whitelist_csv
+        ]
+        duplicate_files = [
             self.bulk_duplicate_csv, self.whitelist_duplicate_csv,
             self.potentially_up_bulk_duplicate_csv, self.potentially_down_bulk_duplicate_csv,
             self.potentially_up_whitelist_duplicate_csv, self.potentially_down_whitelist_duplicate_csv,
             self.winerror_bulk_duplicate_csv, self.winerror_whitelist_duplicate_csv
-        ]:
+        ]
+        for csv_obj in regular_files + duplicate_files:
             csv_obj.close()
         if self.zeroday_csv:
             self.zeroday_csv.close()
@@ -342,38 +357,44 @@ class ScannerWorker:
             status_type = data.get("status_type", "up")
             is_whitelist = "whitelist" in data["categories"]
             
-            csv_line = f'{ip},{all_categories},{report_date},"{comment}"\n'
-            
-            target_csv = None
             if is_duplicate:
                 if is_whitelist:
-                    target_csv = {
-                        "potentially_up": self.potentially_up_whitelist_duplicate_csv,
-                        "potentially_down": self.potentially_down_whitelist_duplicate_csv,
-                        "winerror": self.winerror_whitelist_duplicate_csv
-                    }.get(status_type, self.whitelist_duplicate_csv)
+                    if status_type == "potentially_up":
+                        self.potentially_up_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "potentially_down":
+                        self.potentially_down_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "winerror":
+                        self.winerror_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    else:
+                        self.whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                 else:
-                    target_csv = {
-                        "potentially_up": self.potentially_up_bulk_duplicate_csv,
-                        "potentially_down": self.potentially_down_bulk_duplicate_csv,
-                        "winerror": self.winerror_bulk_duplicate_csv
-                    }.get(status_type, self.bulk_duplicate_csv)
+                    if status_type == "potentially_up":
+                        self.potentially_up_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "potentially_down":
+                        self.potentially_down_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "winerror":
+                        self.winerror_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    else:
+                        self.bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
             else:
                 if is_whitelist:
-                    target_csv = {
-                        "potentially_up": self.potentially_up_whitelist_csv,
-                        "potentially_down": self.potentially_down_whitelist_csv,
-                        "winerror": self.winerror_whitelist_csv
-                    }.get(status_type, self.whitelist_csv)
+                    if status_type == "potentially_up":
+                        self.potentially_up_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "potentially_down":
+                        self.potentially_down_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "winerror":
+                        self.winerror_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    else:
+                        self.whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
                 else:
-                    target_csv = {
-                        "potentially_up": self.potentially_up_bulk_csv,
-                        "potentially_down": self.potentially_down_bulk_csv,
-                        "winerror": self.winerror_bulk_csv
-                    }.get(status_type, self.bulk_csv)
-            
-            if target_csv:
-                target_csv.write_line(csv_line)
+                    if status_type == "potentially_up":
+                        self.potentially_up_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "potentially_down":
+                        self.potentially_down_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    elif status_type == "winerror":
+                        self.winerror_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    else:
+                        self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
 
     def check_zeroday_executable(self, url, originating_ip):
         try:
@@ -397,7 +418,7 @@ class ScannerWorker:
                     if originating_ip not in processed_results:
                         processed_results[originating_ip] = {
                             "categories": set(),
-                            "last_comment": comment,
+                            "last_comment": "",
                             "is_initial": False,
                             "count": 0,
                             "processed": False,
@@ -405,100 +426,121 @@ class ScannerWorker:
                         }
                     processed_results[originating_ip]["categories"].add("malicious")
                     processed_results[originating_ip]["last_comment"] = comment
+                    processed_results[originating_ip]["status_type"] = "up"
                     report_date = datetime.now(timezone.utc).isoformat()
-                    line = f'{originating_ip},{CATEGORY_MAP["malicious"]},{report_date},"{comment}"\n'
-                    if processed_results[originating_ip].get("count", 0) > 1:
-                        self.zeroday_duplicate_csv.write_line(line)
+                    line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
+                    is_duplicate = processed_results[originating_ip].get("is_initial", False) or processed_results[originating_ip].get("count", 0) > 1
+                    if is_duplicate:
+                        if self.zeroday_duplicate_csv:
+                            self.zeroday_duplicate_csv.write_line(line)
                     else:
                         self.zeroday_csv.write_line(line)
         except Exception as e:
-            logging.error("ZeroDay check error for %s: %s", url, e)
+            error_comment = f"ZeroDay check error: {e}"
+            logging.error("Error in ZeroDay executable check for %s: %s", url, e)
+            with self.lock:
+                if originating_ip not in processed_results:
+                    processed_results[originating_ip] = {
+                        "categories": set(),
+                        "last_comment": error_comment,
+                        "is_initial": False,
+                        "count": 0,
+                        "processed": False,
+                        "status_type": "winerror"
+                    }
+                else:
+                    processed_results[originating_ip]["last_comment"] = error_comment
+                    processed_results[originating_ip]["status_type"] = "winerror"
 
-    def process_seed(self, seed):
-        ip = seed["ip"]
-        category = seed["category"]
-        version = seed.get("version", "ipv4")
-        port = seed.get("port", None)
-        initial_ip = seed.get("initial", False)
-
+    def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
         with self.lock:
             if ip not in processed_results:
                 processed_results[ip] = {
                     "categories": set(),
                     "last_comment": "",
-                    "is_initial": initial_ip,
+                    "is_initial": False,
                     "count": 0,
                     "processed": False,
-                    "status_type": "up",
-                    "initial_content": None
+                    "status_type": "up"
                 }
+            if initial_ip:
+                processed_results[ip]["is_initial"] = True
             processed_results[ip]["categories"].add(category)
             processed_results[ip]["count"] += 1
-            if initial_ip and not processed_results[ip]["initial_content"]:
-                base_url = f"http://{ip}" + (f":{port}" if port else "")
-                try:
-                    response = requests.get(base_url, timeout=self.timeout, allow_redirects=True)
-                    processed_results[ip]["initial_content"] = response.text
-                except:
-                    pass
+            already_processed = processed_results[ip]["processed"]
+        
+        if already_processed:
+            return
 
-        base_url = f"http://{ip}" + (f":{port}" if port else "")
+        with self.lock:
+            processed_results[ip]["processed"] = True
+
+        port = None
+        base_url = f"http://{ip}"
         visited = set()
-        to_process = [base_url]
+        to_process = set([base_url])
+        base_content = None
 
-        def process_page(url):
+        def process_page(url, visited):
+            new_sub_urls = set()
             try:
                 response = requests.get(url, timeout=self.timeout, allow_redirects=True)
-                parsed = urlparse(response.url)
-                final_ip = parsed.hostname
-                final_port = parsed.port or 80
-                if final_ip != ip or final_port != (port or 80):
-                    with self.lock:
-                        processed_results[ip]["status_type"] = "potentially_down"
-                        processed_results[ip]["last_comment"] = f"Redirected to {final_ip}:{final_port}"
-                    return [], None
-            except requests.exceptions.RequestException as e:
+            except requests.exceptions.ConnectionError as ce:
                 with self.lock:
                     processed_results[ip]["status_type"] = "winerror"
-                    processed_results[ip]["last_comment"] = f"Connection error: {e}"
-                return [], None
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
+                    )
+                return new_sub_urls, None
+            except Exception as e:
+                with self.lock:
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
+                    )
+                return new_sub_urls, None
 
             code_str = f"{response.status_code:03d}"
             up_codes = set(self.settings["HTTPUpCodes"].split(","))
             potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
             potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
+            
+            nonlocal base_content
+            if url == base_url and response.status_code == 200:
+                base_content = response.text
 
-            initial_content = processed_results[ip].get("initial_content", "")
-            similarity = compute_similarity(initial_content, response.text) if response.status_code == 200 else 0.0
+            similarity = 0.0
+            if response.status_code == 200 and base_content and url != base_url:
+                similarity = compute_similarity(response.text, base_content)
 
             if code_str in up_codes:
-                if code_str == "200":
-                    comment = self.settings["CommentTemplateZerodayStatus200"].format(
-                        ip=ip, discovered_url=response.url, verdict=category, status=code_str, similarity=similarity
+                if response.status_code == 200:
+                    final_comment = self.settings["CommentTemplateZerodayStatus200"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
                     )
                 else:
-                    comment = self.settings["CommentTemplateZeroday"].format(
-                        ip=ip, discovered_url=response.url, verdict=category, status=code_str
+                    final_comment = self.settings["CommentTemplateZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                     )
                 status_type = "up"
             elif code_str in potentially_up_codes:
-                comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=response.url, verdict=category, status=code_str
+                final_comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "potentially_up"
             elif code_str in potentially_down_codes:
-                comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=response.url, verdict=category, status=code_str
+                final_comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "potentially_down"
             else:
-                comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=response.url, verdict=category, status=code_str
+                final_comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
                 )
                 status_type = "up"
 
             with self.lock:
-                processed_results[ip]["last_comment"] = comment
+                processed_results[ip]["last_comment"] = final_comment
                 processed_results[ip]["status_type"] = status_type
 
             try:
@@ -506,41 +548,71 @@ class ScannerWorker:
                     warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
                     soup = BeautifulSoup(response.text, "lxml")
             except Exception as e:
-                soup = BeautifulSoup(response.text, "html.parser")
+                logging.error("lxml parser failed for %s: %s", url, e)
+                try:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                except Exception as e:
+                    logging.error("html.parser failed for %s: %s", url, e)
+                    return new_sub_urls, None
 
-            new_urls = set()
-            for tag in soup.find_all(["a", "script", "link", "img"]):
-                attr = "href" if tag.name == "a" else ("src" if tag.name in ["script", "img"] else "href")
-                url_val = tag.get(attr, "")
-                full_url = urljoin(url, url_val)
-                parsed = urlparse(full_url)
-                if parsed.hostname == ip and full_url not in visited:
-                    new_urls.add(full_url)
-                extracted_ips = extract_ip_and_port(full_url)
-                for new_ip, new_port, new_version in extracted_ips:
-                    if new_ip != ip:
-                        with self.lock:
-                            if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                continue
-                            if new_ip not in processed_results:
-                                self.seed_queue.put({
-                                    "ip": new_ip,
-                                    "port": new_port,
-                                    "category": "malicious",
-                                    "version": new_version
-                                })
-                                if self.pbar:
-                                    self.pbar.total += 1
+            if response.status_code == 200:
+                for tag in soup.find_all(["script", "link", "img"]):
+                    attr = "src" if tag.name in ["script", "img"] else "href"
+                    url_val = tag.get(attr)
+                    if url_val:
+                        full_url = urljoin(url, url_val)
+                        parsed = urlparse(full_url)
+                        if parsed.hostname == ip:
+                            if full_url not in visited:
+                                new_sub_urls.add(full_url)
+                        else:
+                            new_ips = extract_ip_and_port(full_url)
+                            for new_ip, new_port, new_version in new_ips:
+                                if new_ip != ip:
+                                    with self.lock:
+                                        if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                            continue
+                                        if new_ip not in processed_results:
+                                            new_seed = {
+                                                "ip": new_ip,
+                                                "category": category,
+                                                "version": new_version,
+                                                "discovered_url": full_url
+                                            }
+                                            self.seed_queue.put(new_seed)
+                                            if self.pbar:
+                                                self.pbar.total += 1
+                                                self.pbar.refresh()
 
-            return list(new_urls), response.text
+                content_text = response.text
+                if content_text:
+                    content_ips = extract_ip_and_port(content_text)
+                    for new_ip, new_port, new_version in content_ips:
+                        if new_ip != ip:
+                            with self.lock:
+                                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                                    continue
+                                if new_ip not in processed_results:
+                                    new_seed = {
+                                        "ip": new_ip,
+                                        "category": "malicious",
+                                        "version": new_version,
+                                        "discovered_url": url
+                                    }
+                                    self.seed_queue.put(new_seed)
+                                    if self.pbar:
+                                        self.pbar.total += 1
+                                        self.pbar.refresh()
+
+            return new_sub_urls, response.text
 
         while to_process:
             current_url = to_process.pop()
-            if current_url in visited:
-                continue
             visited.add(current_url)
-            new_urls, content = process_page(current_url)
-            to_process.extend([url for url in new_urls if url not in visited])
+            new_urls, content = process_page(current_url, visited)
+            for url in new_urls:
+                if url not in visited:
+                    to_process.add(url)
 
         if self.zeroday_csv and base_url:
             self.check_zeroday_executable(base_url, ip)
@@ -549,32 +621,47 @@ class ScannerWorker:
         while True:
             try:
                 seed = self.seed_queue.get(timeout=5)
-                self.process_seed(seed)
-                self.seed_queue.task_done()
-                with self.lock:
-                    if self.pbar:
-                        self.pbar.update(1)
             except queue.Empty:
                 break
+            
+            with self.lock:
+                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
+                    self.seed_queue.task_done()
+                    break
+            
+            self.process_seed(
+                seed["ip"],
+                seed["category"],
+                seed["version"],
+                seed["discovered_url"],
+                initial_ip=seed.get("initial", False)
+            )
+            self.seed_queue.task_done()
+            
+            with self.lock:
+                if self.pbar:
+                    self.pbar.update(1)
 
     def run(self, seeds):
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
         
         for seed in seeds:
+            with self.lock:
+                if seed["ip"] not in processed_results:
+                    processed_results[seed["ip"]] = {
+                        "categories": set(),
+                        "last_comment": "",
+                        "is_initial": True,
+                        "count": 0,
+                        "processed": False,
+                        "status_type": "up"
+                    }
+                processed_results[seed["ip"]]["categories"].add(seed["category"])
+                processed_results[seed["ip"]]["count"] += 1
             seed["initial"] = True
             self.seed_queue.put(seed)
-            with self.lock:
-                processed_results[seed["ip"]] = {
-                    "categories": {seed["category"]},
-                    "last_comment": "",
-                    "is_initial": True,
-                    "count": 1,
-                    "processed": False,
-                    "status_type": "up",
-                    "initial_content": None
-                }
-
+        
         initial_total = self.seed_queue.qsize()
         self.pbar = tqdm(total=initial_total, desc="Processing seeds")
         
@@ -586,10 +673,12 @@ class ScannerWorker:
             threads.append(t)
         
         self.seed_queue.join()
+        
         for t in threads:
             t.join()
         
         self.pbar.close()
+        
         self.final_write()
         self.close_files()
         logging.info("Scan completed.")
@@ -603,7 +692,7 @@ def main():
     start_time = time.time()
     worker.run(seeds)
     elapsed = time.time() - start_time
-    print(f"Scan completed in {time.strftime('%H:%M:%S', time.gmtime(elapsed))}")
+    print("Scan completed in", time.strftime('%H:%M:%S', time.gmtime(elapsed)))
 
 if __name__ == "__main__":
     main()
