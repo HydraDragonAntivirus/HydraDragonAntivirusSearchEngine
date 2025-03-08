@@ -413,62 +413,6 @@ class ScannerWorker:
                     else:
                         self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
 
-    def check_zeroday_executable(self, url, originating_ip):
-        try:
-            response = requests.get(url, timeout=self.timeout, stream=True)
-            if response.status_code != 200:
-                return
-
-            header_bytes = response.raw.read(4)
-            detected = False
-            comment = ""
-
-            if header_bytes.startswith(b'MZ'):
-                comment = "ZeroDay Executable detected (MZ signature)"
-                detected = True
-            elif header_bytes.startswith(b'\x7FELF'):
-                comment = "ZeroDay Executable detected (ELF signature)"
-                detected = True
-
-            if detected:
-                with self.lock:
-                    if originating_ip not in processed_results:
-                        processed_results[originating_ip] = {
-                            "categories": set(),
-                            "last_comment": "",
-                            "is_initial": False,
-                            "count": 0,
-                            "processed": False,
-                            "status_type": "up"
-                        }
-                    processed_results[originating_ip]["categories"].add("malicious")
-                    processed_results[originating_ip]["last_comment"] = comment
-                    processed_results[originating_ip]["status_type"] = "up"
-                    report_date = datetime.now(timezone.utc).isoformat()
-                    line = f'{originating_ip},{CATEGORY_MAP.get("malicious", "")},{report_date},"{comment}"\n'
-                    is_duplicate = processed_results[originating_ip].get("is_initial", False) or processed_results[originating_ip].get("count", 0) > 1
-                    if is_duplicate:
-                        if self.zeroday_duplicate_csv:
-                            self.zeroday_duplicate_csv.write_line(line)
-                    else:
-                        self.zeroday_csv.write_line(line)
-        except Exception as e:
-            error_comment = f"ZeroDay check error: {e}"
-            logging.error("Error in ZeroDay executable check for %s: %s", url, e)
-            with self.lock:
-                if originating_ip not in processed_results:
-                    processed_results[originating_ip] = {
-                        "categories": set(),
-                        "last_comment": error_comment,
-                        "is_initial": False,
-                        "count": 0,
-                        "processed": False,
-                        "status_type": "winerror"
-                    }
-                else:
-                    processed_results[originating_ip]["last_comment"] = error_comment
-                    processed_results[originating_ip]["status_type"] = "winerror"
-
     def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
         with self.lock:
             if ip not in processed_results:
@@ -496,40 +440,62 @@ class ScannerWorker:
         base_url = f"http://{ip}"
         visited = set()
         to_process = set([base_url])
+
+    def process_page(url, visited):
+        new_sub_urls = set()
+        try:
+            response = requests.get(url, timeout=self.timeout, allow_redirects=True)
+        except requests.exceptions.ConnectionError as ce:
+            with self.lock:
+                processed_results[ip]["status_type"] = "winerror"
+                processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
+                )
+            return new_sub_urls, None
+        except Exception as e:
+            with self.lock:
+                processed_results[ip]["status_type"] = "winerror"
+                processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
+                )
+            return new_sub_urls, None
+
+        code_str = f"{response.status_code:03d}"
+        up_codes = set(self.settings["HTTPUpCodes"].split(","))
+        potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
+        potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
+
         base_content = None
 
-        def process_page(url, visited):
-            new_sub_urls = set()
-            try:
-                response = requests.get(url, timeout=self.timeout, allow_redirects=True)
-            except requests.exceptions.ConnectionError as ce:
+        if url == base_url and response.status_code == 200:
+            base_content = response.text
+
+        similarity = 0.0
+        final_comment = ""
+        status_type = "up"
+
+        # Check for ZeroDay Executable
+        if response.status_code == 200:
+            header_bytes = response.content[:4]
+            if header_bytes.startswith(b'MZ'):
+                final_comment = "ZeroDay Executable detected (MZ signature)"
                 with self.lock:
-                    processed_results[ip]["status_type"] = "winerror"
-                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
-                    )
-                return new_sub_urls, None
-            except Exception as e:
+                    processed_results[ip]["categories"].add("malicious")
+                    processed_results[ip]["last_comment"] = final_comment
+                    processed_results[ip]["status_type"] = "up"
+            elif header_bytes.startswith(b'\x7FELF'):
+                final_comment = "ZeroDay Executable detected (ELF signature)"
                 with self.lock:
-                    processed_results[ip]["status_type"] = "winerror"
-                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
-                    )
-                return new_sub_urls, None
+                    processed_results[ip]["categories"].add("malicious")
+                    processed_results[ip]["last_comment"] = final_comment
+                    processed_results[ip]["status_type"] = "up"
+            else:
+                # Proceed with similarity check if not an executable
+                if base_content and url != base_url:
+                    similarity = compute_similarity(response.text, base_content)
 
-            code_str = f"{response.status_code:03d}"
-            up_codes = set(self.settings["HTTPUpCodes"].split(","))
-            potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
-            potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
-            
-            nonlocal base_content
-            if url == base_url and response.status_code == 200:
-                base_content = response.text
-
-            similarity = 0.0
-            if response.status_code == 200 and base_content and url != base_url:
-                similarity = compute_similarity(response.text, base_content)
-
+        # If executable was detected, skip other comment templates
+        if not final_comment:
             if code_str in up_codes:
                 if response.status_code == 200:
                     final_comment = self.settings["CommentTemplateZerodayStatus200"].format(
@@ -556,7 +522,8 @@ class ScannerWorker:
                 )
                 status_type = "up"
 
-            with self.lock:
+        with self.lock:
+            if not processed_results[ip]["last_comment"]:  # Only update if not already set by executable check
                 processed_results[ip]["last_comment"] = final_comment
                 processed_results[ip]["status_type"] = status_type
 
@@ -630,9 +597,6 @@ class ScannerWorker:
             for url in new_urls:
                 if url not in visited:
                     to_process.add(url)
-
-        if self.zeroday_csv and base_url:
-            self.check_zeroday_executable(base_url, ip)
 
     def worker(self):
         while True:
