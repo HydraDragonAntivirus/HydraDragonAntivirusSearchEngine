@@ -203,52 +203,69 @@ def extract_ip_and_port(text):
             found_ips.append((ip, None, "ipv6"))
     return found_ips
 
-def load_lines(path):
+def load_lines(path, expected_version):
     entries = []
+    invalid_entries = []
     paths = [p.strip() for p in path.split(",") if p.strip()]
     for single_path in paths:
-        if os.path.exists(single_path):
-            with open(single_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    parts = line.split(',')
-                    first_part = parts[0].strip()
-                    found_ips = extract_ip_and_port(first_part)
-                    if found_ips:
-                        ip = found_ips[0][0]  # Take the first IP found, ignoring port
+        if not os.path.exists(single_path):
+            logging.warning("File not found: %s", single_path)
+            continue
+        with open(single_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue  # Skip empty lines
+                parts = line.split(',')
+                first_part = parts[0].strip()
+                found_ips = extract_ip_and_port(first_part)
+                valid = False
+                for ip, port, version in found_ips:
+                    if version == expected_version and is_valid_ip(ip) == expected_version:
                         entries.append(ip)
-                    else:
-                        logging.warning("Invalid IP in line: %s", line)
-            logging.info("Loaded %d IPs from %s", len(entries), single_path)
+                        valid = True
+                        break  # At least one valid IP found
+                if not valid:
+                    invalid_entries.append(line)
+        # Write invalid entries for the current file
+        if invalid_entries:
+            invalid_filename = os.path.join(output_dir, f"invalid_{expected_version}.txt")
+            with open(invalid_filename, "a", encoding="utf-8") as invalid_file:
+                for invalid_line in invalid_entries:
+                    invalid_file.write(f"{invalid_line}\n")
+            logging.info("Wrote %d invalid entries from %s to %s", len(invalid_entries), single_path, invalid_filename)
+            invalid_entries.clear()  # Clear for next file
     return entries
 
 def load_seeds(settings):
     seeds = []
-    file_category_mapping = {
-        settings["WhiteListFilesIPv4"]: "whitelist",
-        settings["WhiteListFilesIPv6"]: "whitelist",
-        settings["PhishingFilesIPv4Active"]: "phishing",
-        settings["PhishingFilesIPv4InActive"]: "phishing",
-        settings["DDoSFilesIPv4"]: "ddos",
-        settings["DDoSFilesIPv6"]: "ddos",
-        settings["BruteForceFilesIPv4"]: "bruteforce",
-        settings["BruteForceFilesIPv6"]: "bruteforce",
-        settings["SpamFilesIPv4"]: "spam",
-        settings["SpamFilesIPv6"]: "spam",
-        settings["MalwareFilesIPv4"]: "malicious",
-        settings["MalwareFilesIPv6"]: "malicious"
-    }
     seen = set()
-    for file, category in file_category_mapping.items():
-        ips = load_lines(file)
+
+    # Define file entries with their respective categories and expected IP versions
+    file_entries = [
+        (settings["WhiteListFilesIPv4"], "whitelist", "ipv4"),
+        (settings["WhiteListFilesIPv6"], "whitelist", "ipv6"),
+        (settings["PhishingFilesIPv4Active"], "phishing", "ipv4"),
+        (settings["PhishingFilesIPv4InActive"], "phishing", "ipv4"),
+        (settings["DDoSFilesIPv4"], "ddos", "ipv4"),
+        (settings["DDoSFilesIPv6"], "ddos", "ipv6"),
+        (settings["BruteForceFilesIPv4"], "bruteforce", "ipv4"),
+        (settings["BruteForceFilesIPv6"], "bruteforce", "ipv6"),
+        (settings["SpamFilesIPv4"], "spam", "ipv4"),
+        (settings["SpamFilesIPv6"], "spam", "ipv6"),
+        (settings["MalwareFilesIPv4"], "malicious", "ipv4"),
+        (settings["MalwareFilesIPv6"], "malicious", "ipv6"),
+    ]
+
+    for file_paths, category, expected_version in file_entries:
+        ips = load_lines(file_paths, expected_version)
         for ip in ips:
             if ip not in seen:
-                version = is_valid_ip(ip)
                 seeds.append({
                     "ip": ip,
                     "category": category,
-                    "version": version,
-                    "discovered_url": f"http://{ip}"  # Initial seeds' discovered URL
+                    "version": expected_version,
+                    "discovered_url": f"http://{ip}"
                 })
                 seen.add(ip)
     logging.info("Total seeds loaded: %d", len(seeds))
