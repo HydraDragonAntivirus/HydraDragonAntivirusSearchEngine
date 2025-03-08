@@ -438,27 +438,41 @@ class ScannerWorker:
 
         port = None
         base_url = f"http://{ip}"
+        base_content = None  # Track base content for similarity checks
         visited = set()
         to_process = set([base_url])
 
-    def process_page(url, visited):
-        new_sub_urls = set()
-        try:
-            response = requests.get(url, timeout=self.timeout, allow_redirects=True)
-        except requests.exceptions.ConnectionError as ce:
-            with self.lock:
-                processed_results[ip]["status_type"] = "winerror"
-                processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
-                )
-            return new_sub_urls, None
-        except Exception as e:
-            with self.lock:
-                processed_results[ip]["status_type"] = "winerror"
-                processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
-                )
-            return new_sub_urls, None
+        def process_page(url):
+            nonlocal base_content
+            new_sub_urls = set()
+            try:
+                response = requests.get(url, timeout=self.timeout, allow_redirects=True)
+            except requests.exceptions.ConnectionError as ce:
+                with self.lock:
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
+                    )
+                return new_sub_urls
+            except Exception as e:
+                with self.lock:
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
+                    )
+                return new_sub_urls
+
+            # --- ZeroDay Executable Check ---
+            if response.status_code == 200:
+                header_bytes = response.content[:4]
+                if header_bytes.startswith((b'MZ', b'\x7FELF')):
+                    signature = "MZ" if header_bytes.startswith(b'MZ') else "ELF"
+                    comment = f"ZeroDay Executable detected ({signature} signature)"
+                    with self.lock:
+                        processed_results[ip]["categories"].add("malicious")
+                        processed_results[ip]["last_comment"] = comment
+                        processed_results[ip]["status_type"] = "up"
+                    return new_sub_urls  # Skip further processing
 
         code_str = f"{response.status_code:03d}"
         up_codes = set(self.settings["HTTPUpCodes"].split(","))
@@ -590,13 +604,15 @@ class ScannerWorker:
 
             return new_sub_urls, response.text
 
+        # --- Main URL Processing Loop ---
         while to_process:
             current_url = to_process.pop()
+            if current_url in visited:
+                continue
             visited.add(current_url)
-            new_urls, content = process_page(current_url, visited)
-            for url in new_urls:
-                if url not in visited:
-                    to_process.add(url)
+
+            new_urls = process_page(current_url)
+            to_process.update(new_urls - visited)
 
     def worker(self):
         while True:
