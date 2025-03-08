@@ -45,7 +45,6 @@ default_bulk = os.path.join(output_dir, "BulkReport.csv")
 default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 DEFAULT_SETTINGS = {
     "MaxThreads": 1000,
-    "MaxIPs": 0,  # 0 means unlimited
     "CsvMaxLines": 10000,
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
@@ -297,7 +296,6 @@ class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
         self.timeout = int(settings["RequestTimeout"])
-        self.max_ips = int(settings.get("MaxIPs", 0))
         self.seed_queue = queue.Queue()
         self.lock = threading.Lock()
         self.pbar = None
@@ -497,8 +495,6 @@ class ScannerWorker:
                             for new_ip, new_port, new_version in new_ips:
                                 if new_ip != ip:
                                     with self.lock:
-                                        if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                            continue
                                         if new_ip not in processed_results:
                                             new_seed = {
                                                 "ip": new_ip,
@@ -517,8 +513,6 @@ class ScannerWorker:
                     for new_ip, new_port, new_version in content_ips:
                         if new_ip != ip:
                             with self.lock:
-                                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                                    continue
                                 if new_ip not in processed_results:
                                     new_seed = {
                                         "ip": new_ip,
@@ -596,11 +590,6 @@ class ScannerWorker:
                 seed = self.seed_queue.get(timeout=5)
             except queue.Empty:
                 break
-            
-            with self.lock:
-                if self.max_ips > 0 and len(processed_results) >= self.max_ips:
-                    self.seed_queue.task_done()
-                    break
             
             self.process_seed(
                 seed["ip"],
