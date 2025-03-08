@@ -290,21 +290,6 @@ def get_my_public_ip(timeout):
         logging.error("Error obtaining public IP: %s", e)
         return None
 
-def is_active_and_static(ip, port, timeout):
-    url = f"http://{ip}" + (f":{port}" if port else "")
-    try:
-        response = requests.get(url, timeout=timeout, allow_redirects=True)
-        if response.status_code not in [200]:
-            return False
-        parsed = urlparse(response.url)
-        final_ip = parsed.hostname
-        final_port = parsed.port if parsed.port else 80
-        expected_port = port if port else 80
-        return final_ip == ip and final_port == expected_port
-    except Exception as e:
-        logging.error("Active check failed for %s: %s", url, e)
-        return False
-
 processed_results = {}
 MY_PUBLIC_IP = None
 
@@ -414,6 +399,7 @@ class ScannerWorker:
                         self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
 
     def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
+        # Update processed_results for the current IP
         with self.lock:
             if ip not in processed_results:
                 processed_results[ip] = {
@@ -429,118 +415,59 @@ class ScannerWorker:
             processed_results[ip]["categories"].add(category)
             processed_results[ip]["count"] += 1
             already_processed = processed_results[ip]["processed"]
-        
+
         if already_processed:
             return
 
         with self.lock:
             processed_results[ip]["processed"] = True
 
-        port = None
         base_url = f"http://{ip}"
-        base_content = None  # Track base content for similarity checks
         visited = set()
-        to_process = set([base_url])
+        to_process = {base_url}
+        base_content = None  # Will hold the HTML of the base URL for similarity comparison
 
         def process_page(url):
-            nonlocal base_content
+            """
+            Processes a given URL and returns a tuple:
+            (set of new sub-URLs to process, response object)
+            """
             new_sub_urls = set()
             try:
                 response = requests.get(url, timeout=self.timeout, allow_redirects=True)
-            except requests.exceptions.ConnectionError as ce:
+            except requests.exceptions.ConnectionError:
                 with self.lock:
                     processed_results[ip]["status_type"] = "winerror"
                     processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
                         ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
                     )
-                return new_sub_urls
+                return new_sub_urls, None
             except Exception as e:
                 with self.lock:
                     processed_results[ip]["status_type"] = "winerror"
                     processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
                         ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
                     )
-                return new_sub_urls
+                return new_sub_urls, None
 
             # --- ZeroDay Executable Check ---
             if response.status_code == 200:
                 header_bytes = response.content[:4]
-                if header_bytes.startswith((b'MZ', b'\x7FELF')):
+                if header_bytes.startswith(b'MZ') or header_bytes.startswith(b'\x7FELF'):
                     signature = "MZ" if header_bytes.startswith(b'MZ') else "ELF"
                     comment = f"ZeroDay Executable detected ({signature} signature)"
                     with self.lock:
                         processed_results[ip]["categories"].add("malicious")
                         processed_results[ip]["last_comment"] = comment
                         processed_results[ip]["status_type"] = "up"
-                    return new_sub_urls  # Skip further processing
+                    return new_sub_urls, response
 
-        code_str = f"{response.status_code:03d}"
-        up_codes = set(self.settings["HTTPUpCodes"].split(","))
-        potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
-        potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
+            # Capture base content for similarity check if this is the base URL
+            if url == base_url and response.status_code == 200:
+                nonlocal base_content
+                base_content = response.text
 
-        base_content = None
-
-        if url == base_url and response.status_code == 200:
-            base_content = response.text
-
-        similarity = 0.0
-        final_comment = ""
-        status_type = "up"
-
-        # Check for ZeroDay Executable
-        if response.status_code == 200:
-            header_bytes = response.content[:4]
-            if header_bytes.startswith(b'MZ'):
-                final_comment = "ZeroDay Executable detected (MZ signature)"
-                with self.lock:
-                    processed_results[ip]["categories"].add("malicious")
-                    processed_results[ip]["last_comment"] = final_comment
-                    processed_results[ip]["status_type"] = "up"
-            elif header_bytes.startswith(b'\x7FELF'):
-                final_comment = "ZeroDay Executable detected (ELF signature)"
-                with self.lock:
-                    processed_results[ip]["categories"].add("malicious")
-                    processed_results[ip]["last_comment"] = final_comment
-                    processed_results[ip]["status_type"] = "up"
-            else:
-                # Proceed with similarity check if not an executable
-                if base_content and url != base_url:
-                    similarity = compute_similarity(response.text, base_content)
-
-        # If executable was detected, skip other comment templates
-        if not final_comment:
-            if code_str in up_codes:
-                if response.status_code == 200:
-                    final_comment = self.settings["CommentTemplateZerodayStatus200"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
-                    )
-                else:
-                    final_comment = self.settings["CommentTemplateZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                    )
-                status_type = "up"
-            elif code_str in potentially_up_codes:
-                final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                )
-                status_type = "potentially_up"
-            elif code_str in potentially_down_codes:
-                final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                )
-                status_type = "potentially_down"
-            else:
-                final_comment = self.settings["CommentTemplateNoZeroday"].format(
-                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                )
-                status_type = "up"
-
-        with self.lock:
-            if not processed_results[ip]["last_comment"]:  # Only update if not already set by executable check
-                processed_results[ip]["last_comment"] = final_comment
-                processed_results[ip]["status_type"] = status_type
-
+            # --- HTML Parsing and URL Extraction ---
             try:
                 with warnings.catch_warnings():
                     warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
@@ -551,9 +478,10 @@ class ScannerWorker:
                     soup = BeautifulSoup(response.text, "html.parser")
                 except Exception as e:
                     logging.error("html.parser failed for %s: %s", url, e)
-                    return new_sub_urls, None
+                    return new_sub_urls, response
 
             if response.status_code == 200:
+                # Extract URLs from tags (script, link, img)
                 for tag in soup.find_all(["script", "link", "img"]):
                     attr = "src" if tag.name in ["script", "img"] else "href"
                     url_val = tag.get(attr)
@@ -564,6 +492,7 @@ class ScannerWorker:
                             if full_url not in visited:
                                 new_sub_urls.add(full_url)
                         else:
+                            # Found external hostnames; try to extract new IP seeds
                             new_ips = extract_ip_and_port(full_url)
                             for new_ip, new_port, new_version in new_ips:
                                 if new_ip != ip:
@@ -581,7 +510,7 @@ class ScannerWorker:
                                             if self.pbar:
                                                 self.pbar.total += 1
                                                 self.pbar.refresh()
-
+                # Also search the text content for IP addresses
                 content_text = response.text
                 if content_text:
                     content_ips = extract_ip_and_port(content_text)
@@ -601,8 +530,7 @@ class ScannerWorker:
                                     if self.pbar:
                                         self.pbar.total += 1
                                         self.pbar.refresh()
-
-            return new_sub_urls, response.text
+            return new_sub_urls, response
 
         # --- Main URL Processing Loop ---
         while to_process:
@@ -610,9 +538,57 @@ class ScannerWorker:
             if current_url in visited:
                 continue
             visited.add(current_url)
+            new_urls, response = process_page(current_url)
+            if response is None:
+                continue
 
-            new_urls = process_page(current_url)
+            # If not processing the base URL, compute similarity if base_content is available
+            similarity = 0.0
+            if current_url != base_url and base_content:
+                similarity = compute_similarity(response.text, base_content)
+
+            # Define HTTP code sets after obtaining the response
+            code_str = f"{response.status_code:03d}"
+            up_codes = set(self.settings["HTTPUpCodes"].split(","))
+            potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
+            potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
+
+            # Determine the appropriate comment and status based on the HTTP code
+            if code_str in up_codes:
+                if response.status_code == 200:
+                    comment = self.settings["CommentTemplateZerodayStatus200"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
+                    )
+                else:
+                    comment = self.settings["CommentTemplateZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                    )
+                status_type = "up"
+            elif code_str in potentially_up_codes:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "potentially_up"
+            elif code_str in potentially_down_codes:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "potentially_down"
+            else:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "up"
+
+            with self.lock:
+                if not processed_results[ip]["last_comment"]:
+                    processed_results[ip]["last_comment"] = comment
+                    processed_results[ip]["status_type"] = status_type
+
             to_process.update(new_urls - visited)
+
+        # End of processing loop
+        return
 
     def worker(self):
         while True:
