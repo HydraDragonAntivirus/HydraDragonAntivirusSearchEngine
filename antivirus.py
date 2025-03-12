@@ -356,68 +356,69 @@ class ScannerWorker:
     def update_realtime_result(self, ip):
         data = processed_results[ip]
         report_date = datetime.now(timezone.utc).isoformat()
-        # Recalculate accumulated categories for the IP
+        # Recalculate accumulated categories and discovered URLs
         categories = sorted(data["categories"])
         all_categories = ",".join(categories)
+        discovered_urls = ", ".join(sorted(data.get("discovered_urls", set())))
+        similarity = data.get("similarity", 0.0)
         comment = data.get("last_comment", "").strip()
-        # For whitelist-only IPs, force non-duplicate placement
+        # If duplicate, adjust the comment to reflect duplicate status
         is_duplicate = (data.get("count", 0) > 1) and (categories != ["whitelist"])
-        status_type = data.get("status_type", "up")
-
-        # If multiple categories exist, update the comment to reflect that
+        if is_duplicate:
+            comment = comment.replace("Yes it's not duplicate", "No it's duplicate")
         if len(categories) > 1:
             comment += " (Multiple categories: {})".format(all_categories)
-
-        # Determine CSV target based on duplicate flag, whitelist status, and HTTP status
+        # Append discovered URLs info to the comment
+        comment += " | Discovered URLs: {}".format(discovered_urls)
+        # Determine CSV target based on duplicate flag and HTTP status
         if is_duplicate:
             if "whitelist" in data["categories"]:
-                if status_type == "potentially_up":
+                if data["status_type"] == "potentially_up":
                     target = "potentially_up_whitelist_duplicate"
-                elif status_type == "potentially_down":
+                elif data["status_type"] == "potentially_down":
                     target = "potentially_down_whitelist_duplicate"
-                elif status_type == "winerror":
+                elif data["status_type"] == "winerror":
                     target = "winerror_whitelist_duplicate"
                 else:
                     target = "whitelist_duplicate"
             else:
-                if status_type == "potentially_up":
+                if data["status_type"] == "potentially_up":
                     target = "potentially_up_bulk_duplicate"
-                elif status_type == "potentially_down":
+                elif data["status_type"] == "potentially_down":
                     target = "potentially_down_bulk_duplicate"
-                elif status_type == "winerror":
+                elif data["status_type"] == "winerror":
                     target = "winerror_bulk_duplicate"
                 else:
                     target = "bulk_duplicate"
         else:
             if "whitelist" in data["categories"]:
-                if status_type == "potentially_up":
+                if data["status_type"] == "potentially_up":
                     target = "potentially_up_whitelist"
-                elif status_type == "potentially_down":
+                elif data["status_type"] == "potentially_down":
                     target = "potentially_down_whitelist"
-                elif status_type == "winerror":
+                elif data["status_type"] == "winerror":
                     target = "winerror_whitelist"
                 else:
                     target = "whitelist"
             else:
-                if status_type == "potentially_up":
+                if data["status_type"] == "potentially_up":
                     target = "potentially_up_bulk"
-                elif status_type == "potentially_down":
+                elif data["status_type"] == "potentially_down":
                     target = "potentially_down_bulk"
-                elif status_type == "winerror":
+                elif data["status_type"] == "winerror":
                     target = "winerror_bulk"
                 else:
                     target = "bulk"
 
-        # Remove the IP from all targets (in case it moved from one category to another)
+        # Remove the IP from all targets in case it moved
         for key in self.realtime_results:
             if ip in self.realtime_results[key]:
                 del self.realtime_results[key][ip]
-        # Add or update the CSV entry for the IP in the determined target
         self.realtime_results[target][ip] = f'{ip},"{all_categories}",{report_date},"{comment}"'
         self.write_csv_target(target)
 
     def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
-        # Update processed_results for the current IP (accumulate categories and count)
+        # Initialize or update processed_results for the IP
         with self.lock:
             if ip not in processed_results:
                 processed_results[ip] = {
@@ -425,177 +426,186 @@ class ScannerWorker:
                     "last_comment": "",
                     "count": 0,
                     "processed": False,
-                    "status_type": "up"
+                    "status_type": "up",
+                    "discovered_urls": set(),
+                    "similarity": 0.0
                 }
             processed_results[ip]["categories"].add(category)
             processed_results[ip]["count"] += 1
+            processed_results[ip]["discovered_urls"].add(discovered_url)
             was_processed = processed_results[ip]["processed"]
 
-        if not was_processed:
+        # If already processed, simply update the CSV row to reflect new categories or URLs
+        if was_processed:
             with self.lock:
-                processed_results[ip]["processed"] = True
+                self.update_realtime_result(ip)
+            return
 
-            base_url = f"http://{ip}"
-            visited = set()
-            to_process = {base_url}
-            base_content = None  # For HTML similarity comparison
+        with self.lock:
+            processed_results[ip]["processed"] = True
 
-            def process_page(url):
-                """
-                Processes a given URL and returns a tuple:
-                (set of new sub-URLs to process, response object)
-                """
-                new_sub_urls = set()
-                try:
-                    response = requests.get(url, timeout=self.timeout, allow_redirects=True)
-                except requests.exceptions.ConnectionError:
-                    with self.lock:
-                        processed_results[ip]["status_type"] = "winerror"
-                        processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                            ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
-                        )
-                    return new_sub_urls, None
-                except Exception as e:
-                    with self.lock:
-                        processed_results[ip]["status_type"] = "winerror"
-                        processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
-                            ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
-                        )
-                    return new_sub_urls, None
+        base_url = f"http://{ip}"
+        visited = set()
+        to_process = {base_url}
+        base_content = None  # For HTML similarity comparison
 
-                # --- ZeroDay Executable Check ---
-                if response.status_code == 200:
-                    header_bytes = response.content[:4]
-                    if header_bytes.startswith(b'MZ') or header_bytes.startswith(b'\x7FELF'):
-                        signature = "MZ" if header_bytes.startswith(b'MZ') else "ELF"
-                        comment = f"ZeroDay Executable detected ({signature} signature)"
-                        with self.lock:
-                            processed_results[ip]["categories"].add("malicious")
-                            processed_results[ip]["last_comment"] = comment
-                            processed_results[ip]["status_type"] = "up"
-                        return new_sub_urls, response
-
-                # Capture base content for similarity check if this is the base URL
-                if url == base_url and response.status_code == 200:
-                    nonlocal base_content
-                    base_content = response.text
-
-                # --- HTML Parsing and URL Extraction ---
-                try:
-                    with warnings.catch_warnings():
-                        warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
-                        soup = BeautifulSoup(response.text, "lxml")
-                except Exception as e:
-                    logging.error("lxml parser failed for %s: %s", url, e)
-                    try:
-                        soup = BeautifulSoup(response.text, "html.parser")
-                    except Exception as e:
-                        logging.error("html.parser failed for %s: %s", url, e)
-                        return new_sub_urls, response
-
-                if response.status_code == 200:
-                    # Extract URLs from tags (script, link, img)
-                    for tag in soup.find_all(["script", "link", "img"]):
-                        attr = "src" if tag.name in ["script", "img"] else "href"
-                        url_val = tag.get(attr)
-                        if url_val:
-                            full_url = urljoin(url, url_val)
-                            parsed = urlparse(full_url)
-                            if parsed.hostname == ip:
-                                if full_url not in visited:
-                                    new_sub_urls.add(full_url)
-                            else:
-                                # Found external hostnames; try to extract new IP seeds
-                                new_ips = extract_ip_and_port(full_url)
-                                for new_ip, new_port, new_version in new_ips:
-                                    if new_ip != ip:
-                                        with self.lock:
-                                            if new_ip not in processed_results:
-                                                new_seed = {
-                                                    "ip": new_ip,
-                                                    "category": category,
-                                                    "version": new_version,
-                                                    "discovered_url": full_url
-                                                }
-                                                self.seed_queue.put(new_seed)
-                                                if self.pbar:
-                                                    self.pbar.total += 1
-                                                    self.pbar.refresh()
-                    # Also search the text content for IP addresses
-                    content_text = response.text
-                    if content_text:
-                        content_ips = extract_ip_and_port(content_text)
-                        for new_ip, new_port, new_version in content_ips:
-                            if new_ip != ip:
-                                with self.lock:
-                                    if new_ip not in processed_results:
-                                        new_seed = {
-                                            "ip": new_ip,
-                                            "category": "malicious",
-                                            "version": new_version,
-                                            "discovered_url": url
-                                        }
-                                        self.seed_queue.put(new_seed)
-                                        if self.pbar:
-                                            self.pbar.total += 1
-                                            self.pbar.refresh()
-                return new_sub_urls, response
-
-            # --- Main URL Processing Loop ---
-            while to_process:
-                current_url = to_process.pop()
-                if current_url in visited:
-                    continue
-                visited.add(current_url)
-                new_urls, response = process_page(current_url)
-                if response is None:
-                    continue
-
-                # If not processing the base URL, compute similarity if base_content is available
-                similarity = 0.0
-                if current_url != base_url and base_content:
-                    similarity = compute_similarity(response.text, base_content)
-
-                code_str = f"{response.status_code:03d}"
-                up_codes = set(self.settings["HTTPUpCodes"].split(","))
-                potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
-                potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
-
-                # Determine the appropriate comment and status based on the HTTP code
-                if code_str in up_codes:
-                    if response.status_code == 200:
-                        comment = self.settings["CommentTemplateZerodayStatus200"].format(
-                            ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
-                        )
-                    else:
-                        comment = self.settings["CommentTemplateZeroday"].format(
-                            ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                        )
-                    status_type = "up"
-                elif code_str in potentially_up_codes:
-                    comment = self.settings["CommentTemplateNoZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                    )
-                    status_type = "potentially_up"
-                elif code_str in potentially_down_codes:
-                    comment = self.settings["CommentTemplateNoZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                    )
-                    status_type = "potentially_down"
-                else:
-                    comment = self.settings["CommentTemplateNoZeroday"].format(
-                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
-                    )
-                    status_type = "up"
-
+        def process_page(url):
+            """
+            Processes a given URL and returns a tuple:
+            (set of new sub-URLs to process, response object)
+            """
+            new_sub_urls = set()
+            try:
+                response = requests.get(url, timeout=self.timeout, allow_redirects=True)
+            except requests.exceptions.ConnectionError:
                 with self.lock:
-                    processed_results[ip]["last_comment"] = comment
-                    processed_results[ip]["status_type"] = status_type
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
+                    )
+                return new_sub_urls, None
+            except Exception as e:
+                with self.lock:
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
+                    )
+                return new_sub_urls, None
 
-                to_process.update(new_urls - visited)
+            # --- ZeroDay Executable Check ---
+            if response.status_code == 200:
+                header_bytes = response.content[:4]
+                if header_bytes.startswith(b'MZ') or header_bytes.startswith(b'\x7FELF'):
+                    signature = "MZ" if header_bytes.startswith(b'MZ') else "ELF"
+                    comment = f"ZeroDay Executable detected ({signature} signature)"
+                    with self.lock:
+                        processed_results[ip]["categories"].add("malicious")
+                        processed_results[ip]["last_comment"] = comment
+                        processed_results[ip]["status_type"] = "up"
+                    return new_sub_urls, response
 
-        # Always update the CSV entry with the latest categories,
-        # even if this IP was already processed previously.
+            # Capture base content if this is the base URL
+            if url == base_url and response.status_code == 200:
+                nonlocal base_content
+                base_content = response.text
+
+            # --- HTML Parsing and URL Extraction ---
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+                    soup = BeautifulSoup(response.text, "lxml")
+            except Exception as e:
+                logging.error("lxml parser failed for %s: %s", url, e)
+                try:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                except Exception as e:
+                    logging.error("html.parser failed for %s: %s", url, e)
+                    return new_sub_urls, response
+
+            if response.status_code == 200:
+                # Extract URLs from tags (script, link, img)
+                for tag in soup.find_all(["script", "link", "img"]):
+                    attr = "src" if tag.name in ["script", "img"] else "href"
+                    url_val = tag.get(attr)
+                    if url_val:
+                        full_url = urljoin(url, url_val)
+                        parsed = urlparse(full_url)
+                        if parsed.hostname == ip:
+                            if full_url not in visited:
+                                new_sub_urls.add(full_url)
+                        else:
+                            # Found external hostnames; try to extract new IP seeds
+                            new_ips = extract_ip_and_port(full_url)
+                            for new_ip, new_port, new_version in new_ips:
+                                if new_ip != ip:
+                                    with self.lock:
+                                        if new_ip not in processed_results:
+                                            new_seed = {
+                                                "ip": new_ip,
+                                                "category": category,
+                                                "version": new_version,
+                                                "discovered_url": full_url
+                                            }
+                                            self.seed_queue.put(new_seed)
+                                            if self.pbar:
+                                                self.pbar.total += 1
+                                                self.pbar.refresh()
+                # Also search text for IP addresses
+                content_text = response.text
+                if content_text:
+                    content_ips = extract_ip_and_port(content_text)
+                    for new_ip, new_port, new_version in content_ips:
+                        if new_ip != ip:
+                            with self.lock:
+                                if new_ip not in processed_results:
+                                    new_seed = {
+                                        "ip": new_ip,
+                                        "category": "malicious",
+                                        "version": new_version,
+                                        "discovered_url": url
+                                    }
+                                    self.seed_queue.put(new_seed)
+                                    if self.pbar:
+                                        self.pbar.total += 1
+                                        self.pbar.refresh()
+            return new_sub_urls, response
+
+        # --- Main URL Processing Loop ---
+        while to_process:
+            current_url = to_process.pop()
+            if current_url in visited:
+                continue
+            visited.add(current_url)
+            new_urls, response = process_page(current_url)
+            if response is None:
+                continue
+
+            # If not processing the base URL, compute similarity if base_content is available
+            similarity = 0.0
+            if current_url != base_url and base_content:
+                similarity = compute_similarity(response.text, base_content)
+            with self.lock:
+                processed_results[ip]["similarity"] = similarity
+
+            code_str = f"{response.status_code:03d}"
+            up_codes = set(self.settings["HTTPUpCodes"].split(","))
+            potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
+            potentially_down_codes = set(self.settings["HTTPPotentiallyDownCodes"].split(","))
+
+            # Determine the appropriate comment and status based on the HTTP code
+            if code_str in up_codes:
+                if response.status_code == 200:
+                    comment = self.settings["CommentTemplateZerodayStatus200"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str, similarity=similarity
+                    )
+                else:
+                    comment = self.settings["CommentTemplateZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                    )
+                status_type = "up"
+            elif code_str in potentially_up_codes:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "potentially_up"
+            elif code_str in potentially_down_codes:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "potentially_down"
+            else:
+                comment = self.settings["CommentTemplateNoZeroday"].format(
+                    ip=ip, discovered_url=discovered_url, verdict=category, status=code_str
+                )
+                status_type = "up"
+
+            with self.lock:
+                processed_results[ip]["last_comment"] = comment
+                processed_results[ip]["status_type"] = status_type
+
+            to_process.update(new_urls - visited)
+
+        # Always update the CSV row with the latest categories, discovered URLs, and similarity
         with self.lock:
             self.update_realtime_result(ip)
 
@@ -630,10 +640,13 @@ class ScannerWorker:
                         "last_comment": "",
                         "count": 0,
                         "processed": False,
-                        "status_type": "up"
+                        "status_type": "up",
+                        "discovered_urls": set(),
+                        "similarity": 0.0
                     }
                 processed_results[seed["ip"]]["categories"].add(seed["category"])
                 processed_results[seed["ip"]]["count"] += 1
+                processed_results[seed["ip"]]["discovered_urls"].add(seed["discovered_url"])
             self.seed_queue.put(seed)
         
         initial_total = self.seed_queue.qsize()
