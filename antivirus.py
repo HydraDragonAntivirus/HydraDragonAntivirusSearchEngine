@@ -292,6 +292,9 @@ def get_my_public_ip(timeout):
 processed_results = {}
 MY_PUBLIC_IP = None
 
+# -----------------------------------------------------------------------------
+# ScannerWorker with Realtime CSV Updates
+# -----------------------------------------------------------------------------
 class ScannerWorker:
     def __init__(self, settings):
         self.settings = settings
@@ -299,102 +302,121 @@ class ScannerWorker:
         self.seed_queue = queue.Queue()
         self.lock = threading.Lock()
         self.pbar = None
-        max_lines = int(settings["CsvMaxLines"])
-        max_size = int(settings["CsvMaxSize"])
+
+        # Instead of CSVFile objects, we now maintain in-memory mappings for each CSV target.
+        # Keys are determined based on duplicate/whitelist and HTTP status.
+        self.realtime_results = {
+            "bulk": {},
+            "whitelist": {},
+            "potentially_up_bulk": {},
+            "potentially_down_bulk": {},
+            "winerror_bulk": {},
+            "potentially_up_whitelist": {},
+            "potentially_down_whitelist": {},
+            "winerror_whitelist": {},
+            "bulk_duplicate": {},
+            "whitelist_duplicate": {},
+            "potentially_up_bulk_duplicate": {},
+            "potentially_down_bulk_duplicate": {},
+            "winerror_bulk_duplicate": {},
+            "potentially_up_whitelist_duplicate": {},
+            "potentially_down_whitelist_duplicate": {},
+            "winerror_whitelist_duplicate": {},
+        }
+        self.csv_file_paths = {
+            "bulk": settings["BulkOutputFile"],
+            "whitelist": settings["WhiteListOutputFile"],
+            "potentially_up_bulk": settings["PotentiallyUpBulkOutputFile"],
+            "potentially_down_bulk": settings["PotentiallyDownBulkOutputFile"],
+            "winerror_bulk": settings["WinErrorBulkOutputFile"],
+            "potentially_up_whitelist": settings["PotentiallyUpWhiteListOutputFile"],
+            "potentially_down_whitelist": settings["PotentiallyDownWhiteListOutputFile"],
+            "winerror_whitelist": settings["WinErrorWhitelistOutputFile"],
+            "bulk_duplicate": settings["BulkDuplicateOutputFile"],
+            "whitelist_duplicate": settings["WhiteListDuplicateOutputFile"],
+            "potentially_up_bulk_duplicate": settings["PotentiallyUpBulkDuplicateOutputFile"],
+            "potentially_down_bulk_duplicate": settings["PotentiallyDownBulkDuplicateOutputFile"],
+            "winerror_bulk_duplicate": settings["WinErrorBulkDuplicateOutputFile"],
+            "potentially_up_whitelist_duplicate": settings["PotentiallyUpWhiteListDuplicateOutputFile"],
+            "potentially_down_whitelist_duplicate": settings["PotentiallyDownWhiteListDuplicateOutputFile"],
+            "winerror_whitelist_duplicate": settings["WinErrorWhitelistDuplicateOutputFile"],
+        }
+
+    def write_csv_target(self, target):
+        """Rewrites the entire CSV file for a given target from the in-memory mapping."""
+        file_path = self.csv_file_paths[target]
         header = "IP,Categories,ReportDate,Comment\n"
-        
-        self.bulk_csv = CSVFile(settings["BulkOutputFile"], max_lines, max_size, header)
-        self.whitelist_csv = CSVFile(settings["WhiteListOutputFile"], max_lines, max_size, header)
-        self.potentially_up_bulk_csv = CSVFile(settings["PotentiallyUpBulkOutputFile"], max_lines, max_size, header)
-        self.potentially_down_bulk_csv = CSVFile(settings["PotentiallyDownBulkOutputFile"], max_lines, max_size, header)
-        self.potentially_up_whitelist_csv = CSVFile(settings["PotentiallyUpWhiteListOutputFile"], max_lines, max_size, header)
-        self.potentially_down_whitelist_csv = CSVFile(settings["PotentiallyDownWhiteListOutputFile"], max_lines, max_size, header)
-        self.winerror_bulk_csv = CSVFile(settings["WinErrorBulkOutputFile"], max_lines, max_size, header)
-        self.winerror_whitelist_csv = CSVFile(settings["WinErrorWhitelistOutputFile"], max_lines, max_size, header)
-        
-        self.bulk_duplicate_csv = CSVFile(settings["BulkDuplicateOutputFile"], max_lines, max_size, header)
-        self.whitelist_duplicate_csv = CSVFile(settings["WhiteListDuplicateOutputFile"], max_lines, max_size, header)
-        self.potentially_up_bulk_duplicate_csv = CSVFile(settings["PotentiallyUpBulkDuplicateOutputFile"], max_lines, max_size, header)
-        self.potentially_down_bulk_duplicate_csv = CSVFile(settings["PotentiallyDownBulkDuplicateOutputFile"], max_lines, max_size, header)
-        self.potentially_up_whitelist_duplicate_csv = CSVFile(settings["PotentiallyUpWhiteListDuplicateOutputFile"], max_lines, max_size, header)
-        self.potentially_down_whitelist_duplicate_csv = CSVFile(settings["PotentiallyDownWhiteListDuplicateOutputFile"], max_lines, max_size, header)
-        self.winerror_bulk_duplicate_csv = CSVFile(settings["WinErrorBulkDuplicateOutputFile"], max_lines, max_size, header)
-        self.winerror_whitelist_duplicate_csv = CSVFile(settings["WinErrorWhitelistDuplicateOutputFile"], max_lines, max_size, header)
-        
-        if settings["ZeroDayExecutableDetection"].lower() == "true":
-            self.zeroday_csv = CSVFile(settings["ZeroDayExecutableOutputFile"], max_lines, max_size, header)
-            self.zeroday_duplicate_csv = CSVFile(settings["ZeroDayExecutableDuplicateOutputFile"], max_lines, max_size, header)
-        else:
-            self.zeroday_csv = None
-            self.zeroday_duplicate_csv = None
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(header)
+                for line in self.realtime_results[target].values():
+                    f.write(line + "\n")
+        except Exception as e:
+            logging.error("Error writing CSV file %s: %s", file_path, e)
 
-    def close_files(self):
-        regular_files = [
-            self.bulk_csv, self.whitelist_csv, 
-            self.potentially_up_bulk_csv, self.potentially_down_bulk_csv,
-            self.potentially_up_whitelist_csv, self.potentially_down_whitelist_csv,
-            self.winerror_bulk_csv, self.winerror_whitelist_csv
-        ]
-        duplicate_files = [
-            self.bulk_duplicate_csv, self.whitelist_duplicate_csv,
-            self.potentially_up_bulk_duplicate_csv, self.potentially_down_bulk_duplicate_csv,
-            self.potentially_up_whitelist_duplicate_csv, self.potentially_down_whitelist_duplicate_csv,
-            self.winerror_bulk_duplicate_csv, self.winerror_whitelist_duplicate_csv
-        ]
-        for csv_obj in regular_files + duplicate_files:
-            csv_obj.close()
-        if self.zeroday_csv:
-            self.zeroday_csv.close()
-        if self.zeroday_duplicate_csv:
-            self.zeroday_duplicate_csv.close()
-
-    def final_write(self):
+    def update_realtime_result(self, ip):
+        """
+        Based on the current processed_results for an IP,
+        update the appropriate CSV target (merging categories, status, etc.)
+        and then rewrite the CSV file.
+        """
+        data = processed_results[ip]
         report_date = datetime.now(timezone.utc).isoformat()
-        for ip, data in processed_results.items():
-            all_categories = '"' + ",".join(sorted(data["categories"])) + '"'
-            comment = data.get("last_comment", "").strip()
-            is_duplicate = data.get("is_initial", False) or data.get("count", 0) > 1
-            status_type = data.get("status_type", "up")
-            is_whitelist = "whitelist" in data["categories"]
-            
-            if is_duplicate:
-                if is_whitelist:
-                    if status_type == "potentially_up":
-                        self.potentially_up_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "potentially_down":
-                        self.potentially_down_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "winerror":
-                        self.winerror_whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:
-                        self.whitelist_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+        categories = sorted(data["categories"])
+        all_categories = ",".join(categories)
+        comment = data.get("last_comment", "").strip()
+        is_duplicate = data.get("is_initial", False) or data.get("count", 0) > 1
+        status_type = data.get("status_type", "up")
+        is_whitelist = "whitelist" in data["categories"]
+
+        # Determine target key based on conditions
+        if is_duplicate:
+            if is_whitelist:
+                if status_type == "potentially_up":
+                    target = "potentially_up_whitelist_duplicate"
+                elif status_type == "potentially_down":
+                    target = "potentially_down_whitelist_duplicate"
+                elif status_type == "winerror":
+                    target = "winerror_whitelist_duplicate"
                 else:
-                    if status_type == "potentially_up":
-                        self.potentially_up_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "potentially_down":
-                        self.potentially_down_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "winerror":
-                        self.winerror_bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:
-                        self.bulk_duplicate_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    target = "whitelist_duplicate"
             else:
-                if is_whitelist:
-                    if status_type == "potentially_up":
-                        self.potentially_up_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "potentially_down":
-                        self.potentially_down_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "winerror":
-                        self.winerror_whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:
-                        self.whitelist_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                if status_type == "potentially_up":
+                    target = "potentially_up_bulk_duplicate"
+                elif status_type == "potentially_down":
+                    target = "potentially_down_bulk_duplicate"
+                elif status_type == "winerror":
+                    target = "winerror_bulk_duplicate"
                 else:
-                    if status_type == "potentially_up":
-                        self.potentially_up_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "potentially_down":
-                        self.potentially_down_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    elif status_type == "winerror":
-                        self.winerror_bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
-                    else:
-                        self.bulk_csv.write_line(f'{ip},{all_categories},{report_date},"{comment}"\n')
+                    target = "bulk_duplicate"
+        else:
+            if is_whitelist:
+                if status_type == "potentially_up":
+                    target = "potentially_up_whitelist"
+                elif status_type == "potentially_down":
+                    target = "potentially_down_whitelist"
+                elif status_type == "winerror":
+                    target = "winerror_whitelist"
+                else:
+                    target = "whitelist"
+            else:
+                if status_type == "potentially_up":
+                    target = "potentially_up_bulk"
+                elif status_type == "potentially_down":
+                    target = "potentially_down_bulk"
+                elif status_type == "winerror":
+                    target = "winerror_bulk"
+                else:
+                    target = "bulk"
+
+        # Remove the IP from all targets (in case it moved from one to another)
+        for key in self.realtime_results:
+            if ip in self.realtime_results[key]:
+                del self.realtime_results[key][ip]
+        # Add/update the IP in the determined target
+        self.realtime_results[target][ip] = f'{ip},"{all_categories}",{report_date},"{comment}"'
+        # Rewrite the CSV file for this target
+        self.write_csv_target(target)
 
     def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
         # Update processed_results for the current IP
@@ -415,6 +437,9 @@ class ScannerWorker:
             already_processed = processed_results[ip]["processed"]
 
         if already_processed:
+            # Even if already processed, update with any new categories
+            with self.lock:
+                self.update_realtime_result(ip)
             return
 
         with self.lock:
@@ -541,7 +566,6 @@ class ScannerWorker:
             if current_url != base_url and base_content:
                 similarity = compute_similarity(response.text, base_content)
 
-            # Define HTTP code sets after obtaining the response
             code_str = f"{response.status_code:03d}"
             up_codes = set(self.settings["HTTPUpCodes"].split(","))
             potentially_up_codes = set(self.settings["HTTPPotentiallyUpCodes"].split(","))
@@ -581,7 +605,9 @@ class ScannerWorker:
 
             to_process.update(new_urls - visited)
 
-        # End of processing loop
+        # End of processing loop – update the CSV for this IP in real time
+        with self.lock:
+            self.update_realtime_result(ip)
         return
 
     def worker(self):
@@ -640,10 +666,7 @@ class ScannerWorker:
             t.join()
         
         self.pbar.close()
-        
-        self.final_write()
-        self.close_files()
-        logging.info("Scan completed.")
+        logging.info("Scan completed. (Results were written in real time.)")
 
 def main():
     seeds = load_seeds(SETTINGS)
