@@ -355,21 +355,22 @@ class ScannerWorker:
             logging.error("Error writing CSV file %s: %s", file_path, e)
 
     def update_realtime_result(self, ip):
-        """
-        Based on the current processed_results for an IP,
-        update the appropriate CSV target (merging categories, status, etc.)
-        and then rewrite the CSV file.
-        """
         data = processed_results[ip]
         report_date = datetime.now(timezone.utc).isoformat()
+        # Retrieve accumulated categories for the IP
         categories = sorted(data["categories"])
         all_categories = ",".join(categories)
         comment = data.get("last_comment", "").strip()
-        is_duplicate = data.get("is_initial", False) or data.get("count", 0) > 1
+        # Duplicate check based solely on count (if count > 1, it's a duplicate)
+        is_duplicate = data.get("count", 0) > 1
         status_type = data.get("status_type", "up")
         is_whitelist = "whitelist" in data["categories"]
 
-        # Determine target key based on conditions
+        # If multiple categories exist, update the comment to reflect that
+        if len(categories) > 1:
+            comment += " (Multiple categories: {})".format(all_categories)
+
+        # Determine CSV target based on duplicate flag, whitelist status, and HTTP status
         if is_duplicate:
             if is_whitelist:
                 if status_type == "potentially_up":
@@ -409,13 +410,12 @@ class ScannerWorker:
                 else:
                     target = "bulk"
 
-        # Remove the IP from all targets (in case it moved from one to another)
+        # Remove the IP from all targets (if it moved from one category to another)
         for key in self.realtime_results:
             if ip in self.realtime_results[key]:
                 del self.realtime_results[key][ip]
-        # Add/update the IP in the determined target
+        # Add or update the IP in the determined target with the current data
         self.realtime_results[target][ip] = f'{ip},"{all_categories}",{report_date},"{comment}"'
-        # Rewrite the CSV file for this target
         self.write_csv_target(target)
 
     def process_seed(self, ip, category, version, discovered_url, initial_ip=False):
