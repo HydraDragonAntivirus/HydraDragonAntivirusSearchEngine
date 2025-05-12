@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 import os
 import re
@@ -204,64 +205,68 @@ def extract_ip_and_port(text):
 
 def load_lines(path, expected_version):
     entries = []
-    seen_paths = set()
-    # 3. Move invalid_entries per file for immediate write
-    for raw in path.split(","):
-        single_path = raw.strip()
-        if not single_path or single_path in seen_paths:
-            continue
-        seen_paths.add(single_path)
+    invalid_entries = []
+    paths = [p.strip() for p in path.split(",") if p.strip()]
+    for single_path in paths:
         if not os.path.exists(single_path):
             logging.warning("File not found: %s", single_path)
             continue
-
-        invalid_entries = []
         with open(single_path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
-                    continue
-                # extract the first CSV field
-                first_part = line.split(',')[0].strip()
+                    continue  # Skip empty lines
+                parts = line.split(',')
+                first_part = parts[0].strip()
                 found_ips = extract_ip_and_port(first_part)
                 valid = False
                 for ip, port, version in found_ips:
-                    if version == expected_version:
+                    if version == expected_version and is_valid_ip(ip) == expected_version:
                         entries.append(ip)
                         valid = True
-                        break
+                        break  # At least one valid IP found
                 if not valid:
                     invalid_entries.append(line)
-
+        # Write invalid entries for the current file
         if invalid_entries:
             invalid_filename = os.path.join(output_dir, f"invalid_{expected_version}.txt")
-            with open(invalid_filename, "a", encoding="utf-8") as inv_f:
-                for iv in invalid_entries:
-                    inv_f.write(iv + "\n")
+            with open(invalid_filename, "a", encoding="utf-8") as invalid_file:
+                for invalid_line in invalid_entries:
+                    invalid_file.write(f"{invalid_line}\n")
             logging.info("Wrote %d invalid entries from %s to %s", len(invalid_entries), single_path, invalid_filename)
+            invalid_entries.clear()  # Clear for next file
     return entries
 
-# Load initial seeds
 def load_seeds(settings):
-    mapping = [
-        (settings['WhiteListFilesIPv4'],   'whitelist', 'ipv4'),
-        (settings['WhiteListFilesIPv6'],   'whitelist', 'ipv6'),
-        (settings['PhishingFilesIPv4Active'],'phishing','ipv4'),
-        (settings['PhishingFilesIPv4InActive'],'phishing','ipv4'),
-        (settings['DDoSFilesIPv4'],        'ddos',      'ipv4'),
-        (settings['DDoSFilesIPv6'],        'ddos',      'ipv6'),
-        (settings['BruteForceFilesIPv4'],  'bruteforce','ipv4'),
-        (settings['BruteForceFilesIPv6'],  'bruteforce','ipv6'),
-        (settings['SpamFilesIPv4'],        'spam',      'ipv4'),
-        (settings['SpamFilesIPv6'],        'spam',      'ipv6'),
-        (settings['MalwareFilesIPv4'],     'malicious', 'ipv4'),
-        (settings['MalwareFilesIPv6'],     'malicious', 'ipv6')
+    seeds = []
+    seen = set()
+
+    # Define file entries with their respective categories and expected IP versions
+    file_entries = [
+        (settings["WhiteListFilesIPv4"], "whitelist", "ipv4"),
+        (settings["WhiteListFilesIPv6"], "whitelist", "ipv6"),
+        (settings["PhishingFilesIPv4Active"], "phishing", "ipv4"),
+        (settings["PhishingFilesIPv4InActive"], "phishing", "ipv4"),
+        (settings["DDoSFilesIPv4"], "ddos", "ipv4"),
+        (settings["DDoSFilesIPv6"], "ddos", "ipv6"),
+        (settings["BruteForceFilesIPv4"], "bruteforce", "ipv4"),
+        (settings["BruteForceFilesIPv6"], "bruteforce", "ipv6"),
+        (settings["SpamFilesIPv4"], "spam", "ipv4"),
+        (settings["SpamFilesIPv6"], "spam", "ipv6"),
+        (settings["MalwareFilesIPv4"], "malicious", "ipv4"),
+        (settings["MalwareFilesIPv6"], "malicious", "ipv6"),
     ]
-    seeds, seen = [], set()
-    for paths,cat,ver in mapping:
-        for ip in load_lines(paths, ver):
+
+    for file_paths, category, expected_version in file_entries:
+        ips = load_lines(file_paths, expected_version)
+        for ip in ips:
             if ip not in seen:
-                seeds.append({'ip':ip,'category':cat,'version':ver,'discovered_url':f"http://{ip}"})
+                seeds.append({
+                    "ip": ip,
+                    "category": category,
+                    "version": expected_version,
+                    "discovered_url": f"http://{ip}"
+                })
                 seen.add(ip)
     logging.info("Total seeds loaded: %d", len(seeds))
     return seeds
@@ -446,96 +451,105 @@ class ScannerWorker:
         base_content = None  # For HTML similarity comparison
 
         def process_page(url):
-            nonlocal base_content
-            new_pages = set()
-            resp = None
-
-            # Attempt fetch
+            """
+            Processes a given URL and returns a tuple:
+            (set of new sub-URLs to process, response object)
+            """
+            new_sub_urls = set()
             try:
-                resp = requests.get(url, timeout=self.timeout, allow_redirects=True)
+                response = requests.get(url, timeout=self.timeout, allow_redirects=True)
+            except requests.exceptions.ConnectionError:
+                with self.lock:
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status="Connection Error"
+                    )
+                return new_sub_urls, None
             except Exception as e:
                 with self.lock:
-                    processed_results[ip]['last_comment'] = str(e)
-                    processed_results[ip]['status_type'] = 'winerror'
-                    self.update_realtime_result(ip)
-                return new_pages, resp
-
-            # Capture base HTML for similarity
-            if url == base_url and resp.status_code == 200:
-                base_content = resp.text
-
-            if resp.status_code == 200:
-                soup = BeautifulSoup(resp.text, 'lxml')
-
-                # 1) Tag-based seeds (only if not seen yet)
-                for tag in soup.find_all(['script','link','img']):
-                    attr = 'src' if tag.name != 'link' else 'href'
-                    val = tag.get(attr)
-                    if not val:
-                        continue
-                    full = urljoin(url, val)
-                    parsed = urlparse(full)
-
-                    # same-host links → crawl
-                    if parsed.hostname == ip and full not in visited:
-                        new_pages.add(full)
-
-                    # external IP links → seed if not already processed
-                    elif (parsed.hostname and
-                          re.fullmatch(r'(?:\d{1,3}\.){3}\d{1,3}', parsed.hostname) and
-                          parsed.hostname not in processed_results):
-                        v2 = is_valid_ip(parsed.hostname)
-                        if v2:
-                            self.seed_queue.put({
-                                'ip': parsed.hostname,
-                                'category': category,
-                                'version': v2,
-                                'discovered_url': full
-                            })
-
-                # 2) Inline-text seeds (only if not already processed)
-                inline_ips = extract_ip_and_port(resp.text)
-                for ip2, _, v2 in inline_ips:
-                    if ip2 != ip and ip2 not in processed_results:
-                        self.seed_queue.put({
-                            'ip': ip2,
-                            'category': category,
-                            'version': v2,
-                            'discovered_url': url
-                        })
-
-                # 3) Similarity, comment templating, CSV update
-                sim = compute_similarity(resp.text, base_content) if (base_content and url != base_url) else 0.0
-                with self.lock:
-                    processed_results[ip]['similarity'] = sim
-                    code_str = f"{resp.status_code:03d}"
-                    tmpl = (self.settings['CommentTemplateZerodayStatus200']
-                            if resp.status_code == 200
-                            else self.settings['CommentTemplateNoZeroday'])
-                    processed_results[ip]['last_comment'] = tmpl.format(
-                        ip=ip,
-                        discovered_url=discovered_url,
-                        verdict=category,
-                        status=code_str,
-                        similarity=sim
+                    processed_results[ip]["status_type"] = "winerror"
+                    processed_results[ip]["last_comment"] = self.settings["CommentTemplateNoZeroday"].format(
+                        ip=ip, discovered_url=discovered_url, verdict=category, status=str(e)
                     )
-                    processed_results[ip]['status_type'] = 'up'
-                    self.update_realtime_result(ip)
+                return new_sub_urls, None
 
-            else:
-                # non-200 status: still log and CSV-update once
-                with self.lock:
-                    code_str = f"{resp.status_code:03d}"
-                    processed_results[ip]['last_comment'] = self.settings['CommentTemplateNoZeroday'].format(
-                        ip=ip,
-                        discovered_url=discovered_url,
-                        verdict=category,
-                        status=code_str
-                    )
-                    processed_results[ip]['status_type'] = 'potentially_down'
-                    self.update_realtime_result(ip)
+            # --- ZeroDay Executable Check ---
+            if response.status_code == 200:
+                header_bytes = response.content[:4]
+                if header_bytes.startswith(b'MZ') or header_bytes.startswith(b'\x7FELF'):
+                    signature = "MZ" if header_bytes.startswith(b'MZ') else "ELF"
+                    comment = f"ZeroDay Executable detected ({signature} signature)"
+                    with self.lock:
+                        processed_results[ip]["categories"].add("malicious")
+                        processed_results[ip]["last_comment"] = comment
+                        processed_results[ip]["status_type"] = "up"
+                    return new_sub_urls, response
 
-            return new_pages, resp
+            # Capture base content if this is the base URL
+            if url == base_url and response.status_code == 200:
+                nonlocal base_content
+                base_content = response.text
+
+            # --- HTML Parsing and URL Extraction ---
+            try:
+                with warnings.catch_warnings():
+                    warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+                    soup = BeautifulSoup(response.text, "lxml")
+            except Exception as e:
+                logging.error("lxml parser failed for %s: %s", url, e)
+                try:
+                    soup = BeautifulSoup(response.text, "html.parser")
+                except Exception as e:
+                    logging.error("html.parser failed for %s: %s", url, e)
+                    return new_sub_urls, response
+
+            if response.status_code == 200:
+                # Extract URLs from tags (script, link, img)
+                for tag in soup.find_all(["script", "link", "img"]):
+                    attr = "src" if tag.name in ["script", "img"] else "href"
+                    url_val = tag.get(attr)
+                    if url_val:
+                        full_url = urljoin(url, url_val)
+                        parsed = urlparse(full_url)
+                        if parsed.hostname == ip:
+                            if full_url not in visited:
+                                new_sub_urls.add(full_url)
+                        else:
+                            # Found external hostnames; try to extract new IP seeds
+                            new_ips = extract_ip_and_port(full_url)
+                            for new_ip, new_port, new_version in new_ips:
+                                if new_ip != ip:
+                                    with self.lock:
+                                        if new_ip not in processed_results:
+                                            new_seed = {
+                                                "ip": new_ip,
+                                                "category": category,
+                                                "version": new_version,
+                                                "discovered_url": full_url
+                                            }
+                                            self.seed_queue.put(new_seed)
+                                            if self.pbar:
+                                                self.pbar.total += 1
+                                                self.pbar.refresh()
+                # Also search text for IP addresses
+                content_text = response.text
+                if content_text:
+                    content_ips = extract_ip_and_port(content_text)
+                    for new_ip, new_port, new_version in content_ips:
+                        if new_ip != ip:
+                            with self.lock:
+                                if new_ip not in processed_results:
+                                    new_seed = {
+                                        "ip": new_ip,
+                                        "category": "malicious",
+                                        "version": new_version,
+                                        "discovered_url": url
+                                    }
+                                    self.seed_queue.put(new_seed)
+                                    if self.pbar:
+                                        self.pbar.total += 1
+                                        self.pbar.refresh()
+            return new_sub_urls, response
 
         # --- Main URL Processing Loop ---
         while to_process:
@@ -617,31 +631,40 @@ class ScannerWorker:
 
     def run(self, seeds):
         global MY_PUBLIC_IP
-        # retrieve our public IP once
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
-
-        # enqueue all seeds; processed_results entries created in process_seed()
+        
         for seed in seeds:
+            with self.lock:
+                if seed["ip"] not in processed_results:
+                    processed_results[seed["ip"]] = {
+                        "categories": set(),
+                        "last_comment": "",
+                        "count": 0,
+                        "processed": False,
+                        "status_type": "up",
+                        "discovered_urls": set(),
+                        "similarity": 0.0
+                    }
+                processed_results[seed["ip"]]["categories"].add(seed["category"])
+                processed_results[seed["ip"]]["count"] += 1
+                processed_results[seed["ip"]]["discovered_urls"].add(seed["discovered_url"])
             self.seed_queue.put(seed)
-
-        # initialize progress bar
+        
         initial_total = self.seed_queue.qsize()
         self.pbar = tqdm(total=initial_total, desc="Processing seeds")
-
-        # start worker threads
-        max_threads = min(int(self.settings["MaxThreads"]), initial_total)
+        
         threads = []
+        max_threads = min(int(self.settings["MaxThreads"]), initial_total)
         for _ in range(max_threads):
             t = threading.Thread(target=self.worker)
             t.start()
             threads.append(t)
-
-        # wait for completion
+        
         self.seed_queue.join()
+        
         for t in threads:
             t.join()
-
-        # cleanup
+        
         self.pbar.close()
         logging.info("Scan completed. (Results were written in real time.)")
 
