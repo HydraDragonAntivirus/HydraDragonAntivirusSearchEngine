@@ -432,7 +432,6 @@ class ScannerWorker:
                     "similarity": 0.0
                 }
             processed_results[ip]["categories"].add(category)
-            processed_results[ip]["count"] += 1
             processed_results[ip]["discovered_urls"].add(discovered_url)
             was_processed = processed_results[ip]["processed"]
 
