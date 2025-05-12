@@ -45,7 +45,7 @@ logging.basicConfig(
 default_bulk = os.path.join(output_dir, "BulkReport.csv")
 default_whitelist = os.path.join(output_dir, "WhitelistReport.csv")
 DEFAULT_SETTINGS = {
-    "MaxThreads": 10000,
+    "MaxThreads": 100000,
     "CsvMaxLines": 10000,
     "CsvMaxSize": 2097152,
     "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",

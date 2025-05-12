@@ -1,5 +1,5 @@
 {
-  "MaxThreads": 10000,
+  "MaxThreads": 100000,
   "CsvMaxLines": 10000,
   "CsvMaxSize": 2097152,
   "CommentTemplateZeroday": "Related with IP detected by heuristics (Discovered IP: {ip}, Discovered URL: {discovered_url}, Verdict: {verdict}, HTTP Status: {status}), Zeroday: Yes it's not duplicate",
