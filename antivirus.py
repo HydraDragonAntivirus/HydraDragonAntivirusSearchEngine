@@ -296,6 +296,19 @@ processed_results = {}
 MY_PUBLIC_IP = None
 
 # -----------------------------------------------------------------------------
+# Multiprocessing helper at module level
+# -----------------------------------------------------------------------------
+def _process_seed_with_queue(worker, ip, category, version, discovered_url, update_queue):
+    # wrap worker.process_seed to emit updates via update_queue
+    original_update = worker.update_realtime_result
+    def hook(ip_arg):
+        update_queue.put(ip_arg)
+        original_update(ip_arg)
+    worker.update_realtime_result = hook
+    worker.process_seed(ip, category, version, discovered_url)
+    return ip
+
+# -----------------------------------------------------------------------------
 # ScannerWorker with Realtime CSV Updates
 # -----------------------------------------------------------------------------
 class ScannerWorker:
@@ -630,23 +643,34 @@ class ScannerWorker:
                 if self.pbar:
                     self.pbar.update(1)
 
+    # -------------------------------------------------------------------------
+    # Listener thread: applies real-time updates from child processes
+    # -------------------------------------------------------------------------
+    def _update_listener(self, update_queue):
+        while True:
+            ip = update_queue.get()
+            if ip is None:
+                break
+            with self.lock:
+                self.update_realtime_result(ip)
+                self.pbar.update(1)
+
     def run(self, seeds):
+        # prepare update queue and listener thread
+        manager = multiprocessing.Manager()
+        update_queue = manager.Queue()
+        listener = threading.Thread(target=self._update_listener, args=(update_queue,))
+        listener.daemon = True
+        listener.start()
+
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
 
-        # Initial per-IP setup
+        # initial setup
         for seed in seeds:
             with self.lock:
                 if seed["ip"] not in processed_results:
-                    processed_results[seed["ip"]] = {
-                        "categories": set(),
-                        "last_comment": "",
-                        "count": 0,
-                        "processed": False,
-                        "status_type": "up",
-                        "discovered_urls": set(),
-                        "similarity": 0.0
-                    }
+                    processed_results[seed["ip"]] = {"categories": set(), "last_comment": "", "count": 0, "processed": False, "status_type": "up", "discovered_urls": set(), "similarity": 0.0}
                 processed_results[seed["ip"]]["categories"].add(seed["category"])
                 processed_results[seed["ip"]]["count"] += 1
                 processed_results[seed["ip"]]["discovered_urls"].add(seed["discovered_url"])
@@ -654,43 +678,39 @@ class ScannerWorker:
         total = len(seeds)
         self.pbar = tqdm(total=total, desc="Processing seeds")
 
-        max_workers = min(int(self.settings["MaxThreads"]), total)
-        # Cap max_workers to the number of CPUs plus fallback
         cpu_count = multiprocessing.cpu_count() or 1
-        max_workers = min(int(self.settings["MaxThreads"]), total, cpu_count)
+        max_workers = min(int(self.settings.get("MaxThreads", 1000)), total, cpu_count)
+
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(
-                    self._process_seed_task,
-                    seed["ip"], seed["category"],
-                    seed["version"], seed["discovered_url"]
+                    _process_seed_with_queue,
+                    self, seed["ip"], seed["category"], seed["version"], seed["discovered_url"], update_queue
                 ): seed["ip"]
                 for seed in seeds
             }
 
             for future in as_completed(futures):
-                ip = future.result()
-                with self.lock:
-                    self.update_realtime_result(ip)
-                    self.pbar.update(1)
+                # signal final completion update per seed
+                update_queue.put(futures[future])
 
+        update_queue.put(None)
+        listener.join()
         self.pbar.close()
-        logging.info("Scan completed. (Results were written in real time.)")
+        logging.info("Scan completed. (Real-time updates applied.)")
 
-    def _process_seed_task(self, ip, category, version, discovered_url):
-        # Runs in worker process
-        self.process_seed(ip, category, version, discovered_url)
-        return ip
-
+# -----------------------------------------------------------------------------
+# Main
+# -----------------------------------------------------------------------------
 def main():
     seeds = load_seeds(SETTINGS)
     if not seeds:
         logging.error("No seeds loaded. Exiting.")
         sys.exit(1)
     worker = ScannerWorker(SETTINGS)
-    start_time = time.time()
+    start = time.time()
     worker.run(seeds)
-    elapsed = time.time() - start_time
+    elapsed = time.time() - start
     print("Scan completed in", time.strftime('%H:%M:%S', time.gmtime(elapsed)))
 
 if __name__ == "__main__":
