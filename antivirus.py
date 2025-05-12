@@ -449,6 +449,8 @@ class ScannerWorker:
             nonlocal base_content
             new_pages = set()
             resp = None
+
+            # Attempt fetch
             try:
                 resp = requests.get(url, timeout=self.timeout, allow_redirects=True)
             except Exception as e:
@@ -458,21 +460,30 @@ class ScannerWorker:
                     self.update_realtime_result(ip)
                 return new_pages, resp
 
+            # Capture base HTML for similarity
             if url == base_url and resp.status_code == 200:
                 base_content = resp.text
 
             if resp.status_code == 200:
                 soup = BeautifulSoup(resp.text, 'lxml')
-                # 1) tag-based seeds
+
+                # 1) Tag-based seeds (only if not seen yet)
                 for tag in soup.find_all(['script','link','img']):
-                    attr = 'src' if tag.name!='link' else 'href'
+                    attr = 'src' if tag.name != 'link' else 'href'
                     val = tag.get(attr)
-                    if not val: continue
+                    if not val:
+                        continue
                     full = urljoin(url, val)
                     parsed = urlparse(full)
+
+                    # same-host links → crawl
                     if parsed.hostname == ip and full not in visited:
                         new_pages.add(full)
-                    elif parsed.hostname and re.fullmatch(r'(?:\d{1,3}\.){3}\d{1,3}', parsed.hostname):
+
+                    # external IP links → seed if not already processed
+                    elif (parsed.hostname and
+                          re.fullmatch(r'(?:\d{1,3}\.){3}\d{1,3}', parsed.hostname) and
+                          parsed.hostname not in processed_results):
                         v2 = is_valid_ip(parsed.hostname)
                         if v2:
                             self.seed_queue.put({
@@ -482,10 +493,10 @@ class ScannerWorker:
                                 'discovered_url': full
                             })
 
-                # 2) inline-text seeds
+                # 2) Inline-text seeds (only if not already processed)
                 inline_ips = extract_ip_and_port(resp.text)
                 for ip2, _, v2 in inline_ips:
-                    if ip2 != ip:
+                    if ip2 != ip and ip2 not in processed_results:
                         self.seed_queue.put({
                             'ip': ip2,
                             'category': category,
@@ -493,27 +504,33 @@ class ScannerWorker:
                             'discovered_url': url
                         })
 
-                # 3) similarity + comment + CSV update
-                sim = compute_similarity(resp.text, base_content) if (base_content and url!=base_url) else 0.0
+                # 3) Similarity, comment templating, CSV update
+                sim = compute_similarity(resp.text, base_content) if (base_content and url != base_url) else 0.0
                 with self.lock:
                     processed_results[ip]['similarity'] = sim
                     code_str = f"{resp.status_code:03d}"
                     tmpl = (self.settings['CommentTemplateZerodayStatus200']
-                            if resp.status_code==200 
+                            if resp.status_code == 200
                             else self.settings['CommentTemplateNoZeroday'])
                     processed_results[ip]['last_comment'] = tmpl.format(
-                        ip=ip, discovered_url=discovered_url,
-                        verdict=category, status=code_str, similarity=sim
+                        ip=ip,
+                        discovered_url=discovered_url,
+                        verdict=category,
+                        status=code_str,
+                        similarity=sim
                     )
-                    processed_results[ip]['status_type'] = 'up' if resp.status_code==200 else 'potentially_down'
+                    processed_results[ip]['status_type'] = 'up'
                     self.update_realtime_result(ip)
+
             else:
-                # non-200 response handling
+                # non-200 status: still log and CSV-update once
                 with self.lock:
-                    code_str = f"{resp.status_code:03d}" if resp else '000'
+                    code_str = f"{resp.status_code:03d}"
                     processed_results[ip]['last_comment'] = self.settings['CommentTemplateNoZeroday'].format(
-                        ip=ip, discovered_url=discovered_url,
-                        verdict=category, status=code_str
+                        ip=ip,
+                        discovered_url=discovered_url,
+                        verdict=category,
+                        status=code_str
                     )
                     processed_results[ip]['status_type'] = 'potentially_down'
                     self.update_realtime_result(ip)
