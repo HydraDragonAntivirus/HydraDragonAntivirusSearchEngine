@@ -11,6 +11,7 @@ import difflib
 import requests
 import logging
 import warnings
+from functools import lru_cache
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
@@ -109,7 +110,11 @@ def load_settings_from_file():
         logging.info("Settings file not found, using default settings")
     return DEFAULT_SETTINGS
 
-SETTINGS = load_settings_from_file()
+@lru_cache(maxsize=1)
+def get_settings():
+    return load_settings_from_file()
+
+SETTINGS = get_settings()
 
 # -----------------------------------------------------------------------------
 # CSV File Rotation Class (thread-safe)
