@@ -12,6 +12,7 @@ import difflib
 import requests
 import logging
 import warnings
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from urllib.parse import urlparse, urljoin
 from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
@@ -126,7 +127,7 @@ class CSVFile:
         self.index = 0
         self.open_file()
         self.lock = threading.Lock()
-        
+
     def open_file(self):
         if self.index == 0:
             path = self.base_path
@@ -136,7 +137,7 @@ class CSVFile:
         self.file = open(path, "w", encoding="utf-8")
         self.file.write(self.header)
         self.file.flush()
-        
+
     def write_line(self, line):
         with self.lock:
             line_bytes = len(line.encode("utf-8"))
@@ -150,7 +151,7 @@ class CSVFile:
             self.file.flush()
             self.line_count += 1
             self.size += line_bytes
-            
+
     def close(self):
         with self.lock:
             self.file.close()
@@ -631,7 +632,8 @@ class ScannerWorker:
     def run(self, seeds):
         global MY_PUBLIC_IP
         MY_PUBLIC_IP = get_my_public_ip(self.timeout)
-        
+
+        # Initial per-IP setup
         for seed in seeds:
             with self.lock:
                 if seed["ip"] not in processed_results:
@@ -647,25 +649,34 @@ class ScannerWorker:
                 processed_results[seed["ip"]]["categories"].add(seed["category"])
                 processed_results[seed["ip"]]["count"] += 1
                 processed_results[seed["ip"]]["discovered_urls"].add(seed["discovered_url"])
-            self.seed_queue.put(seed)
-        
-        initial_total = self.seed_queue.qsize()
-        self.pbar = tqdm(total=initial_total, desc="Processing seeds")
-        
-        threads = []
-        max_threads = min(int(self.settings["MaxThreads"]), initial_total)
-        for _ in range(max_threads):
-            t = threading.Thread(target=self.worker)
-            t.start()
-            threads.append(t)
-        
-        self.seed_queue.join()
-        
-        for t in threads:
-            t.join()
-        
+
+        total = len(seeds)
+        self.pbar = tqdm(total=total, desc="Processing seeds")
+
+        max_workers = min(int(self.settings["MaxThreads"]), total)
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(
+                    self._process_seed_task,
+                    seed["ip"], seed["category"],
+                    seed["version"], seed["discovered_url"]
+                ): seed["ip"]
+                for seed in seeds
+            }
+
+            for future in as_completed(futures):
+                ip = future.result()
+                with self.lock:
+                    self.update_realtime_result(ip)
+                    self.pbar.update(1)
+
         self.pbar.close()
         logging.info("Scan completed. (Results were written in real time.)")
+
+    def _process_seed_task(self, ip, category, version, discovered_url):
+        # Runs in worker process
+        self.process_seed(ip, category, version, discovered_url)
+        return ip
 
 def main():
     seeds = load_seeds(SETTINGS)
