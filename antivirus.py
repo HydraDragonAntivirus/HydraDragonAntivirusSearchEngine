@@ -10,6 +10,7 @@ import queue
 import time
 import difflib
 import requests
+import multiprocessing
 import logging
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -654,6 +655,9 @@ class ScannerWorker:
         self.pbar = tqdm(total=total, desc="Processing seeds")
 
         max_workers = min(int(self.settings["MaxThreads"]), total)
+        # Cap max_workers to the number of CPUs plus fallback
+        cpu_count = multiprocessing.cpu_count() or 1
+        max_workers = min(int(self.settings["MaxThreads"]), total, cpu_count)
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             futures = {
                 executor.submit(
