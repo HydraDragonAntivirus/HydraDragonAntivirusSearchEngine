@@ -1,37 +1,38 @@
-name: Scan for New IPs
+name: Hydra Dragon IP Scan
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Runs every hour (adjust as needed)
-  workflow_dispatch:    # Allows manual triggering
+    - cron: '0 */1 * * *' # Runs every hour
+  workflow_dispatch: # Allows manual triggering from the Actions tab
 
 jobs:
-  scan:
-    runs-on: windows-latest
+  scan-and-report:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.8'
+          python-version: '3.12'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirementsconsole.txt
+          pip install -r requirements.txt
 
-      - name: Run the scanner script
-        run: |
-          python antivirusconsole.py
+      - name: Run Hydra Scanner
+        run: python antivirus.py
 
-      - name: Commit and push CSV updates
+      - name: Run Post-Scan Filter
+        run: python post_script.py
+
+      - name: Commit and push reports
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add output/*.csv
-          git commit -m "Update IPs" || echo "No changes to commit"
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add website/reports/*.csv
+          git add logs/*.log
+          git commit -m "Automated Threat Intelligence Report Update" || echo "No changes to commit"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
