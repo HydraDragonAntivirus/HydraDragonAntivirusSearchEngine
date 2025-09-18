@@ -43,7 +43,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(BASE_DIR, "website", "reports")
 INPUT_DIR = os.path.join(BASE_DIR, "website")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
 FIVE_HOURS_IN_SECONDS = 5 * 60 * 60
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
