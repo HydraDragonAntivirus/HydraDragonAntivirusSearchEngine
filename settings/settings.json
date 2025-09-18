@@ -12,7 +12,7 @@
     "Phishing": "9",
     "Spam": "13",
     "DDoS": "17",
-    "BruteForce": "20",
+    "BruteForce": "20"
   },
   "OutputFiles": {
     "bulk": "BulkReport.csv",
