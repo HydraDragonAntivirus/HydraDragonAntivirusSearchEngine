@@ -44,5 +44,9 @@
     { "filename": "IPv4Spam.csv", "category": "Spam" },
     { "filename": "IPv6Spam.csv", "category": "Spam" },
     { "filename": "IPv4BruteForce.csv", "category": "BruteForce" }
-  ]
+  ],
+  "ScanTimeLimitSeconds": 3600,
+  "PrioritizeByReferences": true,
+  "RandomizeQueue": true,
+  "ScanFraction": 1.0
 }

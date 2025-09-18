@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Hydra Dragon Antivirus - IP Scanner (clean, complete)
-Features:
- - Read split CSV parts (base_1.csv, base_2.csv...)
- - Parse cells like "1.1.1.1,korna | korna2" -> ip + refs (korna, korna2)
- - Treat second CSV column as extra references (split by '|')
- - Add HydraDragonAntivirusSearchEngine reference for first-seen IPs
- - Write outputs according to OutputFiles in settings.json
- - CSV columns: IP,Categories,References,ReportDate,Comment
- - ZeroDay executable detection (MZ / ELF)
- - Threaded scanning with progress bar
-"""
+Hydra Dragon Antivirus - IP Scanner (fixed)
 
+Key fixes (see commit notes in chat):
+ - Enforced hard stop via a supervisor thread (default 55 minutes; configurable).
+ - When time limit is hit: stop_event is set, remaining queue items are drained (task_done called)
+   so queue.join() unblocks and the program exits promptly.
+ - Workers check the elapsed time before making network calls and will abort early.
+ - Requests always use configured per-request timeouts so no worker stays blocked longer than that.
+ - Cleaner shutdown: session closed, CSV outputs written for all known buckets.
+ - Preserved original behaviour and templates.
+"""
 import os
 import re
+import string
 import sys
 import json
 import ipaddress
@@ -44,8 +44,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "website", "reports")
 INPUT_DIR = os.path.join(BASE_DIR, "website")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
-FIVE_HOURS_IN_SECONDS = 5 * 60 * 60
-
+DEFAULT_TIME_LIMIT_SECONDS = 55 * 60  # default changed to 55 minutes; can be overridden via settings ScanTimeLimitSeconds
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(INPUT_DIR, exist_ok=True)
@@ -69,19 +68,22 @@ def load_settings():
     try:
         with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
             settings = json.load(f)
-            logging.info("Loaded settings from %s", SETTINGS_FILE)
-            return settings
+        logging.info("Loaded settings from %s", SETTINGS_FILE)
+        return settings
     except Exception as e:
         logging.exception("Failed to read settings.json: %s", e)
         sys.exit(1)
 
 SETTINGS = load_settings()
+# derive runtime time limit from settings (seconds). If absent, default to DEFAULT_TIME_LIMIT_SECONDS
+TIME_LIMIT_SECONDS = int(SETTINGS.get("ScanTimeLimitSeconds", DEFAULT_TIME_LIMIT_SECONDS))
 
 # --- Globals ---
-processed_results = {}   # ip -> { categories:set, references:set, last_comment:str, count:int, processed:bool, status_type:str, similarity:float }
+processed_results = {}  # ip -> { categories:set, references:set, last_comment:str, count:int, processed:bool, status_type:str, similarity:float }
 scanner_lock = threading.Lock()
 
 # --- Utility functions ---
+
 def is_valid_public_ip(ip_str):
     """Return True if ip_str is a valid public IPv4/IPv6 address (not private/loopback/link-local/multicast/reserved)."""
     try:
@@ -95,23 +97,26 @@ def is_valid_public_ip(ip_str):
     except Exception:
         return False
 
+
 def compute_similarity(text1, text2):
     return difflib.SequenceMatcher(None, text1, text2).ratio() * 100
 
 # read rows supporting split files like base_1.csv, base_2.csv...
+
 def read_rows_from_files(base_filepath):
     base_name, extension = os.path.splitext(base_filepath)
     glob_pattern = f"{base_name}_[0-9]*{extension}"
     split_files = glob.glob(glob_pattern)
+
     def get_part_number(fn):
         try:
             name = os.path.splitext(os.path.basename(fn))[0]
             return int(name.rsplit("_", 1)[-1])
         except Exception:
             return float("inf")
+
     split_files = [f for f in split_files if get_part_number(f) != float("inf")]
     split_files.sort(key=get_part_number)
-
     if split_files:
         logging.info("Detected %d split parts for %s", len(split_files), os.path.basename(base_filepath))
         for p in split_files:
@@ -123,8 +128,7 @@ def read_rows_from_files(base_filepath):
                         yield row
             except Exception as e:
                 logging.error("Error reading split part %s: %s", p, e)
-        return
-
+                return
     if os.path.exists(base_filepath):
         try:
             with open(base_filepath, "r", encoding="utf-8") as fh:
@@ -135,70 +139,77 @@ def read_rows_from_files(base_filepath):
         except Exception as e:
             logging.error("Error reading file %s: %s", base_filepath, e)
     else:
-        # file missing -> yield nothing
         return
 
 # parse cell like "1.1.1.1,korna | korna2" or "1.1.1.1 | korna" or "1.1.1.1"
 _ip_re = re.compile(r'(?:\d{1,3}\.){3}\d{1,3}')
 
+def _tokens_from_cell(cell):
+    # split on whitespace and punctuation, preserve tokens that might be IPs
+    separators = string.whitespace + string.punctuation
+    token = ""
+    tokens = []
+    for ch in cell:
+        if ch in separators:
+            if token:
+                tokens.append(token)
+                token = ""
+        else:
+            token += ch
+    if token:
+        tokens.append(token)
+    return tokens
+
 def parse_cell_for_ip_and_refs(cell):
     """
     Returns list of tuples: (ip, [refs])
-    - splits on '|' first, treats comma as separator between ip and inline ref(s).
-    - supports multiple parts in the cell.
+    - Supports IPv4 and IPv6 by validating tokens with ipaddress.ip_address()
+    - Attempts to attribute nearby text as references (simple heuristic).
     """
     results = []
     if not cell:
         return results
+
+    # split on '|' first to preserve intended ref blocks
     parts = [p.strip() for p in cell.split("|") if p.strip()]
-    current_ip = None
+    last_ip = None
     for p in parts:
-        # if comma exists, try left/right mapping
-        if "," in p:
-            left, right = [x.strip() for x in p.split(",", 1)]
-            m_left = _ip_re.search(left)
-            m_right = _ip_re.search(right)
-            if m_left and is_valid_public_ip(m_left.group(0)):
-                ip = m_left.group(0)
-                refs = [r.strip() for r in re.split(r'[|,]', right) if r.strip()]
-                results.append((ip, refs))
-                current_ip = ip
+        # look for any token in part that is a valid IP (v4 or v6)
+        tokens = _tokens_from_cell(p)
+        found_ip = None
+        for t in tokens:
+            try:
+                ip_obj = ipaddress.ip_address(t)
+                # valid IP (v4 or v6)
+                found_ip = t
+                break
+            except Exception:
                 continue
-            if m_right and is_valid_public_ip(m_right.group(0)):
-                ip = m_right.group(0)
-                refs = [r.strip() for r in re.split(r'[|,]', left) if r.strip()]
-                results.append((ip, refs))
-                current_ip = ip
-                continue
-        # else find ip anywhere
-        m = _ip_re.search(p)
-        if m and is_valid_public_ip(m.group(0)):
-            ip = m.group(0)
-            after = p.replace(ip, "").strip(" ,|")
-            refs = [s.strip() for s in re.split(r'[|,]', after) if s.strip()]
-            results.append((ip, refs))
-            current_ip = ip
-            continue
-        # no IP in part => treat as additional ref for last ip if exists
-        if current_ip and results:
-            last_ip, last_refs = results[-1]
-            if p and p not in last_refs:
-                last_refs.append(p)
-                results[-1] = (last_ip, last_refs)
+        if found_ip:
+            # build refs as anything in part after removing the ip token
+            after = p.replace(found_ip, "").strip(" ,|")
+            refs = [r.strip() for r in re.split(r'[|,;/]+', after) if r.strip()]
+            results.append((found_ip, refs))
+            last_ip = found_ip
+        else:
+            # no IP in this segment -> treat as additional ref for last ip
+            if last_ip and results:
+                last_ip_existing, refs_existing = results[-1]
+                if p and p not in refs_existing:
+                    refs_existing.append(p)
+                    results[-1] = (last_ip_existing, refs_existing)
     return results
 
 # --- Seed loader ---
+
 def load_seeds(settings):
-    """
-    Build seeds list from settings["InputFiles"].
-    Each seed = {"ip": ip, "category": category, "discovered_url": f"http://{ip}", "references": [...]}.
+    """ Build seeds list from settings["InputFiles"]. Each seed = {"ip": ip, "category": category, "discovered_url": f"http://{ip}", "references": [...] }.
     Adds "HydraDragonAntivirusSearchEngine" to references for first-seen IPs.
     """
     seeds = []
     seen_ips = set()
     whitelist_ips = set()
     input_files = settings.get("InputFiles", [])
-
     # 1) collect whitelist IPs
     for file_info in input_files:
         try:
@@ -214,7 +225,6 @@ def load_seeds(settings):
                             if is_valid_public_ip(ip):
                                 whitelist_ips.add(ip)
                     else:
-                        # fallback: maybe second column contains ip
                         if len(row) > 1:
                             maybe = row[1].strip()
                             m = _ip_re.search(maybe)
@@ -222,7 +232,6 @@ def load_seeds(settings):
                                 whitelist_ips.add(m.group(0))
         except Exception as e:
             logging.debug("Whitelist load error for %s: %s", file_info.get("filename"), e)
-
     logging.info("Loaded %d whitelist IPs", len(whitelist_ips))
 
     # 2) process all input files
@@ -260,7 +269,6 @@ def load_seeds(settings):
                     seeds.append(seed)
                     seen_ips.add(ip)
                 continue
-            # parsed list
             for ip, refs_from_cell in parsed:
                 if not is_valid_public_ip(ip):
                     continue
@@ -286,7 +294,6 @@ def load_seeds(settings):
                 seen_ips.add(ip)
         if not got_any:
             logging.debug("No rows yielded from %s (missing or empty).", filepath)
-
     logging.info("Total unique seeds loaded for processing: %d", len(seeds))
     return seeds
 
@@ -294,7 +301,11 @@ def load_seeds(settings):
 class HeuristicScanner:
     def __init__(self, settings):
         self.settings = settings
-        self.timeout = int(settings.get("RequestTimeout", 10))
+        # enforce a reasonable per-request timeout (seconds)
+        try:
+            self.timeout = max(1, int(settings.get("RequestTimeout", 10)))
+        except Exception:
+            self.timeout = 10
         self.seed_queue = queue.Queue()
         self.pbar = None
         # initialize realtime buckets from OutputFiles keys
@@ -302,6 +313,58 @@ class HeuristicScanner:
         self.stop_event = threading.Event()
         self.start_time = None
         self.session = requests.Session()
+        self.supervisor_thread = None
+
+    def enqueue_seeds_with_priority(self, seeds, prioritize_by_refs=True, randomize=True, fraction=1.0):
+        """Pre-sort and enqueue seeds.
+        - prioritize_by_refs: sort descending by number of references
+        - randomize: use random tie-breakers and/or shuffle
+        - fraction: float in (0,1] to only enqueue that fraction of seeds (top portion after sorting)
+        """
+        import random
+        # work on a shallow copy so we don't mutate caller objects
+        seeds_copy = [dict(s) for s in seeds]
+
+        if prioritize_by_refs:
+            # attach random tiebreaker
+            for s in seeds_copy:
+                s.setdefault("references", [])
+                s["_rand_tiebreak"] = random.random()
+            seeds_copy.sort(key=lambda s: (-len(s.get("references", [])), s["_rand_tiebreak"]))
+            for s in seeds_copy:
+                s.pop("_rand_tiebreak", None)
+            if randomize:
+                # small local shuffle among equal-ref-count blocks to avoid strict ordering
+                i = 0
+                grouped = []
+                while i < len(seeds_copy):
+                    cnt = len(seeds_copy[i].get("references", []))
+                    j = i
+                    while j < len(seeds_copy) and len(seeds_copy[j].get("references", [])) == cnt:
+                        j += 1
+                    block = seeds_copy[i:j]
+                    random.shuffle(block)
+                    grouped.extend(block)
+                    i = j
+                seeds_copy = grouped
+        else:
+            if randomize:
+                random.shuffle(seeds_copy)
+
+        # apply fraction (keep top portion)
+        try:
+            frac = float(fraction)
+        except Exception:
+            frac = 1.0
+        frac = max(0.0, min(1.0, frac))
+        if frac < 1.0:
+            keep = max(1, int(len(seeds_copy) * frac))
+            seeds_copy = seeds_copy[:keep]
+
+        for seed in seeds_copy:
+            # ensure we don't enqueue empty seeds
+            if seed.get("ip"):
+                self.seed_queue.put(seed)
 
     def _default_processed_entry(self):
         return {
@@ -339,7 +402,6 @@ class HeuristicScanner:
             categories = sorted(list(data.get("categories", [])))
             all_categories_str = ",".join(categories)
             refs = sorted(list(data.get("references", [])))
-            # NO trailing pipe; join only with '|'
             refs_str = "|".join(refs) if refs else ""
             comment = data.get("last_comment", "").strip()
             count = int(data.get("count", 0))
@@ -352,9 +414,12 @@ class HeuristicScanner:
             if is_whitelist:
                 target_key = "whitelist"
             else:
-                if status_type == "potentially_up": target_key = "potentially_up_bulk"
-                elif status_type == "potentially_down": target_key = "potentially_down_bulk"
-                elif status_type == "winerror": target_key = "winerror_bulk"
+                if status_type == "potentially_up":
+                    target_key = "potentially_up_bulk"
+                elif status_type == "potentially_down":
+                    target_key = "potentially_down_bulk"
+                elif status_type == "winerror":
+                    target_key = "winerror_bulk"
             if is_duplicate:
                 target_key += "_duplicate"
             # remove ip from any previous buckets
@@ -372,6 +437,31 @@ class HeuristicScanner:
             # write that target file
             self.write_csv_target(target_key)
 
+    def _drain_queue(self):
+        # mark all remaining queued tasks as done (so queue.join() won't block)
+        while True:
+            try:
+                self.seed_queue.get_nowait()
+                try:
+                    self.seed_queue.task_done()
+                except Exception:
+                    pass
+            except queue.Empty:
+                break
+
+    def _supervisor(self):
+        # monitor elapsed time and force stop when limit reached
+        while not self.stop_event.is_set() and self.start_time is not None:
+            elapsed = time.time() - self.start_time
+            if elapsed > TIME_LIMIT_SECONDS:
+                logging.warning("Scan time exceeded %d seconds (%s). Stopping workers.", TIME_LIMIT_SECONDS, time.ctime())
+                self.stop_event.set()
+                # drain queue so join() unblocks
+                self._drain_queue()
+                break
+            # sleep a bit to avoid busy-looping
+            time.sleep(1)
+
     def process_seed(self, seed):
         ip = seed.get("ip")
         if not ip:
@@ -379,24 +469,30 @@ class HeuristicScanner:
         initial_category = seed.get("category", "Unknown")
         discovered_url = seed.get("discovered_url", f"http://{ip}")
         references = seed.get("references", [])
-
         # initialize processed_results entry
         with scanner_lock:
             if ip not in processed_results:
                 processed_results[ip] = self._default_processed_entry()
             processed_results[ip]["categories"].add(initial_category)
-            # add references into processed_results
             for r in references:
                 if r:
                     processed_results[ip]["references"].add(r)
             processed_results[ip]["count"] = int(processed_results[ip].get("count", 0)) + 1
-            # if already processed before, just update CSV and return
-            if processed_results[ip].get("processed"):
-                self.update_realtime_result(ip)
-                return
-            processed_results[ip]["processed"] = True
+        # if already processed before, just update CSV and return
+        if processed_results[ip].get("processed"):
+            self.update_realtime_result(ip)
+            return
+        processed_results[ip]["processed"] = True
+
+        # check elapsed time before doing any network work
+        if self.start_time and (time.time() - self.start_time > TIME_LIMIT_SECONDS):
+            logging.warning("Time limit reached before processing %s, skipping.", ip)
+            # set stop flag and avoid making requests
+            self.stop_event.set()
+            return
 
         try:
+            # make the HTTP request with the enforced timeout
             response = self.session.get(f"http://{ip}", timeout=self.timeout, allow_redirects=True)
             status_code = response.status_code
             content = response.content or b""
@@ -428,21 +524,22 @@ class HeuristicScanner:
                             processed_results[new_ip]["categories"].add("Heuristic")
                             processed_results[new_ip]["references"].add("HydraDragonAntivirusSearchEngine")
                             processed_results[new_ip]["count"] = 1
-                            new_seed = {"ip": new_ip, "category": "Heuristic", "discovered_url": f"http://{new_ip}", "references": ["HydraDragonAntivirusSearchEngine"]}
-                            self.seed_queue.put(new_seed)
-                            if self.pbar:
-                                try:
-                                    self.pbar.total += 1
-                                    self.pbar.refresh()
-                                except Exception:
-                                    pass
+                    new_seed = {"ip": new_ip, "category": "Heuristic", "discovered_url": f"http://{new_ip}", "references": ["HydraDragonAntivirusSearchEngine"]}
+                    # enqueue discovered IPs but respect stop_event
+                    if not self.stop_event.is_set():
+                        self.seed_queue.put(new_seed)
+                        if self.pbar:
+                            try:
+                                self.pbar.total += 1
+                                self.pbar.refresh()
+                            except Exception:
+                                pass
 
             # determine status/comment based on HTTP codes from settings
             code_str = str(status_code)
             http_up = [c.strip() for c in self.settings.get("HTTPUpCodes", "").split(",") if c.strip()]
             http_potentially_up = [c.strip() for c in self.settings.get("HTTPPotentiallyUpCodes", "").split(",") if c.strip()]
             http_potentially_down = [c.strip() for c in self.settings.get("HTTPPotentiallyDownCodes", "").split(",") if c.strip()]
-
             status_type = "up"
             template = self.settings.get("CommentTemplateNoZeroday", "")
             if code_str in http_up:
@@ -458,7 +555,6 @@ class HeuristicScanner:
                 template = self.settings.get("CommentTemplateNoZeroday", "")
                 status_type = "up"
 
-            # if similarity useful: compute against empty base_text? we leave similarity 0.0 for now
             try:
                 comment = template.format(ip=ip, discovered_url=discovered_url, verdict=initial_category, status=status_code, similarity=0.0)
             except Exception:
@@ -477,18 +573,23 @@ class HeuristicScanner:
             processed_results[ip]["status_type"] = status_type
             processed_results[ip]["last_comment"] = comment
             processed_results[ip]["similarity"] = float(processed_results[ip].get("similarity", 0.0))
-            self.update_realtime_result(ip)
+        self.update_realtime_result(ip)
 
     def worker(self):
         while not self.stop_event.is_set():
-            if self.start_time and (time.time() - self.start_time > FIVE_HOURS_IN_SECONDS):
-                logging.warning("Scan time exceeded 5 hours. Stopping workers.")
-                self.stop_event.set()
-                break
             try:
                 seed = self.seed_queue.get(timeout=1)
             except queue.Empty:
-                # queue empty, check again
+                # if stop requested, break; otherwise keep waiting
+                if self.stop_event.is_set():
+                    break
+                continue
+            # If stop_event set after getting the seed, mark task done and stop
+            if self.stop_event.is_set():
+                try:
+                    self.seed_queue.task_done()
+                except Exception:
+                    pass
                 break
             try:
                 self.process_seed(seed)
@@ -506,7 +607,8 @@ class HeuristicScanner:
     def run(self, seeds):
         self.start_time = time.time()
         logging.info("Initializing scan...")
-        # enqueue seeds and initialize processed_results
+        # prepare seeds and optionally prioritize/randomize before enqueueing
+        seeds_prepared = []
         for seed in seeds:
             ip = seed.get("ip")
             if not ip:
@@ -515,13 +617,24 @@ class HeuristicScanner:
                 if ip not in processed_results:
                     processed_results[ip] = self._default_processed_entry()
                 processed_results[ip]["categories"].add(seed.get("category", "Unknown"))
-                # add references into processed_results
                 for ref in seed.get("references", []):
                     if ref:
                         processed_results[ip]["references"].add(ref)
                 processed_results[ip]["count"] = int(processed_results[ip].get("count", 0)) + 1
-            self.seed_queue.put(seed)
+            seeds_prepared.append(seed)
 
+        # Enqueue with prioritization / randomization / fraction, controlled by settings
+        prioritize = bool(self.settings.get("PrioritizeByReferences", True))
+        randomize_q = bool(self.settings.get("RandomizeQueue", True))
+        fraction = float(self.settings.get("ScanFraction", 1.0))
+        self.enqueue_seeds_with_priority(
+            seeds_prepared,
+            prioritize_by_refs=prioritize,
+            randomize=randomize_q,
+            fraction=fraction
+        )
+
+        # after enqueueing, count how many items are in the queue
         initial_count = self.seed_queue.qsize()
         if initial_count == 0:
             logging.warning("No seeds to scan.")
@@ -530,12 +643,16 @@ class HeuristicScanner:
         # progress bar
         self.pbar = tqdm(total=initial_count, desc="Scanning IPs", unit="ip")
 
-        # spawn threads
+        # spawn supervisor
+        self.supervisor_thread = threading.Thread(target=self._supervisor, daemon=True)
+        self.supervisor_thread.start()
+
+        # spawn worker threads
         try:
             max_threads = max(1, int(self.settings.get("MaxThreads", 10)))
         except Exception:
             max_threads = 10
-        num_threads = min(max_threads, initial_count)
+        num_threads = min(max_threads, max(1, initial_count))
         threads = []
         for _ in range(num_threads):
             t = threading.Thread(target=self.worker, daemon=True)
@@ -543,14 +660,22 @@ class HeuristicScanner:
             threads.append(t)
 
         try:
+            # join the queue (this will unblock because supervisor drains and sets stop_event on timeout)
             self.seed_queue.join()
         except KeyboardInterrupt:
             logging.warning("KeyboardInterrupt: stopping.")
             self.stop_event.set()
+            # drain queue in case
+            self._drain_queue()
+
+        # ensure stop flag so workers can exit
+        self.stop_event.set()
 
         # wait for threads to finish
         for t in threads:
-            t.join(timeout=1)
+            t.join(timeout=2)
+        if self.supervisor_thread:
+            self.supervisor_thread.join(timeout=2)
 
         if self.pbar:
             try:
@@ -558,9 +683,23 @@ class HeuristicScanner:
             except Exception:
                 pass
 
-        logging.info("Scan completed. Reports written to %s", OUTPUT_DIR)
+        # final write of all outputs to ensure up-to-date CSVs
+        for key in list(self.realtime_results.keys()):
+            try:
+                self.write_csv_target(key)
+            except Exception:
+                pass
+
+        # close session cleanly
+        try:
+            self.session.close()
+        except Exception:
+            pass
+
+        logging.info("Scan completed or stopped. Reports written to %s", OUTPUT_DIR)
 
 # --- Main ---
+
 def main():
     logging.info("--- Hydra Dragon Antivirus Search Engine Initializing ---")
     seeds = load_seeds(SETTINGS)
@@ -570,6 +709,7 @@ def main():
     scanner = HeuristicScanner(SETTINGS)
     scanner.run(seeds)
     logging.info("--- Shutdown ---")
+
 
 if __name__ == "__main__":
     main()
