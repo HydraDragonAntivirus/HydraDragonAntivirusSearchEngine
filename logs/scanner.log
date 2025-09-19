@@ -1,0 +1,60 @@
+2025-09-19 17:19:55,827 [INFO] Loaded settings from /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/settings/settings.json
+2025-09-19 17:19:55,828 [INFO] --- Hydra Dragon Antivirus Search Engine Initializing ---
+2025-09-19 17:19:57,489 [INFO] Loaded 0 whitelist IPs
+2025-09-19 17:20:00,070 [INFO] Detected 2 split parts for IPv4Malware.csv
+2025-09-19 17:24:36,518 [INFO] Total unique seeds loaded for processing: 8848693
+2025-09-19 17:24:36,683 [INFO] Initializing scan... time_limit=3600.0 connect/read=(3.00, 10.00)
+2025-09-19 17:28:25,459 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-19 17:31:15,191 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-19 17:46:17,293 [WARNING] Failed to parse headers (url=http://190.180.154.153:80/login.html): [MissingHeaderBodySeparatorDefect()], unparsed data: 'Mon, 30 Jan 2023 01:36:47 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+Traceback (most recent call last):
+  File "/opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/urllib3/connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "/opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/urllib3/util/response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'Mon, 30 Jan 2023 01:36:47 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+2025-09-19 17:52:36,375 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-19 17:56:59,921 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-19 17:57:27,989 [WARNING] Failed to parse headers (url=http://117.211.72.250:80/login.html): [MissingHeaderBodySeparatorDefect()], unparsed data: 'Fri, 12 Aug 2022 07:43:28 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+Traceback (most recent call last):
+  File "/opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/urllib3/connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "/opt/hostedtoolcache/Python/3.12.11/x64/lib/python3.12/site-packages/urllib3/util/response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'Fri, 12 Aug 2022 07:43:28 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+2025-09-19 18:05:15,791 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-19 18:24:36,748 [WARNING] Scan time exceeded 3600.0 seconds. Stopping workers.
+2025-09-19 18:24:52,958 [WARNING] Time limit reached before processing 89.164.231.134, skipping.
+2025-09-19 18:24:53,580 [WARNING] Time limit reached before processing 84.130.102.143, skipping.
+2025-09-19 18:24:53,580 [WARNING] Time limit reached before processing 117.247.206.37, skipping.
+2025-09-19 18:24:53,581 [WARNING] Time limit reached before processing 186.62.128.177, skipping.
+2025-09-19 18:24:53,581 [WARNING] Time limit reached before processing 115.144.183.124, skipping.
+2025-09-19 18:24:53,665 [WARNING] Time limit reached before processing 106.60.47.150, skipping.
+2025-09-19 18:24:54,085 [WARNING] Time limit reached before processing 39.62.0.237, skipping.
+2025-09-19 18:24:54,170 [WARNING] Time limit reached before processing 95.133.16.44, skipping.
+2025-09-19 18:24:54,170 [WARNING] Time limit reached before processing 176.67.0.187, skipping.
+2025-09-19 18:24:54,254 [WARNING] Time limit reached before processing 45.67.192.102, skipping.
+2025-09-19 18:24:54,507 [WARNING] Time limit reached before processing 89.188.80.0, skipping.
+2025-09-19 18:24:54,756 [WARNING] Time limit reached before processing 24.243.174.125, skipping.
+2025-09-19 18:24:54,757 [WARNING] Time limit reached before processing 188.170.193.88, skipping.
+2025-09-19 18:24:54,757 [WARNING] Time limit reached before processing 186.133.151.9, skipping.
+2025-09-19 18:24:54,923 [WARNING] Time limit reached before processing 143.255.140.50, skipping.
+2025-09-19 18:24:54,924 [WARNING] Time limit reached before processing 42.100.35.193, skipping.
+2025-09-19 18:24:55,093 [WARNING] Time limit reached before processing 192.3.144.137, skipping.
+2025-09-19 18:24:55,094 [WARNING] Time limit reached before processing 198.46.230.155, skipping.
+2025-09-19 18:24:55,177 [WARNING] Time limit reached before processing 219.124.197.109, skipping.
+2025-09-19 18:24:55,177 [WARNING] Time limit reached before processing 61.146.199.186, skipping.
+2025-09-19 18:24:55,177 [WARNING] Time limit reached before processing 105.213.118.233, skipping.
+2025-09-19 18:24:55,178 [WARNING] Time limit reached before processing 180.103.214.80, skipping.
+2025-09-19 18:24:55,178 [WARNING] Time limit reached before processing 146.52.56.222, skipping.
+2025-09-19 18:24:56,687 [WARNING] Time limit reached before processing 115.20.160.199, skipping.
+2025-09-19 18:24:56,773 [WARNING] Time limit reached before processing 36.90.39.9, skipping.
+2025-09-19 18:24:56,856 [WARNING] Time limit reached before processing 223.155.16.170, skipping.
+2025-09-19 18:24:56,857 [WARNING] Time limit reached before processing 64.86.100.0, skipping.
+2025-09-19 18:24:56,857 [WARNING] Time limit reached before processing 36.249.192.35, skipping.
+2025-09-19 18:24:56,940 [WARNING] Time limit reached before processing 168.194.159.34, skipping.
+2025-09-19 18:24:56,941 [WARNING] Time limit reached before processing 186.152.95.106, skipping.
+2025-09-19 18:24:58,286 [WARNING] Time limit reached before processing 177.11.51.232, skipping.
+2025-09-19 18:24:58,703 [WARNING] Time limit reached before processing 37.123.199.177, skipping.
+2025-09-19 18:24:58,886 [INFO] Scan completed or stopped. Reports written to /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/website/reports
+2025-09-19 18:24:58,937 [INFO] --- Shutdown ---
