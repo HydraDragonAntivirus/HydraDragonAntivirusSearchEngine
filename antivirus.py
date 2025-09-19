@@ -11,6 +11,7 @@ Key fixes applied:
  - HTTPAdapter mounted on requests.Session to better control connection pooling.
  - Optional global socket default timeout (commented by default).
  - Minor robustness improvements around task_done and writer operations.
+ - FIXED: IP discovery regex pattern to properly find IPs in HTML content.
 
 This file is the full, ready-to-run script (based on the file you provided) with the recommended fixes applied.
 """
@@ -438,16 +439,19 @@ class HeuristicScanner:
                 comment = comment.replace("Zeroday: Yes", "Zeroday: No")
             status_type = data.get("status_type", "up")
             is_whitelist = ("Whitelist" in categories)
-            target_key = "bulk"
-            if is_whitelist:
+            
+            # FIXED: Connection errors should never go to whitelist reports
+            if status_type == "winerror":
+                target_key = "winerror_bulk"
+            elif is_whitelist:
                 target_key = "whitelist"
             else:
+                target_key = "bulk"
                 if status_type == "potentially_up":
                     target_key = "potentially_up_bulk"
                 elif status_type == "potentially_down":
                     target_key = "potentially_down_bulk"
-                elif status_type == "winerror":
-                    target_key = "winerror_bulk"
+            
             if is_duplicate:
                 target_key += "_duplicate"
             # remove ip from any previous buckets
@@ -549,8 +553,9 @@ class HeuristicScanner:
             except Exception:
                 base_text = ""
 
-            # discover ips in content
-            found_ips = re.findall(r'\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b', base_text)
+            # FIXED: discover ips in content - corrected regex pattern
+            found_ips = re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', base_text)
+            discovered_count = 0
             for new_ip in found_ips:
                 if new_ip != ip and is_valid_public_ip(new_ip):
                     with scanner_lock:
@@ -559,6 +564,7 @@ class HeuristicScanner:
                             processed_results[new_ip]["categories"].add("Heuristic")
                             processed_results[new_ip]["references"].add("HydraDragonAntivirusSearchEngine")
                             processed_results[new_ip]["count"] = 1
+                            discovered_count += 1
                     new_seed = {"ip": new_ip, "category": "Heuristic", "discovered_url": f"http://{new_ip}", "references": ["HydraDragonAntivirusSearchEngine"]}
                     # enqueue discovered IPs but respect stop_event
                     if not self.stop_event.is_set():
@@ -569,6 +575,10 @@ class HeuristicScanner:
                                 self.pbar.refresh()
                             except Exception:
                                 pass
+            
+            # Log IP discovery for debugging
+            if discovered_count > 0:
+                logging.info("Discovered %d new IPs from %s", discovered_count, ip)
 
             # determine status/comment based on HTTP codes from settings
             code_str = str(status_code)

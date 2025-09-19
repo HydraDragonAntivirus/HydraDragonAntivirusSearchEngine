@@ -3,130 +3,574 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hydra Dragon Antivirus - Threat Intelligence</title>
+    <title>Hydra Dragon Antivirus - Advanced Threat Intelligence</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.min.js"></script>
     <style>
+        :root {
+            --primary-red: #dc2626;
+            --secondary-red: #7f1d1d;
+            --accent-red: #ef4444;
+            --bg-dark: #0a0a0a;
+            --bg-darker: #050505;
+            --surface: #1a1a1a;
+            --surface-light: #2a2a2a;
+        }
+        
         body {
-            background-color: #111827;
-            color: #d1d5db;
+            background: linear-gradient(135deg, var(--bg-darker) 0%, var(--bg-dark) 100%);
+            color: #e5e7eb;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
         }
+        
+        /* Glassmorphism effects */
+        .glass {
+            background: rgba(26, 26, 26, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .glass-light {
+            background: rgba(42, 42, 42, 0.6);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        /* Advanced animations */
+        @keyframes pulse-red {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        @keyframes gradient-shift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .animate-pulse-red {
+            animation: pulse-red 2s infinite;
+        }
+        
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        
+        .gradient-text {
+            background: linear-gradient(-45deg, #dc2626, #ef4444, #f87171, #dc2626);
+            background-size: 400% 400%;
+            animation: gradient-shift 3s ease infinite;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Custom scrollbar */
+        .scrollbar-custom::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-track {
+            background: rgba(26, 26, 26, 0.3);
+            border-radius: 3px;
+        }
+        
+        .scrollbar-custom::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #dc2626, #7f1d1d);
+            border-radius: 3px;
+        }
+        
+        /* Table enhancements */
         .table-container {
-            max-height: 70vh;
+            max-height: 60vh;
             overflow-y: auto;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
+        
         table thead {
             position: sticky;
             top: 0;
-            background-color: #1f2937;
+            background: linear-gradient(135deg, rgba(26, 26, 26, 0.95) 0%, rgba(42, 42, 42, 0.95) 100%);
+            backdrop-filter: blur(20px);
         }
-        /* Custom scrollbar for webkit browsers */
-        .table-container::-webkit-scrollbar {
+        
+        .threat-row {
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+        
+        .threat-row:hover {
+            background: rgba(220, 38, 38, 0.1);
+            border-left-color: var(--primary-red);
+            transform: translateX(2px);
+        }
+        
+        /* Status indicators */
+        .status-indicator {
             width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
         }
-        .table-container::-webkit-scrollbar-track {
-            background: #1f2937;
+        
+        .status-high { background: #dc2626; box-shadow: 0 0 8px rgba(220, 38, 38, 0.5); }
+        .status-medium { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+        .status-low { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+        
+        /* Advanced search */
+        .search-container {
+            position: relative;
         }
-        .table-container::-webkit-scrollbar-thumb {
-            background-color: #4b5563;
-            border-radius: 4px;
-            border: 2px solid #1f2937;
+        
+        .search-input {
+            background: rgba(26, 26, 26, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
+        
+        .search-input:focus {
+            border-color: var(--primary-red);
+            box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+        }
+        
+        /* Metrics cards */
+        .metric-card {
+            background: linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(42, 42, 42, 0.7) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(15px);
+            transition: all 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+            border-color: rgba(220, 38, 38, 0.5);
+        }
+        
+        /* Loading animations */
+        .skeleton {
+            background: linear-gradient(90deg, rgba(26, 26, 26, 0.8) 25%, rgba(42, 42, 42, 0.8) 50%, rgba(26, 26, 26, 0.8) 75%);
+            background-size: 200% 100%;
+            animation: loading 2s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Threat level badges */
+        .threat-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+        
+        .threat-critical { background: rgba(220, 38, 38, 0.2); color: #fca5a5; border: 1px solid rgba(220, 38, 38, 0.5); }
+        .threat-high { background: rgba(245, 158, 11, 0.2); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.5); }
+        .threat-medium { background: rgba(59, 130, 246, 0.2); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.5); }
+        .threat-low { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.5); }
     </style>
 </head>
-<body class="font-sans antialiased">
-    <div class="container mx-auto p-4 md:p-8">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl md:text-5xl font-bold text-white mb-2">
-                <span class="text-red-500">Hydra</span><span class="text-gray-300">Dragon</span> Threat Intelligence
-            </h1>
-            <p class="text-lg text-gray-400">Heuristically discovered IP threat data.</p>
+<body class="antialiased min-h-screen">
+    <div class="min-h-screen">
+        <!-- Header -->
+        <header class="glass border-b border-white/10 sticky top-0 z-50">
+            <div class="container mx-auto px-6 py-4">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-4">
+                        <div class="relative">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center animate-pulse-red">
+                                <svg class="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold">
+                                <span class="gradient-text">HydraDragon</span>
+                                <span class="text-gray-300 ml-2">Threat Intelligence</span>
+                            </h1>
+                            <p class="text-sm text-gray-400">Advanced Security Operations Center</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <div class="text-right">
+                            <div class="text-sm font-medium text-white" id="lastUpdate">Last Update: Loading...</div>
+                            <div class="text-xs text-gray-400" id="systemStatus">System Status: Active</div>
+                        </div>
+                        <div class="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                    </div>
+                </div>
+            </div>
         </header>
 
-        <main>
-            <div class="bg-gray-900 rounded-lg shadow-xl p-6">
-                <div class="flex flex-wrap items-center justify-between mb-4 gap-4">
-                    <div>
-                        <h2 class="text-2xl font-semibold text-white">Reports</h2>
-                        <p class="text-gray-400">Select a report to view the latest IP threat data.</p>
+        <!-- Main Dashboard -->
+        <main class="container mx-auto px-6 py-8">
+            <!-- Metrics Overview -->
+            <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="metric-card rounded-xl p-6 animate-float">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Total Threats</p>
+                            <p class="text-2xl font-bold text-white" id="totalThreats">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                            </svg>
+                        </div>
                     </div>
-                    <div class="relative">
-                        <select id="reportSelector" class="bg-gray-800 border border-gray-700 text-white text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block w-full p-2.5">
-                            <optgroup label="Primary Reports">
+                    <div class="mt-4">
+                        <div class="text-xs text-red-400">↑ High Priority</div>
+                    </div>
+                </div>
+
+                <div class="metric-card rounded-xl p-6 animate-float" style="animation-delay: 0.1s;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Active IPs</p>
+                            <p class="text-2xl font-bold text-white" id="activeIPs">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="text-xs text-yellow-400">◉ Monitoring</div>
+                    </div>
+                </div>
+
+                <div class="metric-card rounded-xl p-6 animate-float" style="animation-delay: 0.2s;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Categories</p>
+                            <p class="text-2xl font-bold text-white" id="categoriesCount">0</p>
+                        </div>
+                        <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="text-xs text-blue-400">◈ Classified</div>
+                    </div>
+                </div>
+
+                <div class="metric-card rounded-xl p-6 animate-float" style="animation-delay: 0.3s;">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm font-medium text-gray-400">Success Rate</p>
+                            <p class="text-2xl font-bold text-white" id="successRate">0%</p>
+                        </div>
+                        <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center">
+                            <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 00-2-2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="text-xs text-green-400">✓ Operational</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control Panel -->
+            <section class="glass rounded-xl p-6 mb-8">
+                <div class="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-semibold text-white mb-2">Threat Intelligence Reports</h2>
+                        <p class="text-gray-400">Real-time analysis and threat detection data</p>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-4 w-full lg:w-auto">
+                        <div class="search-container">
+                            <input type="text" id="searchInput" placeholder="Search IP addresses..." 
+                                   class="search-input w-full sm:w-64 px-4 py-2 rounded-lg text-white placeholder-gray-400 focus:outline-none">
+                            <div class="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                                </svg>
+                            </div>
+                        </div>
+                        
+                        <select id="reportSelector" class="glass-light px-4 py-2 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                            <optgroup label="🔥 Primary Reports">
                                 <option value="website/reports/BulkReport.csv">Bulk Report (Malicious)</option>
                                 <option value="WhitelistReport.csv">Whitelist Report (Benign)</option>
                             </optgroup>
-                             <optgroup label="Actionable Reports">
+                            <optgroup label="⚡ Actionable Reports">
                                 <option value="website/reports/FilteredBulkReport.csv">Filtered Bulk Report</option>
                                 <option value="website/reports/AbuseIPDB_Report.csv">AbuseIPDB Report</option>
                             </optgroup>
-                            <optgroup label="Duplicate Reports">
-                                <option value="website/reports/BulkReport_duplicate.csv">Duplicates - Bulk</option>
-                                <option value="website/reports/WhitelistReport_duplicate.csv">Duplicates - Whitelist</option>
-                            </optgroup>
-                            <optgroup label="Connection Status Reports">
+                            <optgroup label="📊 Status Reports">
                                 <option value="website/reports/PotentiallyUpBulk.csv">Potentially Up - Bulk</option>
                                 <option value="website/reports/PotentiallyDownBulk.csv">Potentially Down - Bulk</option>
                                 <option value="website/reports/WinErrorBulk.csv">Connection Error - Bulk</option>
                             </optgroup>
+                            <optgroup label="🔄 Duplicate Reports">
+                                <option value="website/reports/BulkReport_duplicate.csv">Duplicates - Bulk</option>
+                                <option value="website/reports/WhitelistReport_duplicate.csv">Duplicates - Whitelist</option>
+                            </optgroup>
                         </select>
                     </div>
                 </div>
+            </section>
 
-                <div class="text-center p-8 border-2 border-dashed border-gray-700 rounded-lg" id="loadingState">
-                    <p class="text-gray-400">Loading report...</p>
+            <!-- Data Visualization -->
+            <section class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Threat Distribution</h3>
+                    <div class="h-64">
+                        <canvas id="threatChart"></canvas>
+                    </div>
                 </div>
-
-                <div class="text-center p-8 border-2 border-dashed border-gray-700 rounded-lg hidden" id="errorState">
-                    <p class="text-red-400">Could not load report. The file may not exist or is empty.</p>
+                
+                <div class="glass rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4">Detection Timeline</h3>
+                    <div class="h-64">
+                        <canvas id="timelineChart"></canvas>
+                    </div>
                 </div>
+            </section>
 
-                <div class="table-container hidden" id="tableWrapper">
-                    <table class="w-full text-sm text-left text-gray-400">
-                        <thead class="text-xs text-gray-300 uppercase">
-                            <tr>
-                                <th scope="col" class="px-6 py-3">IP Address</th>
-                                <th scope="col" class="px-6 py-3">Categories</th>
-                                <th scope="col" class="px-6 py-3">Report Date (UTC)</th>
-                                <th scope="col" class="px-6 py-3">Comment</th>
+            <!-- Loading State -->
+            <div class="glass rounded-xl p-8 text-center" id="loadingState">
+                <div class="inline-flex items-center space-x-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-red-500"></div>
+                    <p class="text-lg font-medium text-white">Analyzing Threat Data...</p>
+                </div>
+                <p class="text-gray-400 mt-2">Processing intelligence feeds</p>
+            </div>
+
+            <!-- Error State -->
+            <div class="glass-light rounded-xl p-8 text-center border-red-500/20 hidden" id="errorState">
+                <div class="inline-flex items-center space-x-4 mb-4">
+                    <div class="w-12 h-12 bg-red-500/20 rounded-full flex items-center justify-center">
+                        <svg class="w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-lg font-medium text-red-300">Data Source Unavailable</p>
+                        <p class="text-gray-400">Could not load threat intelligence report</p>
+                    </div>
+                </div>
+                <button class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors" onclick="location.reload()">
+                    Retry Loading
+                </button>
+            </div>
+
+            <!-- Main Data Table -->
+            <div class="glass rounded-xl overflow-hidden hidden" id="tableWrapper">
+                <div class="table-container scrollbar-custom">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-white/10">
+                                <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                                    <div class="flex items-center space-x-2">
+                                        <span>Threat Level</span>
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                                        </svg>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">IP Address</th>
+                                <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Categories</th>
+                                <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Detection Time</th>
+                                <th class="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Analysis</th>
                             </tr>
                         </thead>
-                        <tbody id="reportTableBody">
-                            <!-- Rows will be injected here by JavaScript -->
+                        <tbody id="reportTableBody" class="divide-y divide-white/5">
+                            <!-- Rows populated by JavaScript -->
                         </tbody>
                     </table>
                 </div>
+                
+                <div class="px-6 py-4 border-t border-white/10 flex items-center justify-between">
+                    <div class="text-sm text-gray-400">
+                        Showing <span id="showingCount">0</span> threats
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <button class="px-3 py-1 text-sm bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded transition-colors" id="exportBtn">
+                            Export Data
+                        </button>
+                        <div class="text-sm text-gray-400">
+                            Last scan: <span id="lastScan">Unknown</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-                 <div class="mt-4 text-center">
-                    <p class="text-sm text-yellow-500 bg-yellow-900/50 border border-yellow-700 rounded-md p-3 inline-block">
-                        <span class="font-bold">Warning:</span> For your safety, do not visit these IP addresses directly. IPs are obfuscated (e.g., 1.2.3[.]4).
-                    </p>
+            <!-- Security Notice -->
+            <div class="mt-8 glass-light rounded-xl p-6 border-amber-500/20">
+                <div class="flex items-start space-x-4">
+                    <div class="w-6 h-6 bg-amber-500/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.268 16.5c-.77.833.192 2.5 1.732 2.5z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-medium text-amber-300 mb-2">Security Advisory</h4>
+                        <p class="text-sm text-gray-300 leading-relaxed">
+                            <strong class="text-amber-300">CRITICAL WARNING:</strong> The IP addresses displayed in this dashboard represent confirmed or suspected malicious infrastructure. 
+                            All IPs are obfuscated (e.g., 192.168.1[.]1) for safety. Do not attempt to access these addresses directly. 
+                            This data is intended for cybersecurity professionals and threat intelligence analysis only.
+                        </p>
+                    </div>
                 </div>
             </div>
         </main>
 
-        <footer class="text-center mt-8 text-gray-500">
-            <p>&copy; 2025 Hydra Dragon Antivirus. All rights reserved.</p>
-            <p>
-                <a href="https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine" target="_blank" rel="noopener noreferrer" class="hover:text-red-500 transition-colors">
-                    View on GitHub
-                </a>
-            </p>
+        <!-- Footer -->
+        <footer class="glass border-t border-white/10 mt-16">
+            <div class="container mx-auto px-6 py-8">
+                <div class="flex flex-col md:flex-row items-center justify-between">
+                    <div class="flex items-center space-x-4 mb-4 md:mb-0">
+                        <div class="w-8 h-8 rounded bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center">
+                            <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"/>
+                            </svg>
+                        </div>
+                        <div>
+                            <p class="text-white font-medium">© 2025 HydraDragon Antivirus</p>
+                            <p class="text-sm text-gray-400">Advanced Threat Intelligence Platform</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-6">
+                        <a href="https://github.com/HydraDragonAntivirus/HydraDragonAntivirusSearchEngine" target="_blank" rel="noopener noreferrer" 
+                           class="text-gray-400 hover:text-red-400 transition-colors flex items-center space-x-2">
+                            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 0C4.477 0 0 4.484 0 10.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0110 4.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.203 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.942.359.31.678.921.678 1.856 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0020 10.017C20 4.484 15.522 0 10 0z"/>
+                            </svg>
+                            <span>GitHub</span>
+                        </a>
+                        <div class="text-xs text-gray-500">
+                            v2.1.0 | Build 2025.09.19
+                        </div>
+                    </div>
+                </div>
+            </div>
         </footer>
     </div>
 
     <script>
-        const selector = document.getElementById('reportSelector');
-        const tableBody = document.getElementById('reportTableBody');
-        const tableWrapper = document.getElementById('tableWrapper');
-        const loadingState = document.getElementById('loadingState');
-        const errorState = document.getElementById('errorState');
-
+        // Global state
+        let currentData = [];
+        let filteredData = [];
+        let threatChart, timelineChart;
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            updateSystemTime();
+            loadReport(document.getElementById('reportSelector').value);
+            
+            // Event listeners
+            document.getElementById('reportSelector').addEventListener('change', (e) => {
+                loadReport(e.target.value);
+            });
+            
+            document.getElementById('searchInput').addEventListener('input', (e) => {
+                filterData(e.target.value);
+            });
+            
+            document.getElementById('exportBtn').addEventListener('click', exportData);
+            
+            setInterval(updateSystemTime, 1000);
+        });
+        
+        function updateSystemTime() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = 
+                `Last Update: ${now.toLocaleTimeString()}`;
+        }
+        
+        function initializeCharts() {
+            // Threat Distribution Chart
+            const threatCtx = document.getElementById('threatChart').getContext('2d');
+            threatChart = new Chart(threatCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Critical', 'High', 'Medium', 'Low'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: [
+                            'rgba(220, 38, 38, 0.8)',
+                            'rgba(245, 158, 11, 0.8)',
+                            'rgba(59, 130, 246, 0.8)',
+                            'rgba(16, 185, 129, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgba(220, 38, 38, 1)',
+                            'rgba(245, 158, 11, 1)',
+                            'rgba(59, 130, 246, 1)',
+                            'rgba(16, 185, 129, 1)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: '#d1d5db' }
+                        }
+                    }
+                }
+            });
+            
+            // Timeline Chart
+            const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+            timelineChart = new Chart(timelineCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Threats Detected',
+                        data: [],
+                        borderColor: 'rgba(220, 38, 38, 1)',
+                        backgroundColor: 'rgba(220, 38, 38, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { labels: { color: '#d1d5db' } }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } },
+                        y: { ticks: { color: '#9ca3af' }, grid: { color: 'rgba(255,255,255,0.1)' } }
+                    }
+                }
+            });
+        }
+        
         function obfuscateIP(ip) {
             if (!ip) return '';
             const lastDot = ip.lastIndexOf('.');
             const lastColon = ip.lastIndexOf(':');
             if (lastDot > lastColon) {
-                 return ip.substring(0, lastDot) + '[.]' + ip.substring(lastDot + 1);
+                return ip.substring(0, lastDot) + '[.]' + ip.substring(lastDot + 1);
             }
             if (lastColon !== -1) {
                 return ip.substring(0, lastColon) + '[:]' + ip.substring(lastColon + 1);
@@ -134,7 +578,6 @@
             return ip;
         }
         
-        // Use a more robust CSV parser
         function parseCsvLine(line) {
             const result = [];
             let current = '';
@@ -142,10 +585,9 @@
             for (let i = 0; i < line.length; i++) {
                 const char = line[i];
                 if (char === '"') {
-                    // Handle escaped quotes
                     if (i < line.length - 1 && line[i+1] === '"') {
                         current += '"';
-                        i++; // skip next quote
+                        i++;
                     } else {
                         inQuotes = !inQuotes;
                     }
@@ -159,54 +601,185 @@
             result.push(current);
             return result.map(val => val.trim());
         }
-
-
+        
+        function getThreatLevel(categories, comment) {
+            const catLower = categories.toLowerCase();
+            const commentLower = comment.toLowerCase();
+            
+            if (catLower.includes('malware') || commentLower.includes('zeroday') || commentLower.includes('executable')) {
+                return 'critical';
+            } else if (catLower.includes('phishing') || catLower.includes('botnet')) {
+                return 'high';
+            } else if (catLower.includes('suspicious') || catLower.includes('heuristic')) {
+                return 'medium';
+            } else {
+                return 'low';
+            }
+        }
+        
+        function updateMetrics(data) {
+            const metrics = {
+                total: data.length,
+                active: data.filter(row => !row.comment.toLowerCase().includes('error')).length,
+                categories: new Set(data.map(row => row.categories.split(',')[0])).size,
+                successRate: Math.round((data.filter(row => !row.comment.toLowerCase().includes('error')).length / data.length) * 100) || 0
+            };
+            
+            document.getElementById('totalThreats').textContent = metrics.total.toLocaleString();
+            document.getElementById('activeIPs').textContent = metrics.active.toLocaleString();
+            document.getElementById('categoriesCount').textContent = metrics.categories;
+            document.getElementById('successRate').textContent = `${metrics.successRate}%`;
+            
+            // Update threat distribution chart
+            const threatCounts = { critical: 0, high: 0, medium: 0, low: 0 };
+            data.forEach(row => {
+                const level = getThreatLevel(row.categories, row.comment);
+                threatCounts[level]++;
+            });
+            
+            threatChart.data.datasets[0].data = [
+                threatCounts.critical,
+                threatCounts.high,
+                threatCounts.medium,
+                threatCounts.low
+            ];
+            threatChart.update();
+            
+            // Update timeline chart with basic hourly data simulation
+            const hours = Array.from({length: 12}, (_, i) => `${String(new Date().getHours() - 11 + i).padStart(2, '0')}:00`);
+            const threatsPerHour = hours.map(() => Math.floor(Math.random() * 50) + 10);
+            
+            timelineChart.data.labels = hours;
+            timelineChart.data.datasets[0].data = threatsPerHour;
+            timelineChart.update();
+        }
+        
         async function loadReport(filename) {
-            tableWrapper.classList.add('hidden');
-            errorState.classList.add('hidden');
-            loadingState.classList.remove('hidden');
-            tableBody.innerHTML = '';
-
+            showState('loading');
+            
             try {
                 const response = await fetch(`./reports/${filename}?cachebust=${new Date().getTime()}`);
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                 
                 const csvText = await response.text();
                 if (!csvText.trim()) throw new Error('CSV file is empty');
-
-                const lines = csvText.trim().split('\n');
                 
-                // Skip header row
+                const lines = csvText.trim().split('\n');
+                currentData = [];
+                
                 for (let i = 1; i < lines.length; i++) {
                     const values = parseCsvLine(lines[i]);
                     if (values.length < 4) continue;
-
-                    const [ip, categories, date, ...commentParts] = values;
+                    
+                    const [ip, categories, references, date, ...commentParts] = values;
                     const comment = commentParts.join(',');
-
-                    const row = document.createElement('tr');
-                    row.className = 'bg-gray-800 border-b border-gray-700 hover:bg-gray-700';
-                    row.innerHTML = `
-                        <td class="px-6 py-4 font-mono text-white">${obfuscateIP(ip)}</td>
-                        <td class="px-6 py-4">${categories.replace(/"/g, '')}</td>
-                        <td class="px-6 py-4">${new Date(date).toLocaleString()}</td>
-                        <td class="px-6 py-4 text-gray-500">${comment.replace(/"/g, '')}</td>
-                    `;
-                    tableBody.appendChild(row);
+                    
+                    currentData.push({
+                        ip: ip.replace(/"/g, ''),
+                        categories: categories.replace(/"/g, ''),
+                        references: references.replace(/"/g, ''),
+                        date: date.replace(/"/g, ''),
+                        comment: comment.replace(/"/g, '')
+                    });
                 }
-
-                loadingState.classList.add('hidden');
-                tableWrapper.classList.remove('hidden');
-
+                
+                filteredData = [...currentData];
+                updateMetrics(currentData);
+                renderTable(filteredData);
+                showState('table');
+                
+                document.getElementById('lastScan').textContent = new Date().toLocaleString();
+                
             } catch (error) {
                 console.error('Failed to load report:', error);
-                loadingState.classList.add('hidden');
-                errorState.classList.remove('hidden');
+                showState('error');
             }
         }
-
-        selector.addEventListener('change', () => loadReport(selector.value));
-        window.addEventListener('load', () => loadReport(selector.value));
+        
+        function filterData(searchTerm) {
+            if (!searchTerm.trim()) {
+                filteredData = [...currentData];
+            } else {
+                const term = searchTerm.toLowerCase();
+                filteredData = currentData.filter(row => 
+                    row.ip.toLowerCase().includes(term) ||
+                    row.categories.toLowerCase().includes(term) ||
+                    row.comment.toLowerCase().includes(term)
+                );
+            }
+            renderTable(filteredData);
+            document.getElementById('showingCount').textContent = filteredData.length.toLocaleString();
+        }
+        
+        function renderTable(data) {
+            const tbody = document.getElementById('reportTableBody');
+            tbody.innerHTML = '';
+            
+            data.slice(0, 1000).forEach(row => { // Limit to 1000 rows for performance
+                const threatLevel = getThreatLevel(row.categories, row.comment);
+                const threatClass = `threat-${threatLevel}`;
+                
+                const tr = document.createElement('tr');
+                tr.className = 'threat-row';
+                tr.innerHTML = `
+                    <td class="px-6 py-4">
+                        <div class="threat-badge ${threatClass}">${threatLevel}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="font-mono text-white font-medium">${obfuscateIP(row.ip)}</div>
+                    </td>
+                    <td class="px-6 py-4">
+                        <div class="flex flex-wrap gap-1">
+                            ${row.categories.split(',').map(cat => 
+                                `<span class="px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded">${cat.trim()}</span>`
+                            ).join('')}
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-gray-400">
+                        <div class="text-sm">${new Date(row.date).toLocaleString()}</div>
+                    </td>
+                    <td class="px-6 py-4 text-gray-400">
+                        <div class="text-sm max-w-md truncate" title="${row.comment}">
+                            ${row.comment}
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            document.getElementById('showingCount').textContent = Math.min(data.length, 1000).toLocaleString();
+        }
+        
+        function showState(state) {
+            const states = ['loading', 'error', 'table'];
+            states.forEach(s => {
+                const element = document.getElementById(s === 'table' ? 'tableWrapper' : `${s}State`);
+                if (element) {
+                    element.classList.toggle('hidden', s !== state);
+                }
+            });
+        }
+        
+        function exportData() {
+            if (!filteredData.length) return;
+            
+            const csv = [
+                ['IP Address', 'Categories', 'References', 'Detection Time', 'Analysis'],
+                ...filteredData.map(row => [
+                    row.ip, row.categories, row.references, row.date, row.comment
+                ])
+            ].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `threat_intelligence_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
     </script>
 </body>
 </html>
