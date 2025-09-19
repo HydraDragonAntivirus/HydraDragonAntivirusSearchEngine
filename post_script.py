@@ -10,7 +10,7 @@ from functools import lru_cache
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORTS_DIR = os.path.join(BASE_DIR, "website", "reports")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
-SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
+SETTINGS_FILE = os.path.join(BASE_DIR, "settings", "settings.json")
 
 os.makedirs(LOG_DIR, exist_ok=True)
 
