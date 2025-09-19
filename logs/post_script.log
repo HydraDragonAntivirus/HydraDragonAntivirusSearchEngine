@@ -2,3 +2,11 @@
 2025-09-19 18:25:09,659 [ERROR] FATAL: /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/settings.json not found. Exiting.
 2025-09-19 18:25:09,659 [ERROR] Could not load settings. Aborting post-scan processing.
 2025-09-19 18:25:09,659 [INFO] --- Post-Scan Script Finished ---
+2025-09-19 21:53:03,504 [INFO] --- Starting Post-Scan Script ---
+2025-09-19 21:53:03,504 [INFO] Loading settings from /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/settings/settings.json
+2025-09-19 21:53:03,505 [INFO] Loaded 62 IPs from the whitelist.
+2025-09-19 21:53:03,505 [INFO] Found 0 non-whitelisted IPs for the filtered report.
+2025-09-19 21:53:03,505 [INFO] Filtered Bulk Report created successfully at: /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/website/reports/FilteredBulkReport.csv
+2025-09-19 21:53:03,505 [INFO] Processed 0 records for AbuseIPDB report.
+2025-09-19 21:53:03,505 [INFO] AbuseIPDB Report created successfully at: /home/runner/work/HydraDragonAntivirusSearchEngine/HydraDragonAntivirusSearchEngine/website/reports/AbuseIPDB_Report.csv
+2025-09-19 21:53:03,505 [INFO] --- Post-Scan Script Finished ---
