@@ -279,3 +279,157 @@ urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unp
 2025-09-20 18:22:30,636 [WARNING] Time limit reached before processing 31.145.197.137, skipping.
 2025-09-20 18:22:31,512 [INFO] Scan completed or stopped. Reports written to D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports
 2025-09-20 18:22:31,859 [INFO] --- Shutdown ---
+2025-09-20 19:16:14,461 [INFO] Loaded settings from D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\settings\settings.json
+2025-09-20 19:16:14,461 [INFO] --- Hydra Dragon Antivirus Search Engine Initializing ---
+2025-09-20 19:16:15,899 [INFO] Loaded 0 whitelist IPs
+2025-09-20 19:16:18,276 [INFO] Detected 2 split parts for IPv4Malware.csv
+2025-09-20 19:20:33,972 [INFO] Total unique seeds loaded for processing: 8848693
+2025-09-20 19:20:34,144 [INFO] Initializing scan... time_limit=3600.0 connect/read=(3.00, 10.00)
+2025-09-20 19:22:06,247 [INFO] Discovered 1 new IPs from 80.94.164.225
+2025-09-20 19:22:11,174 [INFO] Discovered 1 new IPs from 104.29.124.0
+2025-09-20 19:22:11,768 [INFO] Discovered 1 new IPs from 81.111.11.189
+2025-09-20 19:22:22,305 [INFO] Discovered 1 new IPs from 159.89.198.224
+2025-09-20 19:23:02,831 [INFO] Discovered 18 new IPs from 143.244.84.38
+2025-09-20 19:23:42,478 [INFO] Discovered 14 new IPs from 44.234.118.91
+2025-09-20 19:24:19,525 [INFO] Discovered 1 new IPs from 95.217.204.224
+2025-09-20 19:24:20,980 [INFO] Discovered 38 new IPs from 192.0.78.27
+2025-09-20 19:24:49,663 [INFO] Discovered 1 new IPs from 128.199.193.211
+2025-09-20 19:25:25,805 [INFO] Discovered 1 new IPs from 172.245.64.212
+2025-09-20 19:25:32,089 [INFO] Discovered 1 new IPs from 148.66.137.26
+2025-09-20 19:25:47,897 [INFO] Discovered 1 new IPs from 37.140.192.56
+2025-09-20 19:26:38,143 [INFO] Discovered 1 new IPs from 185.247.137.166
+2025-09-20 19:27:02,693 [INFO] Discovered 1 new IPs from 160.251.55.68
+2025-09-20 19:27:20,263 [INFO] Discovered 1 new IPs from 64.64.22.80
+2025-09-20 19:27:22,518 [INFO] Discovered 1 new IPs from 41.57.124.48
+2025-09-20 19:27:25,725 [INFO] Discovered 1 new IPs from 213.3.47.155
+2025-09-20 19:28:13,968 [INFO] Discovered 1 new IPs from 62.69.41.198
+2025-09-20 19:28:15,877 [INFO] Discovered 1 new IPs from 220.133.217.216
+2025-09-20 19:28:18,960 [INFO] Discovered 2 new IPs from 154.197.130.66
+2025-09-20 19:28:21,935 [INFO] Discovered 1 new IPs from 122.116.162.252
+2025-09-20 19:28:22,044 [INFO] Discovered 3 new IPs from 91.196.152.31
+2025-09-20 19:28:56,730 [INFO] Discovered 1 new IPs from 46.253.1.246
+2025-09-20 19:29:14,031 [INFO] Discovered 2 new IPs from 118.31.35.112
+2025-09-20 19:29:20,884 [INFO] Discovered 1 new IPs from 93.185.156.118
+2025-09-20 19:29:37,075 [WARNING] Failed to parse headers (url=http://195.154.56.148:80/): [MissingHeaderBodySeparatorDefect()], unparsed data: '200 OK\r\nPragma: no-cache\r\nExpires: -1\r\nDate: sam. 20 sept. 2025 21:29:37 GMT\r\nMIME-Version: 1.0\r\nServer: AbmWeb/1.4\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: '200 OK\r\nPragma: no-cache\r\nExpires: -1\r\nDate: sam. 20 sept. 2025 21:29:37 GMT\r\nMIME-Version: 1.0\r\nServer: AbmWeb/1.4\r\n\r\n'
+2025-09-20 19:29:41,915 [INFO] Discovered 1 new IPs from 138.36.122.29
+2025-09-20 19:29:48,237 [INFO] Discovered 1 new IPs from 5.63.151.106
+2025-09-20 19:30:08,847 [INFO] Discovered 1 new IPs from 188.166.253.181
+2025-09-20 19:30:34,610 [INFO] Discovered 3 new IPs from 59.84.11.168
+2025-09-20 19:30:35,377 [INFO] Discovered 52 new IPs from 157.245.192.97
+2025-09-20 19:30:47,067 [INFO] Discovered 2 new IPs from 39.108.88.195
+2025-09-20 19:31:20,401 [INFO] Discovered 1 new IPs from 122.117.194.155
+2025-09-20 19:31:49,916 [INFO] Discovered 12 new IPs from 128.199.225.217
+2025-09-20 19:32:13,624 [INFO] Discovered 17 new IPs from 165.22.242.160
+2025-09-20 19:32:57,648 [INFO] Discovered 478 new IPs from 137.184.37.100
+2025-09-20 19:33:52,230 [INFO] Discovered 1 new IPs from 156.239.46.144
+2025-09-20 19:34:30,829 [INFO] Discovered 4 new IPs from 162.240.167.94
+2025-09-20 19:35:28,867 [INFO] Discovered 1 new IPs from 193.105.32.181
+2025-09-20 19:35:37,709 [WARNING] Failed to parse headers (url=http://106.0.38.27:80/): [MissingHeaderBodySeparatorDefect()], unparsed data: 'X-Frame-Options : SAMEORIGIN\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 74\r\nLast-Modified: Thu, 30 May 2019 07:31:52 GMT\r\nConnection: close\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'X-Frame-Options : SAMEORIGIN\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 74\r\nLast-Modified: Thu, 30 May 2019 07:31:52 GMT\r\nConnection: close\r\n\r\n'
+2025-09-20 19:35:50,902 [INFO] Discovered 3 new IPs from 139.144.210.30
+2025-09-20 19:36:17,472 [INFO] Discovered 1 new IPs from 157.245.48.22
+2025-09-20 19:37:11,272 [INFO] Discovered 1 new IPs from 194.146.233.58
+2025-09-20 19:37:19,346 [INFO] Discovered 3 new IPs from 218.234.17.96
+2025-09-20 19:37:37,404 [INFO] Discovered 1 new IPs from 84.32.190.49
+2025-09-20 19:38:18,472 [INFO] Discovered 1 new IPs from 210.103.48.136
+2025-09-20 19:38:18,957 [INFO] Discovered 7 new IPs from 150.95.81.161
+2025-09-20 19:38:47,562 [INFO] Discovered 1 new IPs from 139.59.251.117
+2025-09-20 19:39:09,035 [WARNING] Failed to parse headers (url=http://41.60.234.100:80/login.html): [MissingHeaderBodySeparatorDefect()], unparsed data: 'Tue, 24 Dec 2024 09:01:27 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'Tue, 24 Dec 2024 09:01:27 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+2025-09-20 19:41:50,899 [INFO] Discovered 1 new IPs from 13.229.236.109
+2025-09-20 19:44:14,084 [INFO] Discovered 2 new IPs from 139.180.184.78
+2025-09-20 19:44:18,511 [INFO] Discovered 1 new IPs from 45.66.45.152
+2025-09-20 19:44:48,232 [INFO] Discovered 1 new IPs from 95.188.93.183
+2025-09-20 19:45:07,654 [INFO] Discovered 3 new IPs from 172.104.190.223
+2025-09-20 19:46:49,082 [INFO] Discovered 9 new IPs from 185.234.114.179
+2025-09-20 19:48:27,154 [INFO] Discovered 1 new IPs from 67.205.185.208
+2025-09-20 19:48:56,780 [INFO] Discovered 1 new IPs from 147.93.43.226
+2025-09-20 19:49:03,147 [INFO] Discovered 1 new IPs from 213.120.230.115
+2025-09-20 19:49:19,439 [INFO] Discovered 1 new IPs from 47.254.175.100
+2025-09-20 19:50:19,642 [INFO] Discovered 2 new IPs from 220.134.154.23
+2025-09-20 19:50:41,572 [INFO] Discovered 1 new IPs from 159.89.164.146
+2025-09-20 19:51:40,457 [INFO] Discovered 3 new IPs from 52.128.40.29
+2025-09-20 19:52:14,412 [INFO] Discovered 31 new IPs from 213.108.108.200
+2025-09-20 19:52:58,477 [INFO] Discovered 1 new IPs from 194.67.91.221
+2025-09-20 19:54:15,910 [WARNING] Failed to parse headers (url=http://5.26.78.159:80/): [MissingHeaderBodySeparatorDefect()], unparsed data: "HTTP/1.0 302 Found\ncontent-type: text/html; charset=UTF-8\nP3P: CP='IDC DSP COR ADM DEVi TAIi PSA PSD IVAi IVDi CONi HIS OUR IND CNT'\nLocation: /login.rsp\n\n"
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: "HTTP/1.0 302 Found\ncontent-type: text/html; charset=UTF-8\nP3P: CP='IDC DSP COR ADM DEVi TAIi PSA PSD IVAi IVDi CONi HIS OUR IND CNT'\nLocation: /login.rsp\n\n"
+2025-09-20 19:55:21,012 [INFO] Discovered 1 new IPs from 140.82.4.49
+2025-09-20 19:55:51,902 [INFO] Discovered 1 new IPs from 172.104.188.12
+2025-09-20 19:57:09,732 [INFO] Discovered 1 new IPs from 170.64.203.200
+2025-09-20 19:57:11,548 [INFO] Discovered 3 new IPs from 47.237.2.245
+2025-09-20 19:58:13,438 [INFO] Discovered 1 new IPs from 137.184.194.45
+2025-09-20 19:58:38,398 [INFO] Discovered 5 new IPs from 52.108.172.0
+2025-09-20 19:59:00,698 [INFO] Discovered 1 new IPs from 5.133.206.73
+2025-09-20 20:00:06,047 [INFO] Discovered 1 new IPs from 138.197.86.109
+2025-09-20 20:01:00,046 [INFO] Discovered 1 new IPs from 172.105.171.176
+2025-09-20 20:01:55,436 [INFO] Discovered 6 new IPs from 147.135.58.169
+2025-09-20 20:02:29,247 [INFO] Discovered 3 new IPs from 5.39.113.172
+2025-09-20 20:02:54,768 [INFO] Discovered 5 new IPs from 86.48.7.17
+2025-09-20 20:05:31,394 [INFO] Discovered 3 new IPs from 104.248.57.44
+2025-09-20 20:06:14,844 [INFO] Discovered 1 new IPs from 64.227.22.49
+2025-09-20 20:06:51,758 [INFO] Discovered 1 new IPs from 159.223.139.189
+2025-09-20 20:08:58,116 [INFO] Discovered 2 new IPs from 61.180.16.46
+2025-09-20 20:09:27,821 [INFO] Discovered 1 new IPs from 14.56.53.238
+2025-09-20 20:10:53,527 [INFO] Discovered 3 new IPs from 139.59.6.5
+2025-09-20 20:14:47,438 [INFO] Discovered 1 new IPs from 164.92.66.167
+2025-09-20 20:17:48,385 [INFO] Discovered 19 new IPs from 138.197.183.92
+2025-09-20 20:18:16,223 [WARNING] Failed to parse headers (url=http://131.161.219.229:80/): [MissingHeaderBodySeparatorDefect()], unparsed data: 'no find file\nContent-type:text/html; charset=UTF-8\r\nCache-Control:private,max-age=0;\r\nSet-Cookie: lang=eng; path=/;\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'no find file\nContent-type:text/html; charset=UTF-8\r\nCache-Control:private,max-age=0;\r\nSet-Cookie: lang=eng; path=/;\r\n\r\n'
+2025-09-20 20:20:34,383 [WARNING] Scan time exceeded 3600.0 seconds. Stopping workers.
+2025-09-20 20:20:51,691 [WARNING] Time limit reached before processing 74.117.222.18, skipping.
+2025-09-20 20:20:51,769 [WARNING] Time limit reached before processing 134.255.243.250, skipping.
+2025-09-20 20:20:51,769 [WARNING] Time limit reached before processing 5.172.7.190, skipping.
+2025-09-20 20:20:51,769 [WARNING] Time limit reached before processing 104.54.33.220, skipping.
+2025-09-20 20:20:51,863 [WARNING] Time limit reached before processing 185.88.181.57, skipping.
+2025-09-20 20:20:51,863 [WARNING] Time limit reached before processing 115.52.224.6, skipping.
+2025-09-20 20:20:52,035 [WARNING] Time limit reached before processing 95.181.179.163, skipping.
+2025-09-20 20:20:52,114 [WARNING] Time limit reached before processing 5.18.238.169, skipping.
+2025-09-20 20:20:52,192 [WARNING] Time limit reached before processing 114.35.1.24, skipping.
+2025-09-20 20:20:52,285 [WARNING] Time limit reached before processing 120.26.243.44, skipping.
+2025-09-20 20:20:52,364 [WARNING] Time limit reached before processing 207.137.0.0, skipping.
+2025-09-20 20:20:52,364 [WARNING] Time limit reached before processing 134.236.19.191, skipping.
+2025-09-20 20:20:52,442 [WARNING] Time limit reached before processing 92.85.21.39, skipping.
+2025-09-20 20:20:52,769 [WARNING] Time limit reached before processing 176.97.114.58, skipping.
+2025-09-20 20:20:52,769 [WARNING] Time limit reached before processing 117.235.122.242, skipping.
+2025-09-20 20:20:53,019 [WARNING] Time limit reached before processing 178.76.243.145, skipping.
+2025-09-20 20:20:53,113 [WARNING] Time limit reached before processing 103.20.148.44, skipping.
+2025-09-20 20:20:54,677 [WARNING] Time limit reached before processing 223.241.56.196, skipping.
+2025-09-20 20:20:54,677 [WARNING] Time limit reached before processing 103.72.3.117, skipping.
+2025-09-20 20:20:54,755 [WARNING] Time limit reached before processing 169.235.25.206, skipping.
+2025-09-20 20:20:54,833 [WARNING] Time limit reached before processing 107.189.186.106, skipping.
+2025-09-20 20:20:54,833 [WARNING] Time limit reached before processing 107.172.67.243, skipping.
+2025-09-20 20:20:55,005 [WARNING] Time limit reached before processing 49.12.153.66, skipping.
+2025-09-20 20:20:55,177 [WARNING] Time limit reached before processing 74.194.7.35, skipping.
+2025-09-20 20:20:55,177 [WARNING] Time limit reached before processing 31.210.23.184, skipping.
+2025-09-20 20:20:56,069 [WARNING] Time limit reached before processing 103.182.10.139, skipping.
+2025-09-20 20:20:56,069 [WARNING] Time limit reached before processing 34.247.32.165, skipping.
+2025-09-20 20:20:56,069 [WARNING] Time limit reached before processing 168.196.47.249, skipping.
+2025-09-20 20:20:56,960 [INFO] Discovered 3 new IPs from 128.199.135.173
+2025-09-20 20:20:57,053 [INFO] Scan completed or stopped. Reports written to D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports
+2025-09-20 20:20:57,132 [INFO] --- Shutdown ---
