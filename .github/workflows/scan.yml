@@ -1,5 +1,4 @@
 name: Hydra Dragon IP Scan
-
 on:
   schedule:
     - cron: '0 */1 * * *' # Runs every hour
@@ -7,7 +6,7 @@ on:
 
 jobs:
   scan-and-report:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -30,8 +29,8 @@ jobs:
 
       - name: Commit and push reports
         run: |
-          git config --global user.name 'GitHub Actions'
-          git config --global user.email 'actions@github.com'
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
           git add website/reports/*.csv
           git add logs/*.log
           git commit -m "Automated Threat Intelligence Report Update" || echo "No changes to commit"
