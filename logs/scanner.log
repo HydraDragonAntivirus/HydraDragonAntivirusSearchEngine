@@ -555,3 +555,137 @@ urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unp
 2025-09-21 00:25:42,206 [WARNING] Time limit reached before processing 78.178.81.244, skipping.
 2025-09-21 00:25:42,394 [INFO] Scan completed or stopped. Reports written to D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports
 2025-09-21 00:25:42,472 [INFO] --- Shutdown ---
+2025-09-21 02:01:03,348 [INFO] Loaded settings from D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\settings\settings.json
+2025-09-21 02:01:03,348 [INFO] --- Hydra Dragon Antivirus Search Engine Initializing ---
+2025-09-21 02:01:04,786 [INFO] Loaded 0 whitelist IPs
+2025-09-21 02:01:07,116 [INFO] Detected 2 split parts for IPv4Malware.csv
+2025-09-21 02:05:18,351 [INFO] Total unique seeds loaded for processing: 8848693
+2025-09-21 02:05:18,507 [INFO] Initializing scan... time_limit=3600.0 connect/read=(3.00, 10.00)
+2025-09-21 02:06:39,657 [INFO] Discovered 1 new IPs from 136.243.91.218
+2025-09-21 02:06:46,967 [INFO] Discovered 1 new IPs from 71.6.233.206
+2025-09-21 02:06:48,926 [INFO] Discovered 1 new IPs from 104.21.23.152
+2025-09-21 02:06:55,427 [INFO] Discovered 1 new IPs from 118.174.128.229
+2025-09-21 02:06:57,275 [INFO] Discovered 1 new IPs from 51.158.145.201
+2025-09-21 02:07:56,126 [INFO] Discovered 1 new IPs from 178.33.198.252
+2025-09-21 02:08:07,973 [INFO] Discovered 3 new IPs from 195.184.76.41
+2025-09-21 02:08:33,037 [INFO] Discovered 1 new IPs from 45.66.45.90
+2025-09-21 02:08:40,097 [INFO] Discovered 1 new IPs from 172.104.215.88
+2025-09-21 02:09:09,838 [INFO] Discovered 1 new IPs from 123.195.87.199
+2025-09-21 02:09:28,549 [INFO] Discovered 1 new IPs from 146.196.96.178
+2025-09-21 02:09:50,985 [INFO] Discovered 2 new IPs from 54.166.24.69
+2025-09-21 02:10:36,305 [INFO] Discovered 16 new IPs from 206.189.153.143
+2025-09-21 02:10:39,591 [INFO] Discovered 23 new IPs from 195.47.238.84
+2025-09-21 02:10:57,241 [INFO] Discovered 1 new IPs from 83.149.17.194
+2025-09-21 02:11:01,810 [INFO] Discovered 5 new IPs from 52.108.152.0
+2025-09-21 02:11:08,585 [INFO] Discovered 1 new IPs from 123.201.110.194
+2025-09-21 02:11:21,856 [INFO] Discovered 19 new IPs from 138.197.183.92
+2025-09-21 02:11:44,228 [INFO] Discovered 1 new IPs from 31.31.196.171
+2025-09-21 02:11:54,183 [INFO] Discovered 1 new IPs from 168.197.49.181
+2025-09-21 02:12:05,278 [INFO] Discovered 1 new IPs from 164.92.90.230
+2025-09-21 02:12:06,060 [INFO] Discovered 1 new IPs from 159.203.80.171
+2025-09-21 02:12:07,595 [INFO] Discovered 6 new IPs from 144.126.239.72
+2025-09-21 02:12:16,419 [INFO] Discovered 1 new IPs from 220.133.125.219
+2025-09-21 02:13:20,873 [INFO] Discovered 1 new IPs from 151.237.72.209
+2025-09-21 02:14:24,047 [INFO] Discovered 14 new IPs from 134.209.22.39
+2025-09-21 02:15:31,700 [INFO] Discovered 4 new IPs from 128.199.126.123
+2025-09-21 02:15:40,652 [INFO] Discovered 1 new IPs from 47.89.153.245
+2025-09-21 02:16:16,572 [INFO] Discovered 1 new IPs from 121.254.171.111
+2025-09-21 02:16:23,116 [INFO] Discovered 30 new IPs from 120.79.31.133
+2025-09-21 02:17:24,939 [INFO] Discovered 88 new IPs from 182.253.36.164
+2025-09-21 02:17:28,571 [INFO] Discovered 3 new IPs from 192.92.97.104
+2025-09-21 02:17:55,726 [INFO] Discovered 1 new IPs from 185.136.181.86
+2025-09-21 02:18:05,020 [INFO] Discovered 7 new IPs from 159.89.194.250
+2025-09-21 02:18:09,089 [INFO] Discovered 1 new IPs from 144.217.15.153
+2025-09-21 02:18:20,278 [INFO] Discovered 1 new IPs from 144.126.209.63
+2025-09-21 02:18:48,944 [INFO] Discovered 1 new IPs from 116.55.248.182
+2025-09-21 02:18:52,480 [INFO] Discovered 8 new IPs from 101.200.235.69
+2025-09-21 02:18:54,357 [INFO] Discovered 1 new IPs from 218.161.81.107
+2025-09-21 02:19:07,284 [INFO] Discovered 6 new IPs from 3.16.50.172
+2025-09-21 02:19:36,879 [INFO] Discovered 1 new IPs from 23.184.48.101
+2025-09-21 02:19:38,177 [INFO] Discovered 1 new IPs from 115.40.165.226
+2025-09-21 02:20:09,336 [INFO] Discovered 1 new IPs from 43.204.35.53
+2025-09-21 02:20:25,934 [INFO] Discovered 1 new IPs from 206.189.94.211
+2025-09-21 02:22:34,746 [INFO] Discovered 1 new IPs from 172.104.113.85
+2025-09-21 02:22:46,123 [INFO] Discovered 1 new IPs from 14.139.58.150
+2025-09-21 02:22:48,568 [INFO] Discovered 13 new IPs from 160.153.133.77
+2025-09-21 02:23:00,976 [WARNING] Failed to parse headers (url=http://129.18.214.84:80/login.html): [MissingHeaderBodySeparatorDefect()], unparsed data: 'Sat, 02 Jul 2022 03:20:45 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'Sat, 02 Jul 2022 03:20:45 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+2025-09-21 02:24:04,762 [INFO] Discovered 3 new IPs from 172.104.9.223
+2025-09-21 02:26:16,847 [INFO] Discovered 1 new IPs from 45.55.198.250
+2025-09-21 02:27:29,801 [INFO] Discovered 1 new IPs from 193.168.146.17
+2025-09-21 02:27:53,949 [INFO] Discovered 1 new IPs from 148.66.138.104
+2025-09-21 02:28:14,590 [INFO] Discovered 1 new IPs from 45.66.124.0
+2025-09-21 02:28:29,977 [INFO] Discovered 4 new IPs from 165.227.38.84
+2025-09-21 02:28:49,682 [INFO] Discovered 1 new IPs from 128.199.100.5
+2025-09-21 02:29:22,251 [INFO] Discovered 1 new IPs from 67.202.38.17
+2025-09-21 02:30:08,756 [INFO] Discovered 5 new IPs from 94.182.179.215
+2025-09-21 02:30:37,384 [INFO] Discovered 1 new IPs from 178.150.44.111
+2025-09-21 02:30:42,986 [INFO] Discovered 1 new IPs from 59.3.30.6
+2025-09-21 02:30:50,137 [INFO] Discovered 1 new IPs from 49.167.230.207
+2025-09-21 02:31:24,143 [INFO] Discovered 18 new IPs from 158.247.24.202
+2025-09-21 02:34:03,538 [INFO] Discovered 1 new IPs from 142.93.145.143
+2025-09-21 02:34:35,636 [INFO] Discovered 1 new IPs from 18.211.22.130
+2025-09-21 02:34:54,200 [INFO] Discovered 6 new IPs from 134.209.29.127
+2025-09-21 02:36:37,622 [INFO] Discovered 1 new IPs from 142.132.250.254
+2025-09-21 02:37:00,499 [INFO] Discovered 1 new IPs from 137.184.53.35
+2025-09-21 02:38:47,562 [INFO] Discovered 1 new IPs from 91.229.245.100
+2025-09-21 02:40:30,816 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-21 02:41:11,801 [INFO] Discovered 1 new IPs from 193.107.88.132
+2025-09-21 02:41:48,827 [INFO] Discovered 1 new IPs from 216.123.192.102
+2025-09-21 02:43:14,052 [INFO] Discovered 6 new IPs from 45.159.50.56
+2025-09-21 02:44:08,839 [INFO] Discovered 1 new IPs from 199.195.252.175
+2025-09-21 02:44:33,390 [INFO] Discovered 32 new IPs from 35.245.216.210
+2025-09-21 02:45:11,169 [INFO] Discovered 1 new IPs from 159.223.82.150
+2025-09-21 02:46:11,243 [WARNING] Received response with both Content-Length and Transfer-Encoding set. This is expressly forbidden by RFC 7230 sec 3.3.2. Ignoring Content-Length and attempting to process response as Transfer-Encoding: chunked.
+2025-09-21 02:47:54,390 [INFO] Discovered 1 new IPs from 143.244.138.80
+2025-09-21 02:51:20,609 [INFO] Discovered 1 new IPs from 64.68.238.111
+2025-09-21 02:51:23,002 [INFO] Discovered 1 new IPs from 130.25.12.27
+2025-09-21 02:52:36,457 [INFO] Discovered 1 new IPs from 23.22.40.25
+2025-09-21 02:55:21,976 [INFO] Discovered 1 new IPs from 161.35.18.158
+2025-09-21 02:56:36,662 [INFO] Discovered 1 new IPs from 175.207.195.15
+2025-09-21 02:56:38,494 [INFO] Discovered 63 new IPs from 146.190.88.34
+2025-09-21 03:01:01,147 [INFO] Discovered 1 new IPs from 167.99.125.142
+2025-09-21 03:01:48,468 [WARNING] Failed to parse headers (url=http://190.182.251.143:80/login.html): [MissingHeaderBodySeparatorDefect()], unparsed data: 'Tue, 25 Jul 2023 08:17:20 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+Traceback (most recent call last):
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\connection.py", line 568, in getresponse
+    assert_header_parsing(httplib_response.msg)
+  File "C:\hostedtoolcache\windows\Python\3.12.10\x64\Lib\site-packages\urllib3\util\response.py", line 88, in assert_header_parsing
+    raise HeaderParsingError(defects=defects, unparsed_data=unparsed_data)
+urllib3.exceptions.HeaderParsingError: [MissingHeaderBodySeparatorDefect()], unparsed data: 'Tue, 25 Jul 2023 08:17:20 GMTLast-Modified:                              \r\nX-Frame-Options: SAMEORIGIN\r\n\r\n'
+2025-09-21 03:02:08,391 [INFO] Discovered 4 new IPs from 68.183.3.136
+2025-09-21 03:05:18,681 [WARNING] Scan time exceeded 3600.0 seconds. Stopping workers.
+2025-09-21 03:05:25,472 [WARNING] Time limit reached before processing 80.231.14.160, skipping.
+2025-09-21 03:05:25,503 [WARNING] Time limit reached before processing 113.87.184.20, skipping.
+2025-09-21 03:05:25,519 [WARNING] Time limit reached before processing 197.211.61.12, skipping.
+2025-09-21 03:05:36,826 [WARNING] Time limit reached before processing 23.20.81.17, skipping.
+2025-09-21 03:05:36,826 [WARNING] Time limit reached before processing 38.141.56.238, skipping.
+2025-09-21 03:05:36,983 [WARNING] Time limit reached before processing 202.136.87.153, skipping.
+2025-09-21 03:05:36,983 [WARNING] Time limit reached before processing 141.148.163.151, skipping.
+2025-09-21 03:05:36,983 [WARNING] Time limit reached before processing 154.28.222.56, skipping.
+2025-09-21 03:05:36,983 [WARNING] Time limit reached before processing 77.253.232.62, skipping.
+2025-09-21 03:05:37,061 [WARNING] Time limit reached before processing 190.141.25.231, skipping.
+2025-09-21 03:05:37,061 [WARNING] Time limit reached before processing 78.137.164.238, skipping.
+2025-09-21 03:05:37,468 [WARNING] Time limit reached before processing 156.67.105.251, skipping.
+2025-09-21 03:05:37,562 [WARNING] Time limit reached before processing 193.161.15.207, skipping.
+2025-09-21 03:05:37,641 [WARNING] Time limit reached before processing 180.54.60.9, skipping.
+2025-09-21 03:05:37,641 [WARNING] Time limit reached before processing 112.124.58.64, skipping.
+2025-09-21 03:05:37,641 [WARNING] Time limit reached before processing 95.86.184.104, skipping.
+2025-09-21 03:05:37,641 [WARNING] Time limit reached before processing 39.184.64.0, skipping.
+2025-09-21 03:05:37,953 [WARNING] Time limit reached before processing 138.197.96.236, skipping.
+2025-09-21 03:05:37,953 [WARNING] Time limit reached before processing 217.115.156.240, skipping.
+2025-09-21 03:05:39,924 [WARNING] Time limit reached before processing 2.17.208.76, skipping.
+2025-09-21 03:05:39,924 [WARNING] Time limit reached before processing 135.225.10.0, skipping.
+2025-09-21 03:05:39,924 [WARNING] Time limit reached before processing 202.109.156.77, skipping.
+2025-09-21 03:05:40,002 [WARNING] Time limit reached before processing 5.75.169.120, skipping.
+2025-09-21 03:05:40,987 [WARNING] Time limit reached before processing 61.203.3.138, skipping.
+2025-09-21 03:05:40,987 [WARNING] Time limit reached before processing 8.77.34.200, skipping.
+2025-09-21 03:05:40,987 [WARNING] Time limit reached before processing 203.189.154.129, skipping.
+2025-09-21 03:05:41,065 [WARNING] Time limit reached before processing 59.95.121.126, skipping.
+2025-09-21 03:05:41,065 [WARNING] Time limit reached before processing 54.165.93.125, skipping.
+2025-09-21 03:05:42,144 [INFO] Scan completed or stopped. Reports written to D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports
+2025-09-21 03:05:42,223 [INFO] --- Shutdown ---
