@@ -398,3 +398,11 @@
 2025-10-04 23:26:27,654 [INFO] Processed 0 records for AbuseIPDB report.
 2025-10-04 23:26:27,654 [INFO] AbuseIPDB Report created successfully at: D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports\AbuseIPDB_Report.csv
 2025-10-04 23:26:27,656 [INFO] --- Post-Scan Script Finished ---
+2025-10-05 03:07:18,015 [INFO] --- Starting Post-Scan Script ---
+2025-10-05 03:07:18,015 [INFO] Loading settings from D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\settings\settings.json
+2025-10-05 03:07:18,017 [INFO] Loaded 72 IPs from the whitelist.
+2025-10-05 03:07:18,017 [INFO] Found 0 non-whitelisted IPs for the filtered report.
+2025-10-05 03:07:18,017 [INFO] Filtered Bulk Report created successfully at: D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports\FilteredBulkReport.csv
+2025-10-05 03:07:18,017 [INFO] Processed 0 records for AbuseIPDB report.
+2025-10-05 03:07:18,017 [INFO] AbuseIPDB Report created successfully at: D:\a\HydraDragonAntivirusSearchEngine\HydraDragonAntivirusSearchEngine\website\reports\AbuseIPDB_Report.csv
+2025-10-05 03:07:18,017 [INFO] --- Post-Scan Script Finished ---
